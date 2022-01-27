@@ -538,6 +538,14 @@
 	* typeck.c (validate_occurs): change level 01/77 check back to plain
 	  dialect verification fixing #854
 
+2022-10-05  Nicolas Berthier <nicolas.berthier@ocamlpro.com>
+
+	* scanner.l, config.def: Add support for EBCDIC symbolic characters in
+	  alphanumeric literals, which is a GCOS-specific extension; add new
+	  configuration option ebcdic-symbolic-characters
+	* scanner.l, pplex.l: detect and issue a warning when EBCDIC
+	  symbolic character strings include extraneous separators
+
 2022-10-04  Nicolas Berthier <nicolas.berthier@ocamlpro.com>
 
 	* pplex.l, parser.y: fix AREACHECK in DEFAULT SECTION of CONTROL DIVISON
