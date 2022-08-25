@@ -1383,6 +1383,9 @@ typedef struct __cob_file {
 	const unsigned char* code_set_read;	/* CODE-SET conversion for READs */
 	size_t			nconvert_fields;	/* Number of logical fields to convert */
 	cob_field	*convert_field;		/* logical fields to convert for CODE-SET */
+
+	const char		*assign_default;	/* [GCOS] External filename to use if file mapping fails  */
+
 } cob_file;
 
 
