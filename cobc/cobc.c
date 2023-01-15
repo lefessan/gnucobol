@@ -985,8 +985,8 @@ cobc_strdup (const char *dupstr)
 	return p;
 }
 
-#if	defined (_WIN32) || defined (__CYGWIN__)
-static char *
+#if        defined (_WIN32) || defined (__CYGWIN__)
+char *
 cobc_stradd_dup (const char *str1, const char *str2)
 {
 	char	*p;
@@ -1312,6 +1312,59 @@ cobc_plex_strdup (const char *dupstr)
 	n = strlen (dupstr);
 	p = cobc_plex_malloc (n + 1);
 	memcpy (p, dupstr, n);
+	return p;
+}
+
+char *
+cobc_plex_stradd (const char *str1, const char *str2)
+{
+	char	*p;
+	size_t	m, n;
+
+	/* LCOV_EXCL_START */
+	if (unlikely (!str1 || !str2)) {
+		cobc_err_msg (_("call to %s with NULL pointer"),
+			      "cobc_plex_stradd");
+		cobc_abort_terminate (1);
+	}
+	/* LCOV_EXCL_STOP */
+	m = strlen (str1);
+	n = strlen (str2);
+	p = cobc_plex_malloc (m + n + 1);
+	memcpy (p, str1, m);
+	memcpy (p + m, str2, n);
+	return p;
+}
+
+void *
+cobc_plex_strsub (const char *s, const int len)
+{
+	void	*p;
+	int	n;
+
+#ifdef	COB_TREE_DEBUG
+	/* LCOV_EXCL_START */
+	if (unlikely (!s)) {
+		cobc_err_msg (_("call to %s with NULL pointer"),
+			      "cobc_plex_strsub");
+		cobc_abort_terminate (1);
+	}
+	/* LCOV_EXCL_STOP */
+#endif
+	n = strlen (s);
+
+#ifdef	COB_TREE_DEBUG
+	/* LCOV_EXCL_START */
+	if ( len>n ) {
+		cobc_err_msg (_("call to %s with bad argument len=%d>%d=strlen(s)"),
+			      "cobc_plex_strsub", len, n);
+		cobc_abort_terminate (1);
+	}
+	/* LCOV_EXCL_STOP */
+#endif
+
+	p = cobc_plex_malloc (len + 1);
+	memcpy (p, s, len);
 	return p;
 }
 
@@ -6011,6 +6064,7 @@ print_program_trailer (void)
 
 		/* Print file/symbol tables if requested */
 		if (cb_listing_symbols) {
+	
 			if (cb_listing_with_header) {
 				set_listing_header_symbols ();
 			}

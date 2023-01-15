@@ -492,6 +492,8 @@ extern struct reserved_word_list	*cob_user_res_list;
 extern void			*cobc_malloc (const size_t);
 extern void			cobc_free (void *);
 extern void			*cobc_strdup (const char *);
+extern char                     *cobc_stradd_dup (const char *str1,
+						  const char *str2);
 extern void			*cobc_realloc (void *, const size_t);
 
 extern void			*cobc_main_malloc (const size_t);
@@ -506,6 +508,9 @@ extern void			cobc_parse_free (void *);
 
 extern void			*cobc_plex_malloc (const size_t);
 extern void			*cobc_plex_strdup (const char *);
+extern void			*cobc_plex_strsub (const char *, const int);
+extern char                     *cobc_plex_stradd (const char *str1,
+						  const char *str2);
 
 extern void			*cobc_check_string (const char *);
 extern void			cobc_err_msg (const char *, ...) COB_A_FORMAT12;

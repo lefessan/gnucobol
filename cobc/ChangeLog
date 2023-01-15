@@ -126,6 +126,16 @@
 	* reserved.c (SEQUENCE): setting CB_CS_ALPHABET to allow code-name parsing
 	* parser.y, reserved.c: changed reference from 202x to 2023
 
+2023-01-05  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* cobc.c.c: add `cobc_plex_stradd` and `cobc_plex_strsub` allocation
+	  functions for the pplex phase.
+	* replace.c: new file containing the two-phase COPY-REPLACING and REPLACE
+	  mechanism, conforming to COBOL standard.
+	* pplex.l: remove former `pplex_echo` and `pplex_replace` code. The
+  	  `alt_space` parameter is not used anymore, leading to different listing
+	  code in some cases.
+
 2023-01-16  Simon Sobisch <simonsobisch@gnu.org>
 
 	* parser.y (occurs_index): only set VALUE 1 for defaultbyte == INIT
