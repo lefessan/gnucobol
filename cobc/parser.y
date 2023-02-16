@@ -6383,11 +6383,19 @@ _data_division:
 	current_storage = CB_STORAGE_WORKING;
   }
   _working_storage_section
-  _communication_section
-  _local_storage_section
-  _linkage_section
+  _data_division_sections
   _report_section
   _screen_section
+;
+
+data_division_section:
+  communication_section
+| local_storage_section
+| linkage_section
+;
+
+_data_division_sections:
+| data_division_section _data_division_sections
 ;
 
 _data_division_header:
@@ -6834,9 +6842,12 @@ rep_name_list:
 /* COMMUNICATION SECTION */
 
 communication: COMMUNICATION { check_area_a_of ("COMMUNICATION SECTION"); };
-_communication_section:
-| communication SECTION _dot
+communication_section:
+ communication SECTION _dot
   {
+	if( header_check & COBC_HD_COMMUNICATION_SECTION ){
+		cb_error (_("Duplicate COMMUNICATION SECTION"));
+	}
 	current_storage = CB_STORAGE_COMMUNICATION;
 	check_headers_present (COBC_HD_DATA_DIVISION, 0, 0, 0);
 	header_check |= COBC_HD_COMMUNICATION_SECTION;
@@ -6919,17 +6930,17 @@ named_input_cd_clauses:
 ;
 
 named_input_cd_clause:
-  _symbolic QUEUE _is identifier
-| _symbolic SUB_QUEUE_1 _is identifier
-| _symbolic SUB_QUEUE_2 _is identifier
-| _symbolic SUB_QUEUE_3 _is identifier
-| MESSAGE DATE _is identifier
-| MESSAGE TIME _is identifier
-| _symbolic SOURCE _is identifier
-| TEXT LENGTH _is identifier
-| END KEY _is identifier
-| STATUS KEY _is identifier
-| _message COUNT _is identifier
+  _symbolic QUEUE _is identifier_1
+| _symbolic SUB_QUEUE_1 _is identifier_1
+| _symbolic SUB_QUEUE_2 _is identifier_1
+| _symbolic SUB_QUEUE_3 _is identifier_1
+| MESSAGE DATE _is identifier_1
+| MESSAGE TIME _is identifier_1
+| _symbolic SOURCE _is identifier_1
+| TEXT LENGTH _is identifier_1
+| END KEY _is identifier_1
+| STATUS KEY _is identifier_1
+| _message COUNT _is identifier_1
 ;
 
 unnamed_input_cd_clauses:
@@ -8967,9 +8978,12 @@ identified_by_clause:
 /* LOCAL-STORAGE SECTION */
 
 local_storage: LOCAL_STORAGE { check_area_a_of ("LOCAL-STORAGE SECTION"); };
-_local_storage_section:
-| local_storage SECTION _dot
+local_storage_section:
+ local_storage SECTION _dot
   {
+	if( header_check & COBC_HD_LOCAL_STORAGE_SECTION ){
+		cb_error (_("Duplicate LOCAL STORAGE SECTION"));
+	}
 	check_headers_present (COBC_HD_DATA_DIVISION, 0, 0, 0);
 	header_check |= COBC_HD_LOCAL_STORAGE_SECTION;
 	current_storage = CB_STORAGE_LOCAL;
@@ -8994,8 +9008,14 @@ _local_storage_section:
 
 linkage: LINKAGE { check_area_a_of ("LINKAGE SECTION"); };
 _linkage_section:
-| linkage SECTION _dot
+| linkage_section
+;
+linkage_section:
+ linkage SECTION _dot
   {
+	if( header_check & COBC_HD_LINKAGE_SECTION ){
+		cb_error (_("Duplicate LINKAGE SECTION"));
+	}
 	check_headers_present (COBC_HD_DATA_DIVISION, 0, 0, 0);
 	header_check |= COBC_HD_LINKAGE_SECTION;
 	current_storage = CB_STORAGE_LINKAGE;

@@ -237,4 +237,4 @@ CB_FLAG_ON (cb_diagnostic_show_option, 1, "diagnostics-show-option",
 	  "                        controls the diagnostic"))
 
 CB_FLAG (cb_display_context, 1, "display-context",
-	_("  -fdisplay-context     display source lines on warning/error"))
+	_("  -fdisplay-context display source lines on warning/error"))

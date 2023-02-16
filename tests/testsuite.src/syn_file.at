@@ -908,7 +908,7 @@ AT_CLEANUP
 
 
 AT_SETUP([DECLARATIVES invalid procedure reference (1)])
-AT_KEYWORDS([file GOTO GO PERFORM])
+AT_KEYWORDS([file GOTO GO PERFORM DECLARATIVES])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
@@ -997,7 +997,7 @@ AT_CLEANUP
 
 
 AT_SETUP([DECLARATIVES invalid procedure reference (2)])
-AT_KEYWORDS([file])
+AT_KEYWORDS([file DECLARATIVES])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION   DIVISION.
