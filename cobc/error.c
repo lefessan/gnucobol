@@ -64,6 +64,49 @@ print_error_prefix (const char *file, int line, const char *prefix)
 }
 
 static void
+print_error_context  (const char *file, int line)
+{
+	if ( cb_display_context && file != NULL && line ){
+		FILE* fd = fopen(file, "r");
+		char buffer[74];
+		int line_pos = 1;
+		int char_pos = 0;
+		int printed = 0; /* nothing printed */
+		while(1){
+			int c = fgetc (fd);
+			if ( c == EOF ){
+				if (printed) fprintf(stderr, "\n");
+				fclose(fd); return ; }
+			buffer[char_pos] = c ;
+			if( c == '\n' || char_pos == 73 ){
+				buffer[char_pos] = 0;
+				if (line_pos > line-3 && line_pos < line+3){
+					if (line_pos == line-2) fprintf(stderr, "\n");
+					printed = 1;
+					fprintf (stderr, "  %04d %c %s%s\n",
+						 line_pos,
+						 line == line_pos ? '>' : ' ',
+						 c == '\n' ? "" : ".." ,
+						 buffer);
+					if (line_pos == line+2){
+						fprintf(stderr, "\n");
+						fclose(fd); return;
+					}
+				} 
+				while ( c != '\n' ){ /* skip end of line too long */
+					c = fgetc (fd);
+					if( c == EOF ) { fclose(fd); return ; }
+				}
+				line_pos++;
+				char_pos=0;
+			} else {
+				char_pos++;
+			}
+		}
+	}
+}
+
+static void
 print_error (const char *file, int line, const char *prefix,
 	     const char *fmt, va_list ap, const char *diagnostic_option)
 {
@@ -119,6 +162,7 @@ print_error (const char *file, int line, const char *prefix,
 		}
 		cb_add_error_to_listing (file, line, prefix, errmsg);
 	}
+	print_error_context (file, line);
 }
 
 static void
@@ -928,6 +972,24 @@ cb_verify (const enum cb_support tag, const char *feature)
 	loc.source_column = 0;
 
 	return cb_verify_x (&loc, tag, feature);
+}
+
+/**
+ * tells whether the given compiler option is supported by the current std/configuration
+ * \return	1 = ok/warning/obsolete, 0 = skip/ignore/error/unconformable
+ */
+unsigned int
+cb_is_supported (const enum cb_support tag)
+{
+	switch (tag) {
+	case CB_OK:
+	case CB_WARNING:
+	case CB_ARCHAIC:
+	case CB_OBSOLETE:
+		return 1;
+	default:;
+	}
+	return 0;
 }
 
 enum cb_warn_val

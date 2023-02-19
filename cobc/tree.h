@@ -1098,6 +1098,7 @@ struct cb_file {
 	char			*cname;			/* Name used in C */
 	/* SELECT */
 	cb_tree			assign;			/* ASSIGN */
+	char			*assign_default;	/* [GCOS] Filename to use if file mapping fails  */
 	cb_tree			file_status;		/* FILE STATUS */
 	cb_tree			sharing;		/* SHARING */
 	cb_tree			key;			/* Primary RECORD KEY */
@@ -1148,6 +1149,7 @@ struct cb_file {
 	/* Whether the file's ASSIGN is like "ASSIGN word", not "ASSIGN
            EXTERNAL/DYNAMIC/USING/... word" */
 	unsigned int		flag_assign_no_keyword : 1;
+	unsigned int		flag_select_external : 1; /* [GCOS] EXTERNAL on SELECT */
 	/* Exceptions enabled for file */
 	struct cb_exception	*exception_table;
 };
@@ -2277,6 +2279,7 @@ extern unsigned int	cb_syntax_check_x (cb_tree, const char *, ...) COB_A_FORMAT2
 extern unsigned int	cb_verify (const enum cb_support, const char *);
 extern unsigned int	cb_verify_x (const cb_tree, const enum cb_support,
 				     const char *);
+extern unsigned int	cb_is_supported (const enum cb_support);
 #if 0 /* CHECKME: Is there any place other than "note" where we want to do listing suppression? */
 extern void		listprint_suppress (void);
 extern void		listprint_restore (void);
@@ -2342,6 +2345,9 @@ extern cb_tree		cb_define_switch_name (cb_tree, cb_tree, const int);
 extern void		cb_check_word_length (unsigned int, const char *);
 extern cb_tree		cb_build_section_name (cb_tree, const int);
 extern cb_tree		cb_build_assignment_name (struct cb_file *, cb_tree);
+extern cb_tree		cb_build_interpreted_assignment_name (struct cb_file * const,
+							      const cb_tree,
+							      char ** const);
 extern cb_tree		cb_build_index (cb_tree, cb_tree,
 					const unsigned int, struct cb_field *);
 extern cb_tree		cb_build_identifier (cb_tree, const int);
@@ -2405,6 +2411,9 @@ extern void		cb_emit_allocate_characters (cb_tree, cb_tree, cb_tree);
 
 extern void		cb_emit_alter (cb_tree, cb_tree);
 extern void		cb_emit_free (cb_tree);
+
+extern void		cb_emit_assign_to_file (cb_tree, cb_tree);
+extern void		cb_emit_assign_to_member (cb_tree, cb_tree, cb_tree);
 
 extern void		cb_emit_call (cb_tree, cb_tree, cb_tree, cb_tree,
 				      cb_tree, cb_tree, cb_tree, cb_tree, int);

@@ -9135,6 +9135,16 @@ output_file_initialization (struct cb_file *f)
 	output_param (f->assign, -1);
 	output (";");
 	output_newline ();
+
+	output_prefix ();
+	output ("%s%s->assign_default = ", CB_PREFIX_FILE, f->cname);
+	if (f->assign_default) {
+		output ("\"%s\";", f->assign_default);
+	} else {
+		output ("NULL;");
+	}
+	output_newline ();
+
 	output_prefix ();
 	output ("%s%s->record = ", CB_PREFIX_FILE, f->cname);
 	output_param (CB_TREE (f->record), -1);
@@ -9681,6 +9691,21 @@ output_report_control (struct cb_report *p, int id, cb_tree ctl, cb_tree nx)
 	s = cb_code_field(x);
 	if(nx) {
 		output_report_control(p, id, nx, CB_CHAIN(nx));
+	}
+	bfound = 0;
+	for(i= p->num_lines-1; i >= 0; i--) {
+		if(p->line_ids[i]->report_control) {
+			struct cb_field *c = cb_code_field (p->line_ids[i]->report_control);
+			if(c == s) {
+				bfound = 1;
+				break;
+			}
+		}
+	}
+	if (!bfound) {
+		ctl = NULL;
+		p->controls = NULL;
+		return ;
 	}
 	output_local("/* Report %s: CONTROL %s */\n",p->name,s->name);
 	prvid = 0;

@@ -183,6 +183,9 @@ CB_CONFIG_BOOLEAN (cb_move_nonnumlit_to_numeric_is_zero, "move-non-numeric-lit-t
 CB_CONFIG_BOOLEAN (cb_implicit_assign_dynamic_var, "implicit-assign-dynamic-var",
 	_("implicitly define a variable if an ASSIGN DYNAMIC does not match any data item"))
 
+CB_CONFIG_BOOLEAN (cb_interpret_assign_literal, "interpret-assign-literal",
+	_("interpret literal arguments to ASSIGN clause in SELECT"))
+
 CB_CONFIG_BOOLEAN (cb_device_mnemonics, "device-mnemonics",
 	_("specifying device by mnemonic"))
 
@@ -325,6 +328,9 @@ CB_CONFIG_SUPPORT (cb_hp_octal_literals, "hp-octal-literals",
 CB_CONFIG_SUPPORT (cb_acu_literals, "acu-literals",
 	_("ACUCOBOL-GT literals (#B #O #H #X)"))
 
+CB_CONFIG_BOOLEAN (cb_gcos_ebcdic_literals, "ebcdic-symbolic-characters",
+	_("EBCDIC symbolic characters in literals (\" \"135,151,151\"bar\"195, 194\"Z\" for \" foobarBAZ\")"))
+
 CB_CONFIG_SUPPORT (cb_word_continuation, "word-continuation",
 	_("continuation of COBOL words"))
 
@@ -407,6 +413,15 @@ CB_CONFIG_SUPPORT (cb_continue_after, "continue-after",
 CB_CONFIG_SUPPORT (cb_goto_entry, "goto-entry",
 	_("ENTRY FOR GO TO and GO TO ENTRY statements"))
 
+CB_CONFIG_SUPPORT (cb_select_external, "select-external",
+	_("SELECT EXTERNAL"))
+
+CB_CONFIG_SUPPORT (cb_select_extra_oganization_clauses, "select-extra-organization-clauses",
+	_("extra ORGANIZATION clauses in SELECT"))
+
+CB_CONFIG_SUPPORT (cb_select_with, "select-with",
+	_("WITH clause in SELECT"))
+
 CB_CONFIG_SUPPORT (cb_assign_variable, "assign-variable",
 	_("ASSIGN [TO] variable in SELECT"))
 
@@ -419,6 +434,9 @@ CB_CONFIG_SUPPORT (cb_assign_ext_dyn, "assign-ext-dyn",
 CB_CONFIG_SUPPORT (cb_assign_disk_from, "assign-disk-from",
 	_("ASSIGN DISK FROM variable in SELECT"))
 
+CB_CONFIG_SUPPORT (cb_assign_statement, "assign-statement",
+	_("ASSIGN statement"))
+
 CB_CONFIG_SUPPORT (cb_vsam_status, "vsam-status",
 	_("VSAM status in FILE STATUS"))
 		
@@ -430,3 +448,7 @@ CB_CONFIG_SUPPORT (cb_record_contains_depending_clause, "record-contains-dependi
 
 CB_CONFIG_SUPPORT (cb_picture_l, "picture-l",
 	_("PICTURE string with 'L' character"))
+
+CB_CONFIG_SUPPORT (cb_non_unique_procedure_names, "non-unique-procedure-names",
+	_("allow paragraph names to redefine field and section names"))
+

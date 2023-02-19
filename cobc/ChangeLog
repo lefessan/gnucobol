@@ -126,6 +126,16 @@
 	* reserved.c (SEQUENCE): setting CB_CS_ALPHABET to allow code-name parsing
 	* parser.y, reserved.c: changed reference from 202x to 2023
 
+2023-01-05  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* cobc.c.c: add `cobc_plex_stradd` and `cobc_plex_strsub` allocation
+	  functions for the pplex phase.
+	* replace.c: new file containing the two-phase COPY-REPLACING and REPLACE
+	  mechanism, conforming to COBOL standard.
+	* pplex.l: remove former `pplex_echo` and `pplex_replace` code. The
+  	  `alt_space` parameter is not used anymore, leading to different listing
+	  code in some cases.
+
 2023-01-16  Simon Sobisch <simonsobisch@gnu.org>
 
 	* parser.y (occurs_index): only set VALUE 1 for defaultbyte == INIT
@@ -538,6 +548,14 @@
 	* typeck.c (validate_occurs): change level 01/77 check back to plain
 	  dialect verification fixing #854
 
+2022-10-05  Nicolas Berthier <nicolas.berthier@ocamlpro.com>
+
+	* scanner.l, config.def: Add support for EBCDIC symbolic characters in
+	  alphanumeric literals, which is a GCOS-specific extension; add new
+	  configuration option ebcdic-symbolic-characters
+	* scanner.l, pplex.l: detect and issue a warning when EBCDIC
+	  symbolic character strings include extraneous separators
+
 2022-10-04  Nicolas Berthier <nicolas.berthier@ocamlpro.com>
 
 	* pplex.l, parser.y: fix AREACHECK in DEFAULT SECTION of CONTROL DIVISON
@@ -703,6 +721,27 @@
 	* cobc.c, error.c: adjusted message handling to use local buffers
 	* field.c (has_std_needed_screen_clause), typeck.c (validate_alphabet),
 	  codegen.c (output_initialize_one): minor refactorings
+
+2022-08-02  David Declerck <david.declerck@ocamlpro.com>
+
+	Support GCOS-specific SELECT
+	Support ASSIGN statements (GCOS extension)
+	* config.def: add options interpret-assign-literal, select-external,
+	  select-extra-organization-clauses, select-with
+	* tree.h, typeck.c (cb_build_interpreted_assignment_name,
+	  is_valid_assign_filename): new functions to support tokenization and
+	  parsing of interpreted literals in ASSIGN clause
+	* parser.y: add support for interpreted literals for ASSIGN clause in
+	  SELECT, SELECT EXTERNAL, WITH clause (syntax only), and extra
+	  organization clauses (syntax only)
+	* reserved.c, scanner.l: add reserved keywords for WITH and
+	  organization clauses
+	* codegen.c (output_file_initialization): record default file
+	  assignment
+	* config.def: add option assign-statement
+	* reserved.c: reserved MEMBER keyword
+	* typeck.c (cb_emit_assign_to_file, cb_emit_assign_to_member),
+	  tree.h, parser.y: support ASSIGN statements
 
 2022-08-20  Simon Sobisch <simonsobisch@gnu.org>
 
@@ -948,6 +987,11 @@
 	* codegen.c : Improvement of code emitted for INITIALIZE of tables
 		Initial table values, then clear next,
 		then propagate through remainder of the table
+
+2022-02-04  David Declerck <david.declerck@ocamlpro.com>
+
+	* config.def, typeck.c: allow paragraph names to redefine field
+	  and section names; related to FR#260
 
 2022-05-31  Simon Sobisch <simonsobisch@gnu.org>
 

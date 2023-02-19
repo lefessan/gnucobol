@@ -124,6 +124,77 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0],
 AT_CLEANUP
 
 
+AT_SETUP([GCOS literals with EBCDIC symbols])
+AT_KEYWORDS([extensions gcos ebcdic])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 X             PIC X(11).
+       01 T             PIC 9.
+       01 S             USAGE COMP-1 VALUE ZERO.
+       PROCEDURE        DIVISION.
+           MOVE 1 TO T
+           MOVE ""135,151,151"bar"195,194,234"" TO X
+           IF X NOT EQUAL "foobarBAZ" PERFORM SHOW.
+
+           MOVE 2 TO T
+           MOVE "  "135,151,151"bar"195 194"Z" TO X
+           IF X NOT EQUAL "  foobarBAZ" PERFORM SHOW.
+
+           MOVE 3 TO T
+           MOVE ' '135 151,151'bar'195,194'Z' TO X
+           IF X NOT EQUAL " foobarBAZ" PERFORM SHOW.
+
+           *> GCOS7-specific: should give a ! in between square brackets:
+           *> note square brackets need to be doubled due to m4 preprocessing.
+           MOVE 4 TO T
+           MOVE ""75,80,91"" TO X
+           IF X NOT EQUAL "[[!]]" PERFORM SHOW.
+
+           STOP RUN S.
+       SHOW.
+           DISPLAY "EBCDIC LIT " T " FAILED: X = """ X """"
+           MOVE 1 TO S.
+])
+
+AT_CHECK([$COMPILE -febcdic-symbolic-characters -febcdic-table=ebcdic500_latin1 prog.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([GCOS literals with EBCDIC symbols])
+AT_KEYWORDS([extensions gcos ebcdic])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       PROCEDURE        DIVISION.
+           DISPLAY ""135,151,151"bar"195,194,0""
+           DISPLAY ""135,257""
+           DISPLAY ""135,x,194,1""
+           DISPLAY " "135, 155,""
+           DISPLAY " "135  155, " "
+
+           STOP RUN.
+])
+
+AT_CHECK([$COMPILE -febcdic-symbolic-characters prog.cob], [1], [],
+[prog.cob:5: error: symbolic character 0 out of allowed EBCDIC range (1...256)
+prog.cob:6: error: symbolic character 257 out of allowed EBCDIC range (1...256)
+prog.cob:7: error: invalid character 'x' in sequence of symbolic EBCDIC characters
+prog.cob:8: warning: extraneous separator ' ' in sequence of symbolic EBCDIC characters
+prog.cob:8: warning: extraneous separator at end of symbolic EBCDIC characters
+prog.cob:9: warning: extraneous separator ' ' in sequence of symbolic EBCDIC characters
+prog.cob:9: warning: extraneous separator ' ' in sequence of symbolic EBCDIC characters
+])
+
+AT_CLEANUP
+
+
 AT_SETUP([HP COBOL octal literals])
 AT_KEYWORDS([extensions])
 

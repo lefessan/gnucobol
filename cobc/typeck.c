@@ -2156,8 +2156,15 @@ cb_build_section_name (cb_tree name, const int sect_or_para)
 		if (!CB_LABEL_P (x) || sect_or_para == 0 ||
 		    (sect_or_para && CB_LABEL_P (x) &&
 		    CB_LABEL (x)->flag_section)) {
-			redefinition_error (name);
-			return cb_error_node;
+			if (cb_is_supported(cb_non_unique_procedure_names) &&
+			    (CB_FIELD_P (x) ||
+			     (CB_LABEL_P (x) && CB_LABEL (x)->flag_section))) {
+				/* To display the usual warning messages, if any */
+				cb_verify(cb_non_unique_procedure_names, _("non-unique section or paragraph name"));
+			} else {
+				redefinition_error (name);
+				return cb_error_node;
+			}
 		}
 	}
 
@@ -2233,6 +2240,70 @@ cb_build_assignment_name (struct cb_file *cfile, cb_tree name)
 			cb_list_add (current_program->reference_list, name);
 		return name;
 	}
+}
+
+static int
+is_valid_assign_filename (const char *fn)
+{				/* GCOS rules for ASSIGN filename */
+	while (*fn && (isalnum (*fn) || *fn == '_' || *fn == '-' || *fn == '.'))
+		fn++;
+	return *fn == '\0';
+}
+
+
+/* Tries to interpret GCOS literal-1 to `SELECT x ASSIGN TO y literal-1`
+  where `literal-1` is a string containing zero, one or two positional arguments
+  (i.e. simple words) and additional non-positional arguments (i.e. `key=value`).
+  Returns the filename and also set the assign_default if not NULL.
+*/
+cb_tree
+cb_build_interpreted_assignment_name (struct cb_file * const cfile,
+				      const cb_tree name,
+				      char ** const assign_default)
+{
+	/* assign_default == NULL => only one positional is allowed */
+	cb_tree res = NULL;
+	char	*data, *n, *d, *filename;
+
+	if (!name || name == cb_error_node ||
+            !(CB_LITERAL_P (name) || CB_REFERENCE_P (name))) {
+		return cb_error_node;
+	}
+
+	data = cobc_strdup (CB_LITERAL_P (name)
+			    ? (char *)(CB_LITERAL (name)->data)
+			    : CB_NAME (name));
+	n = strtok (data, " \t,");
+	if (n && strchr (n, '=') == NULL ) { /* get out if non-positional */
+		d = strtok (NULL, " \t,");
+		if (d && strchr (d, '=') == NULL) { /* get out if non-positional */
+			/* two positionals: n is an internal-file-name, d is
+			   the file-name */
+			if (!assign_default) {
+				cb_error_x (name,
+					    _("expected at most one "
+					      "positional parameter in '%s'"),
+					    data);
+			}
+			filename = d;
+		} else {
+			/* only one positional: n is the file-name */
+			filename = n;
+		}
+		res = cb_build_alphanumeric_literal (filename,
+						     strlen (filename));
+		if (assign_default) {
+			/* record filename */
+			*assign_default = cobc_strdup (filename);
+		}
+	}
+	cobc_free (data);
+
+	if (res && !is_valid_assign_filename ((char *)(CB_LITERAL (res)->data))) {
+		cb_error_x (name, _("invalid filename in ASSIGN literal"));
+	}
+
+	return res;
 }
 
 cb_tree
@@ -5854,6 +5925,9 @@ cb_build_expr (cb_tree list)
 		default:
 			v = CB_VALUE (l);
 			if (op == 'x') {
+                                if( has_var && v == cb_zero ){
+                                        has_rel = 1;
+                                }
 				has_var = 1;
 				if (CB_TREE_TAG (v) == CB_TAG_BINARY_OP) {
 					has_rel = 1;
@@ -5861,7 +5935,7 @@ cb_build_expr (cb_tree list)
 				if (CB_TREE_TAG (v) == CB_TAG_FUNCALL) {
 					has_rel = 1;
 				} else
-				if (CB_REF_OR_FIELD_P (v)) {
+                                if (CB_REF_OR_FIELD_P (v)) {
 					f = CB_FIELD_PTR (v);
 					if (f->level == 88) {
 						has_rel = 1;
@@ -8455,6 +8529,115 @@ cb_emit_alter (cb_tree source, cb_tree target)
 	}
 	CB_REFERENCE(source)->flag_alter_code = 1;
 	cb_emit (cb_build_alter (source, target));
+}
+
+/* ASSIGN statement */
+
+void
+cb_emit_assign_to_file (cb_tree file, cb_tree target)
+{
+	struct cb_file *f;
+        int target_is_file = 0;
+
+	file = cb_ref (file);
+	if (file == cb_error_node) {
+		return;
+	}
+
+	f = CB_FILE (file);
+	if (f->assign_default == NULL) {
+		cb_error_x (CB_TREE (current_statement),
+			    _("ASSIGN can only be used on files whose description "
+			      "specify a file literal in their ASSIGN clause"));
+		return;
+	}
+
+	if (CB_INVALID_TREE(target)) {
+		return;
+	}
+
+	if (CB_LITERAL_P (target)) {
+		// Literal is a file-literal (may be followed by params)
+		struct cb_literal *l = CB_LITERAL (target);
+		if (CB_NUMERIC_LITERAL_P (l)) {
+			cb_error_x (CB_TREE (current_statement),
+				    _("literal must be non-numeric in ASSIGN"));
+			return;
+		}
+	} else {
+		cb_tree x = cb_ref (target);
+		if (CB_FIELD_P (x)) {
+			// Field contains a file-literal (may be followed by params)
+			if (CB_TREE_CATEGORY (x) != CB_CATEGORY_ALPHANUMERIC) {
+				cb_error_x (CB_TREE (current_statement),
+					    _("field must be alphanumeric in ASSIGN"));
+				return;
+			}
+		} else if (CB_FILE_P (x)) {
+			target_is_file = 1;
+		} else {
+			return;
+		}
+	}
+
+	if (target_is_file == 0) {
+		cb_emit (CB_BUILD_FUNCALL_3 ("cob_assign_to_file", file, target, NULL));
+	} else {
+		cb_emit (CB_BUILD_FUNCALL_3 ("cob_assign_to_file", file, NULL, target));
+	}
+}
+
+void
+cb_emit_assign_to_member (cb_tree file, cb_tree op, cb_tree target)
+{
+	struct cb_file *f;
+
+	file = cb_ref (file);
+	if (file == cb_error_node) {
+		return;
+	}
+
+	f = CB_FILE (file);
+	if (f->assign_default == NULL) {
+		cb_error_x (CB_TREE (current_statement),
+			    _("ASSIGN can only be used on files whose description "
+			      "specify a file literal in their ASSIGN clause"));
+		return;
+	}
+
+	if (CB_INVALID_TREE (op) || !CB_INTEGER_P (op)) {
+		return;
+	}
+
+	if (target && CB_INVALID_TREE (target)) {
+		return;
+	}
+
+	if (target == NULL) {
+		// ACTUAL
+	} else if (CB_LITERAL_P (target)) {
+		// Literal is a file-literal (may be followed by params)
+		struct cb_literal *l = CB_LITERAL (target);
+		if (CB_NUMERIC_LITERAL_P (l)) {
+			cb_error_x (CB_TREE (current_statement),
+				    _("literal must be non-numeric in ASSIGN"));
+			return;
+		}
+	} else {
+		cb_tree x = cb_ref (target);
+		if (CB_FIELD_P (x)) {
+			// Field contains a file-literal (may be followed by params)
+			if (CB_TREE_CATEGORY (x) != CB_CATEGORY_ALPHANUMERIC) {
+				cb_error_x (CB_TREE (current_statement),
+					    _("field must be alphanumeric in ASSIGN"));
+				return;
+			}
+		} else {
+			return;
+		}
+	}
+
+	CB_PENDING ("TO MEMBER phrase in ASSIGN statement");
 }
 
 /* CALL statement */
