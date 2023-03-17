@@ -1,0 +1,118 @@
+name: MacOS Workflow
+
+on:
+  pull_request:
+    branches: [ gcos4gnucobol-3.x ]
+  push:
+    branches: [ gcos4gnucobol-3.x ]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Configure git
+        run: git config --global core.symlinks false
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install packages
+        run: |
+          brew install automake help2man texinfo bison berkeley-db@4
+          opt="/usr/local/opt"; \
+          for d in automake help2man bison texinfo berkeley-db@4; do \
+            test -d "$opt/$d/bin" && echo "$opt/$d/bin" >> $GITHUB_PATH; \
+            test -d "$opt/$d/lib" && export LDFLAGS="-L$opt/$d/lib $LDFLAGS"; \
+            test -d "$opt/$d/include" && export CPPFLAGS="-I$opt/$d/include $CPPFLAGS"; \
+          done; \
+          echo "LDFLAGS=${LDFLAGS}" >> $GITHUB_ENV; \
+          echo "CPPFLAGS=${CPPFLAGS}" >> $GITHUB_ENV
+
+      - name: Set git user
+        run: |
+          git config --global user.name github-actions
+          git config --global user.email github-actions-bot@users.noreply.github.com
+
+      - name: bootstrap
+        run: |
+          ./autogen.sh
+          autoconf
+          autoreconf --install --force
+
+      - name: Build environment setup
+        run: |
+          mkdir _build
+          echo "NPROC=`sysctl -n hw.ncpu`" >> $GITHUB_ENV
+          export TERM="vt100"
+          echo "TERM=$TERM" >> $GITHUB_ENV
+
+      - name: configure
+        run: |
+          cd _build
+          ../configure --enable-cobc-internal-checks --enable-hardening --prefix /opt/cobol/gnucobol-gcos --exec-prefix /opt/cobol/gnucobol-gcos
+
+      - name: Upload config.log
+        uses: actions/upload-artifact@v3
+        with:
+          name: config.log
+          path: _build/config.log
+#       if: failure()
+
+      - name: make
+        run: |
+          cd _build
+          make --jobs=$((${NPROC}+1))
+
+# make install must be done before make check, otherwise execution of
+# generated COBOL files fail for a missing /usr/local/lib/libcob.dylib
+      - name: make install
+        run: |
+          cd _build
+          sudo make install
+          find /opt/cobol > install.log
+
+      - name: Upload install.log
+        uses: actions/upload-artifact@v3
+        with:
+          name: install.log
+          path: _build/install.log
+
+      - name: check
+        run: |
+          cd _build
+          make check TESTSUITEFLAGS="--jobs=$((${NPROC}+1))"
+
+      - name: Upload testsuite.log
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: testsuite.log
+          path: _build/tests/testsuite.log
+
+      - name: Cache newcob.val.Z
+        uses: actions/cache@v3
+        id: newcob
+        with:
+          path: _build/tests/cobol85/newcob.val.Z.cached
+          key: newcob
+
+      - name: Download newcob.val.Z
+        if: steps.newcob.outputs.cache-hit != 'true'
+        run: |
+          cd _build/tests/cobol85
+          make newcob.val.Z
+          ln -f newcob.val.Z newcob.val.Z.cached
+
+      - name: NIST85 Test Suite
+        run: |
+          cd _build/tests/cobol85
+          ln -f newcob.val.Z.cached newcob.val.Z
+          make EXEC85 && make --jobs=$(($(nproc)+1)) test
