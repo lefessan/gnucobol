@@ -1,4 +1,152 @@
 
+2024-03-17  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+	    Emilien Lemaire <emilien.lemaire@ocamlpro.com>
+
+	* parser.y: generate calls to "cob_prof_function_call" in the
+	  parsetree when profiling is unabled, when entering/leaving
+	  profiled blocks
+	* flag.def: add `-fprof` to enable profiling
+	* tree.h: add a flags field to cb_goto, add profiling
+	  fields to cb_program, add cb_prof_call enum and export
+	  cb_build_prof_call and cb_prof_procedure_fivision functions
+	* tree.c (cb_build_program): initialize the new profiling
+	  fields of the cb_program structure
+	* tree.c (cb_build_goto): add a "flags" argument
+	  (stored in the cb_program structure)
+	* typeck.c (cb_emit_goto): add a "flags" argument
+	  (passed to cb_build_goto)
+	* codegen.c: handle profiling code generation under the
+	  cb_flag_prof guard
+
+2024-02-19  Boris Eng <boris.eng@ocamlpro.com>
+
+	* parser.y (screen_value_clause): replaced basic literals by literals
+
+2024-01-28  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* parser.y: fix SEGFAULT when checking the BY VALUE arguments of a
+          prototype with ANY LENGTH
+
+2024-01-25  David Declerck <david.declerck@ocamlpro.com>
+
+	FR #459: support COLLATING SEQUENCE clause on SELECT / INDEXED files
+	* codegen.c (output_file_initialization): output the indexed
+	  file/keys collating sequence (were already present in the AST)
+	* tree.c (validate_indexed_key_field): process postponed
+	  key collating sequences
+	* parser.y (collating_sequence_clause, collating_sequence_clause_key):
+	  replace CB_PENDING by CB_UNFINISHED on file and key collating sequence
+	* flag.def, tree.c, tree.h, cobc.c, parser.y: add and handle a new
+	  -fdefault-file-colseq flag to specify the default collating
+	  sequence to use for files without a collating sequence clause
+
+2023-10-12  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* cobc.c, codegen.c: new option --include FILE, to #include
+	  additional files in the C generated code. Such files can be
+	  used to statically check the number of arguments in static
+	  calls, for example. The files are put into quotes, unless
+	  they start by '<'. Since C files are compiled in a temp dir,
+	  quoted files should be absolute paths. Implementing FR #176
+
+2023-10-11  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* cobc.c, pplex.l: new option --copy COPYBOOK, to include a COPYBOOK
+	  before reading the source file
+
+2023-11-29  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* cobc.c (cobc_clean_up): when save-temps specifies a directory,
+	  do not move object files and preprocess files when they were
+	  specified as an explicit target on the command line (-E, -c)
+
+2023-09-20  Simon Sobisch <simonsobisch@gnu.org>
+
+	* typeck.c (cb_build_optim_cond): generate calls to new functions
+	  for numeric zero compare for USAGE DISPLAY and PACKED, as well
+	  as comparison between two USAGE DISPLAY or USAGE DISPLAY to literal
+	* typeck.c (validate_move): internally change literals like 0.00
+	  to zero constant allowing use of optimized MOVE code
+
+2023-10-17  David Declerck <david.declerck@ocamlpro.com>
+
+	BUG #923: generated modules init/clear unused decimal constants
+	* codegen.c (literal_list): removal of the unused x field,
+	  and type moved to tree.h
+	* tree.h (struct cb_program): new decimal_constant field
+	  to store decimal constants used by the current program,
+	* codegen.c (cb_cache_program_decimal_constant): new function
+	  that adds constants used by the current program to the new
+	  decimal_constant field in struct cb_prog
+	* codegen.c (cb_lookup_literal): added the current program as
+	  argument to cb_lookup_literal to account for different
+	  usage contexts (parse/typecheck vs codegen)
+	* codegen.c (output_internal_function): iterate over
+	  prog->decimal_constants instead of literal_cache so as to only
+	  output decimal constants actually used by the current program
+	* typeck.c (decimal_expand, cb_build_cond_fields),
+	  codegen.c (output_param) : pass current_program to cb_lookup_literal
+
+	BUG #917: segfault on decimal constant after CANCEL on subprogram
+	* codegen.c (codegen_internal, codegen_finalize): move declaration
+	  of decimal constants from global storage to local storage
+
+2023-10-02  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* error.c (print_error_prefix), flag.def: new flag
+	  -fdiagnostics-absolute-paths to print the full path of
+	  a file for diagnostics; this flag can be activated if
+	  your editor and build system do not correctly work
+	  together to locate files from diagnostic output
+
+2023-09-12  Simon Sobisch <simonsobisch@gnu.org>
+
+	* codegen.c (literal_list): removed self-reference as tree
+	* replace.c (ppecho_replace): now inline
+	* replace.c (cb_free_replace): removed setting child to zero before free
+	* replace.c: style adjustment
+
+2023-09-07  Simon Sobisch <simonsobisch@gnu.org>
+
+	* typeck.c (cb_build_converting): protoype (disabled) to pre-generate
+	  conversion table and call new function cob_inspect_translating instead
+	  of cob_inspect_converting if both operands are literals/alphabets
+
+2023-09-06  Simon Sobisch <simonsobisch@gnu.org>
+
+	* typeck.c (validate_inspect): check for identical operands,
+	  check for invalid combination of operands
+	* typeck.c (cb_build_converting): shortcut when identical operands
+	  are used
+	* tree.h: change alphabet_target and alphabet_type from defines to enums
+
+2023-09-01  Simon Sobisch <simonsobisch@gnu.org>
+
+	FR #443: error handling for non-cobol "sources"
+	* pplex.l (ppopen_get_file): test for binary file and directly error out
+	* cobc.c (cobc_terminate_exit), cobc.h: split cobc_terminate and make
+	  the new function available
+	* pplex.l: check for format errors per file and skip format related
+	  warnings if the file reached a max. of 5 such errors
+	* error.c, cobc.c (print_program_trailer), flag.def:
+	  implemented -fmax-errors=0 as unlimited
+	* flag.def (max_errors): reduced default from 128 to 20
+	* config.c (cb_load_conf), error.c (configuration_error): count missing
+	  definitions as single error
+	* cobc.c (process_command_line): passing -O0 by defaut for -g as some
+	  C compilers raise warnings otherwise, breaking the testsuite
+
+2023-08-25  Simon Sobisch <simonsobisch@gnu.org>
+
+	* codeoptim.c (cob_gen_optim): fixed to actually skip leading zeros
+	  for COB_GET_NUMDISP and COB_GET_NUMDISPS
+
+2023-08-22  Simon Sobisch <simonsobisch@gnu.org>
+
+	* typeck.c (emit_definition_note): renamed from warning_destination
+	* typeck.c (emit_definition_note), tree.h (cb_field): prevent output
+	  of the same field multiple times by new flag_had_definition_note
+
 2023-07-26  Simon Sobisch <simonsobisch@gnu.org>
 
 	* typeck.c (search_set_keys): improving SEARCH ALL syntax checks

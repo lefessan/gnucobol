@@ -124,14 +124,6 @@ struct attr_list {
 	cob_u32_t		flags;
 };
 
-struct literal_list {
-	struct literal_list	*next;
-	struct cb_literal	*literal;
-	cb_tree			x;
-	int			id;
-	int			make_decimal;
-};
-
 struct field_list {
 	struct field_list	*next;
 	struct cb_field		*f;
@@ -669,7 +661,12 @@ output_string (const unsigned char *s, const int size, const cob_u32_t llit)
 	for (i = 0; i < size; i++) {
 		c = s[i];
 		if (!isprint (c)) {
+#if 1	/* octal */
 			output ("\\%03o", c);
+#else	/* hex (can be useful for a small amount of non-printable characters,
+		   but gets really uggly if the string has a lot of those */
+			output ("\" \"\\x%X\" \"", c);
+#endif
 		} else if (c == '\"') {
 			output ("\\%c", c);
 		} else if ((c == '\\' || c == '?') && !llit) {
@@ -754,7 +751,7 @@ chk_field_variable_address (struct cb_field *fld)
 {
 	if (!fld->flag_vaddr_done) {
 		/* CHECKME: only sliding odo may create a varying address, no? */
-		/* Note: this is called _very_ often and takes 15-20% of parse + codegen time,
+		/* Note: this was called _very_ often and took 15-20% of parse + codegen time,
 		   with about half the time in chk_field_variable_size; so try to not call
 		   this function if not necessary (according to the testsuite: as long as
 		   cb_odoslide is not set, but the caller's coverage is not that well...) */
@@ -762,7 +759,7 @@ chk_field_variable_address (struct cb_field *fld)
 		struct cb_field		*p;
 		for (p = f->parent; p; f = f->parent, p = f->parent) {
 			for (p = p->children; p != f; p = p->sister) {
-#if 0	/* CHECKME: why does this fail the testsuite ? */
+#if 0	/* CHECKME: Why does this fail the testsuite ? Most likely "recompute" issue */
 				if (p->flag_vaddr_done) {
 					if (!p->vaddr) {
 						continue;
@@ -772,10 +769,9 @@ chk_field_variable_address (struct cb_field *fld)
 					return 1;
 				}
 #endif
-				/* Skip PIC L fields as their representation
-				   have constant length */
-				if (p->depending ||
-				    (!p->flag_picture_l && chk_field_variable_size (p))) {
+				if (p->depending	/* ODO leads to variable size */
+				 || (!p->flag_picture_l && chk_field_variable_size (p)) /* skipping PIC L fields */
+				   ) {
 #if 0	/* only useful with the code above */
 					/* as we have a variable address, all sisters will also;
 					   store this for next check */
@@ -1323,8 +1319,8 @@ output_size (const cb_tree x)
 			output ("%s%d.size - ", CB_PREFIX_FIELD, f->id);
 			output_index (r->offset);
 		} else if (chk_field_variable_size (f)
-			&& cb_odoslide
-			&& !gen_init_working) {
+		 && cb_odoslide
+		 && !gen_init_working) {
 			out_odoslide_size (f);
 		} else {
 			struct cb_field		*p = chk_field_variable_size (f);
@@ -1832,6 +1828,17 @@ output_gnucobol_defines (const char *formatted_date)
 		(current_compile_tm.tm_min * 100) +
 		current_compile_tm.tm_sec;
 	output_line ("#define  COB_MODULE_TIME\t\t%d", i);
+
+	{
+		struct cb_text_list *l = cb_include_file_list ;
+		for (;l;l=l->next){
+			if (l->text[0] == '<'){
+				output_line ("#include %s", l->text);
+			} else {
+				output_line ("#include \"%s\"", l->text);
+			}
+		}
+	}
 
 }
 
@@ -2597,7 +2604,7 @@ output_literals_figuratives_and_constants (void)
 #else
 		output ("static const cob_field %s%d\t= ",
 			CB_PREFIX_CONST, lit->id);
-		output_field (lit->x);
+		output_field (CB_TREE(lit->literal));
 #endif
 		output (";");
 		output_newline ();
@@ -2763,8 +2770,32 @@ output_source_cache (void)
 
 /* Literal */
 
+/* Add the given literal to the list of "seen" decimal
+   constants in the given program "prog" */
+static void
+cb_cache_program_decimal_constant (struct cb_program *prog, struct literal_list *cached_literal)
+{
+	struct literal_list	*l;
+	for (l = prog->decimal_constants; l; l = l->next) {
+		if (cached_literal->id == l->id) {
+			return;
+		}
+	}
+
+	l = cobc_parse_malloc (sizeof (struct literal_list));
+	l->id = cached_literal->id;
+	l->literal = cached_literal->literal;
+	l->make_decimal = cached_literal->make_decimal;
+	l->next = prog->decimal_constants;
+	prog->decimal_constants = l;
+}
+
+/* Resolve literal "x" from the literal cache and return its id.
+   The literal is added to the literal cache if missing.
+   Additionally, if the literal is a decimal constant, it is
+   added to the list of "seen" decimal constant of program "prog". */
 int
-cb_lookup_literal (cb_tree x, int make_decimal)
+cb_lookup_literal (struct cb_program *prog, cb_tree x, int make_decimal)
 {
 	struct cb_literal	*literal;
 	struct literal_list	*l;
@@ -2781,6 +2812,7 @@ cb_lookup_literal (cb_tree x, int make_decimal)
 			    (size_t)literal->size) == 0) {
 			if (make_decimal) {
 				l->make_decimal = 1;
+				cb_cache_program_decimal_constant (prog, l);
 			}
 			return l->id;
 		}
@@ -2794,9 +2826,11 @@ cb_lookup_literal (cb_tree x, int make_decimal)
 	l->id = cb_literal_id;
 	l->literal = literal;
 	l->make_decimal = make_decimal;
-	l->x = x;
 	l->next = literal_cache;
 	literal_cache = l;
+	if (make_decimal) {
+		cb_cache_program_decimal_constant (prog, l);
+	}
 
 	return cb_literal_id++;
 }
@@ -3135,7 +3169,7 @@ output_long_integer (cb_tree x)
 	switch (CB_TREE_TAG (x)) {
 	case CB_TAG_CONST:
 		if (x == cb_zero) {
-			output (CB_FMT_LLD_F, 0LL);
+			output (CB_FMT_LLD_F, COB_S64_C(0));
 		} else if (x == cb_null) {
 			output ("(cob_u8_ptr)NULL");
 		} else {
@@ -3655,10 +3689,10 @@ output_param (cb_tree x, int id)
 	}
 	case CB_TAG_LITERAL:
 		if (nolitcast) {
-			output ("&%s%d", CB_PREFIX_CONST, cb_lookup_literal (x, 0));
+			output ("&%s%d", CB_PREFIX_CONST, cb_lookup_literal (current_prog, x, 0));
 		} else {
 			output ("(cob_field *)&%s%d", CB_PREFIX_CONST,
-				cb_lookup_literal (x, 0));
+				cb_lookup_literal (current_prog, x, 0));
 		}
 		break;
 	case CB_TAG_FIELD:
@@ -4294,7 +4328,6 @@ output_funcall_item (cb_tree x, const int i, unsigned int func_nolitcast)
 	output_param (x, i);
 }
 
-
 static void
 output_funcall (cb_tree x)
 {
@@ -4309,6 +4342,61 @@ output_funcall (cb_tree x)
 		output_funcall_typed (p, p->name[1]);
 		return;
 	}
+
+	if ( cb_flag_prof && p->name == cob_prof_function_call_str ) {
+
+		int proc_idx ;
+
+		switch ( CB_INTEGER (p->argv[0])->val ){
+
+		case COB_PROF_EXIT_PARAGRAPH:
+			proc_idx = CB_INTEGER(p->argv[1])->val;
+			output ("cob_prof_exit_procedure (prof_info, %d)", proc_idx);
+			break;
+		case COB_PROF_ENTER_SECTION:
+			proc_idx = CB_INTEGER(p->argv[1])->val;
+			output ("cob_prof_enter_section (prof_info, %d)", proc_idx);
+			break;
+		case COB_PROF_EXIT_SECTION:
+			proc_idx = CB_INTEGER(p->argv[1])->val;
+			output ("cob_prof_exit_section (prof_info, %d)", proc_idx);
+			break;
+		case COB_PROF_ENTER_CALL:
+			proc_idx = CB_INTEGER(p->argv[1])->val;
+			output ("cob_prof_enter_procedure (prof_info, %d)", proc_idx);
+			break;
+		case COB_PROF_EXIT_CALL:
+			proc_idx = CB_INTEGER(p->argv[1])->val;
+			output ("cob_prof_exit_procedure (prof_info, %d)", proc_idx);
+			break;
+		case COB_PROF_ENTER_PARAGRAPH:
+			proc_idx = CB_INTEGER(p->argv[1])->val;
+			output ("cob_prof_enter_procedure (prof_info, %d);", proc_idx);
+			output_newline ();
+			output_prefix ();
+			output ("fallthrough_label = 0");
+			break;
+		case COB_PROF_USE_PARAGRAPH_ENTRY: {
+			int paragraph_idx = CB_INTEGER(p->argv[1])->val;
+			int entry_idx = CB_INTEGER(p->argv[2])->val;
+			output ("if (!fallthrough_label)");
+			output_block_open ();
+			output_line ("cob_prof_use_paragraph_entry (prof_info, %d, %d);",
+				     paragraph_idx, entry_idx);
+			output_block_close ();
+			output_line ("else");
+			output_block_open ();
+			output_line ("fallthrough_label = 0;");
+			output_block_close ();
+			break;
+		}
+		case COB_PROF_STAYIN_PARAGRAPH:
+			output ("fallthrough_label = 1");
+			break;
+		}
+		return;
+	}
+
 
 	screenptr = p->screenptr;
 	output ("%s (", p->name);
@@ -7902,6 +7990,13 @@ output_goto (struct cb_goto *p)
 	struct cb_field	*f;
 	int		i;
 
+	if (cb_flag_prof) {
+		/* Output this only if we are exiting the paragraph... */
+		if ( !(p->flags & CB_GOTO_FLAG_SAME_PARAGRAPH) ){
+			output_line ("cob_prof_goto (prof_info);");
+		}
+	}
+
 	i = 1;
 	if (p->depending) {
 		/* Check for debugging on the DEPENDING item */
@@ -9237,6 +9332,39 @@ output_key_components (struct cb_file* f, struct cb_key_component* key_component
 	}
 }
 
+
+static void
+output_indexed_file_key_colseq (const struct cb_file *f, const struct cb_alt_key *ak, int idx)
+{
+	const cb_tree	key = ak ? ak->key : f->key;
+	const cb_tree	key_col = ak ? ak->collating_sequence_key : f->collating_sequence_key;
+	const int	type = cb_tree_type (key, cb_code_field (key));
+	cb_tree		col = NULL;
+
+	/* We only apply a collating sequence if the key is alphanumeric / display */
+	if ((type & COB_TYPE_ALNUM) || (type == COB_TYPE_NUMERIC_DISPLAY)) {
+		col = key_col ? key_col : f->collating_sequence;
+#if 0	/* TODO: this should be done for national, when available */
+	} else if (type & COB_TYPE_NATIONAL) {
+		col = key_col_n ? key_col_n : f->collating_sequence_n;
+#endif
+	}
+
+	output_prefix ();
+	if (idx == 0) {
+		output ("%s%s->collating_sequence = ", CB_PREFIX_KEYS, f->cname);
+	} else {
+		output ("(%s%s + %d)->collating_sequence = ", CB_PREFIX_KEYS, f->cname, idx);
+	}
+	if (col != NULL && CB_REFERENCE_P (col)) {
+		output_param (cb_ref(col), -1);
+		output (";");
+	} else {
+		output ("NULL;");
+	}
+	output_newline ();
+}
+
 static void
 output_file_initialization (struct cb_file *f)
 {
@@ -9297,6 +9425,9 @@ output_file_initialization (struct cb_file *f)
 		} else {
 			output_line ("%s%s->offset = 0;", CB_PREFIX_KEYS, f->cname);
 		}
+		if (f->organization == COB_ORG_INDEXED) {
+			output_indexed_file_key_colseq (f, NULL, 0);
+		}
 		nkeys = 1;
 		for (l = f->alt_key_list; l; l = l->next) {
 			output_prefix ();
@@ -9318,6 +9449,9 @@ output_file_initialization (struct cb_file *f)
 				output_line ("(%s%s + %d)->offset = 0;", CB_PREFIX_KEYS,
 					f->cname, nkeys);
 				output_key_components (f, l->component_list, nkeys);
+			}
+			if (f->organization == COB_ORG_INDEXED) {
+				output_indexed_file_key_colseq (f, l, nkeys);
 			}
 			nkeys++;
 		}
@@ -12183,6 +12317,19 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 
 	/* Entry dispatch */
 	output_line ("/* Entry dispatch */");
+	if (cb_flag_prof) {
+		output_line ("if (!prof_info) {");
+		output_line (
+			"\tprof_info = cob_prof_init_module (module, prof_procedures, %d);",
+			prog->procedure_list_len);
+		output_line ("}");
+
+		/* Prevent CANCEL from dlclose() the module, because
+		   we keep pointers to static data there. */
+		output_line ("if (prof_info) { module->flag_no_phys_canc = 1; }");
+
+		output_line ("cob_prof_enter_procedure (prof_info, 0);");
+	}
 	if (cb_flag_stack_extended) {
 		/* entry marker = first frameptr is the one with
 		   an empty (instead of NULL) section name */;
@@ -12277,7 +12424,9 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 			output_newline ();
 		}
 	}
-
+	if (cb_flag_prof){
+		output_line ("cob_prof_exit_procedure (prof_info, 0);");
+	}
 	if (!prog->flag_recursive) {
 		output_line ("/* Decrement module active count */");
 		output_line ("if (module->module_active) {");
@@ -12489,7 +12638,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	/* Check matching version */
 #if !defined (HAVE_ATTRIBUTE_CONSTRUCTOR)
 #ifdef _WIN32
-	if (prog->flag_main)	/* otherwise we generate that in DllMain*/
+	if (prog->flag_main)	/* otherwise we generate that in DllMain */
 #else
 	if (!prog->nested_level)
 #endif
@@ -12601,21 +12750,18 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	}
 
 	seen = 0;
-	for (m = literal_cache; m; m = m->next) {
-		if (CB_TREE_CLASS (m->x) == CB_CLASS_NUMERIC
-		 && m->make_decimal) {
-			if (!seen) {
-				seen = 1;
-				output_line ("/* Set Decimal Constant values */");
-			}
-			output_line ("%s%d = &%s%d;", CB_PREFIX_DEC_CONST, m->id,
-				     CB_PREFIX_DEC_FIELD, m->id);
-			output_line ("cob_decimal_init (%s%d);", CB_PREFIX_DEC_CONST, m->id);
-			output_line ("cob_decimal_set_field (%s%d, (cob_field *)&%s%d);",
-				     CB_PREFIX_DEC_CONST, m->id,
-				     CB_PREFIX_CONST, m->id);
-			output_newline ();
+	for (m = prog->decimal_constants; m; m = m->next) {
+		if (!seen) {
+			seen = 1;
+			output_line ("/* Set Decimal Constant values */");
 		}
+		output_line ("%s%d = &%s%d;", CB_PREFIX_DEC_CONST, m->id,
+			     CB_PREFIX_DEC_FIELD, m->id);
+		output_line ("cob_decimal_init (%s%d);", CB_PREFIX_DEC_CONST, m->id);
+		output_line ("cob_decimal_set_field (%s%d, (cob_field *)&%s%d);",
+			     CB_PREFIX_DEC_CONST, m->id,
+			     CB_PREFIX_CONST, m->id);
+		output_newline ();
 	}
 	if (seen) {
 		output_newline ();
@@ -12809,16 +12955,13 @@ cancel_end:
 	output_newline ();
 	output_line ("P_clear_decimal:");
 	seen = 0;
-	for (m = literal_cache; m; m = m->next) {
-		if (CB_TREE_CLASS (m->x) == CB_CLASS_NUMERIC
-		 && m->make_decimal) {
-			if (!seen) {
-				seen = 1;
-				output_line ("/* Clear Decimal Constant values */");
-			}
-			output_line ("cob_decimal_clear (%s%d);", CB_PREFIX_DEC_CONST, m->id);
-			output_line ("%s%d = NULL;", CB_PREFIX_DEC_CONST, m->id);
+	for (m = prog->decimal_constants; m; m = m->next) {
+		if (!seen) {
+			seen = 1;
+			output_line ("/* Clear Decimal Constant values */");
 		}
+		output_line ("cob_decimal_clear (%s%d);", CB_PREFIX_DEC_CONST, m->id);
+		output_line ("%s%d = NULL;", CB_PREFIX_DEC_CONST, m->id);
 	}
 	if (seen) {
 		output_newline ();
@@ -13612,6 +13755,45 @@ output_header (const char *locbuff, const struct cb_program *cp)
 	}
 }
 
+static void
+output_cob_prof_data ( struct cb_program * program )
+{
+	if (cb_flag_prof) {
+		struct cb_procedure_list *l;
+		char sep = ' ';
+
+		output_local ("/* cob_prof data */\n\n");
+
+		output_local ("static const int nprocedures = %d;\n",
+			      program->procedure_list_len);
+		output_local ("static struct cob_prof_procedure prof_procedures[%d] = {\n",
+			      program->procedure_list_len);
+		sep = ' ';
+		for (l = program->procedure_list; l; l=l->next) {
+			output_local ("  %c { \"%s\", \"%s\", %d,  %d, %d }\n",
+				      sep,
+				      l->proc.text,
+				      l->proc.file,
+				      l->proc.line,
+				      l->proc.section,
+				      l->proc.kind
+				);
+			sep = ',';
+		}
+		output_local ("};\n");
+
+		output_local ("static int fallthrough_label = 0;\n");
+		output_local ("static struct cob_prof_module *prof_info;\n");
+
+		output_local ("\n/* End of cob_prof data */\n");
+
+		program->procedure_list = NULL;
+		program->procedure_list_len = 0;
+		program->prof_current_section = -1;
+		program->prof_current_paragraph = -1;
+	}
+}
+
 void
 codegen (struct cb_program *prog, const char *translate_name)
 {
@@ -13887,6 +14069,7 @@ codegen_internal (struct cb_program *prog, const int subsequent_call)
 
 	output_local_base_cache ();
 	output_local_field_cache (prog);
+	output_cob_prof_data (prog);
 
 	/* Report data fields */
 	if (prog->report_storage) {
@@ -13926,6 +14109,27 @@ codegen_internal (struct cb_program *prog, const int subsequent_call)
 		/* Switch to main storage file */
 		output_target = cb_storage_file;
 	}
+
+	/* Decimal constants */
+	{
+		struct literal_list* m = literal_cache;
+		int comment_gen = 0;
+		for (; m; m = m->next) {
+			if (m->make_decimal) {
+				if (!comment_gen) {
+					comment_gen = 1;
+					output_local ("\n/* Decimal constants */\n");
+				}
+				output_local ("static\tcob_decimal\t%s%d;\n",
+						CB_PREFIX_DEC_FIELD, m->id);
+				output_local ("static\tcob_decimal\t*%s%d = NULL;\n",
+						CB_PREFIX_DEC_CONST, m->id);
+			}
+		}
+		if (comment_gen) {
+			output_local ("\n");
+		}
+	}
 }
 
 void
@@ -13962,28 +14166,6 @@ codegen_finalize (void)
 				cob_gen_optim (optidx);
 				output_storage ("\n");
 			}
-		}
-	}
-
-	/* Decimal constants */
-	{
-		struct literal_list* m;
-		int comment_gen = 0;
-		for (m = literal_cache; m; m = m->next) {
-			if (CB_TREE_CLASS (m->x) == CB_CLASS_NUMERIC
-			 && m->make_decimal) {
-				if (!comment_gen) {
-					comment_gen = 1;
-					output_storage ("\n/* Decimal constants */\n");
-				}
-				output_storage ("static\tcob_decimal\t%s%d;\n",
-						CB_PREFIX_DEC_FIELD, m->id);
-				output_storage ("static\tcob_decimal\t*%s%d = NULL;\n",
-						CB_PREFIX_DEC_CONST, m->id);
-			}
-		}
-		if (comment_gen) {
-			output_storage ("\n");
 		}
 	}
 

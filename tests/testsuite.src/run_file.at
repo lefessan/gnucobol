@@ -1,4 +1,4 @@
-## Copyright (C) 2003-2012, 2014-2023 Free Software Foundation, Inc.
+## Copyright (C) 2003-2012, 2014-2024 Free Software Foundation, Inc.
 ## Written by Keisuke Nishida, Roger While, Simon Sobisch, Ron Norman,
 ## Brian Tiffin, Joe Robbins, Edward Hart
 ##
@@ -86,6 +86,147 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
 AT_CLEANUP
 
 
+AT_SETUP([CLOSE WITH LOCK])
+AT_KEYWORDS([runfile OPEN WRITE READ DELETE FILE])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. prog.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT  FILE-TBL      ASSIGN TO "testfile"
+                   ORGANIZATION  IS SEQUENTIAL
+                   FILE STATUS   IS WSFS.
+           SELECT  FILE0         ASSIGN TO "testfile"
+                   ORGANIZATION  IS SEQUENTIAL
+                   FILE STATUS   IS WSFS.
+       DATA DIVISION.
+       FILE SECTION.
+       FD  FILE0.
+       01  F0REC             PIC X(80).
+       FD  FILE-TBL.
+       01  FOREC             PIC X(80).
+       WORKING-STORAGE SECTION.
+       01  WSFS              PIC X(2).
+       PROCEDURE DIVISION.
+      *
+           OPEN OUTPUT FILE-TBL
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS OPEN OUTPUT:" WSFS.
+           MOVE ALL "A" TO FOREC
+           WRITE FOREC
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS WRITE A:" WSFS.
+           CLOSE FILE-TBL WITH LOCK
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS CLOSE WITH LOCK:" WSFS.
+           OPEN INPUT FILE-TBL
+           IF WSFS NOT = "38"
+              DISPLAY "STATUS INPUT after CLOSE LOCK:" WSFS.
+           CLOSE FILE-TBL
+           IF WSFS NOT = "42"
+              DISPLAY "STATUS CLOSE non-opened:" WSFS.
+      *
+      *    Note: MicroFocus _does_ delete the file and returns status 00 here
+           DELETE FILE FILE-TBL
+           IF WSFS NOT = "38"
+              DISPLAY "STATUS DELETE FILE after CLOSE LOCK:" WSFS.
+      *
+           OPEN INPUT FILE0
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS INPUT separate file:" WSFS.
+           READ FILE0 NEXT
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS READ A:" WSFS.
+           IF F0REC NOT = ALL "A"
+              DISPLAY "content not ALL 'A':" F0REC ":".
+           CLOSE FILE0
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS CLOSE:" WSFS.
+      *
+           STOP RUN.
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([CLOSE WITH LOCK, EXTERNAL FILE])
+AT_KEYWORDS([runfile OPEN WRITE READ DELETE FILE])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. prog.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT  FILE-TBL      ASSIGN TO "testfile"
+                   ORGANIZATION  IS SEQUENTIAL
+                   FILE STATUS   IS WSFS.
+       DATA DIVISION.
+       FILE SECTION.
+       FD  FILE-TBL EXTERNAL.
+       01  FOREC             PIC X(80).
+       WORKING-STORAGE SECTION.
+       01  WSFS              PIC X(2).
+       PROCEDURE DIVISION.
+      *
+           OPEN OUTPUT FILE-TBL
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS OPEN OUTPUT:" WSFS.
+           MOVE ALL "A" TO FOREC
+           WRITE FOREC
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS WRITE A:" WSFS.
+           CLOSE FILE-TBL WITH LOCK
+           IF WSFS NOT = "00"
+              DISPLAY "STATUS CLOSE WITH LOCK:" WSFS.
+      *
+           CALL "progb".
+      *
+           STOP RUN.
+])
+
+AT_DATA([progb.cob], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. progb.
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT  FILE-TBL      ASSIGN TO "testfile"
+                   ORGANIZATION  IS SEQUENTIAL
+                   FILE STATUS   IS WSFS.
+       DATA DIVISION.
+       FILE SECTION.
+       FD  FILE-TBL EXTERNAL.
+       01  FOREC             PIC X(80).
+       WORKING-STORAGE SECTION.
+       01  WSFS              PIC X(2).
+       PROCEDURE DIVISION.
+      *
+           OPEN INPUT FILE-TBL
+           IF WSFS NOT = "38"
+              DISPLAY "STATUS INPUT after CLOSE LOCK:" WSFS.
+           CLOSE FILE-TBL
+           IF WSFS NOT = "42"
+              DISPLAY "STATUS CLOSE non-opened:" WSFS.
+           DELETE FILE FILE-TBL
+           IF WSFS NOT = "38"
+              DISPLAY "STATUS DELETE FILE after CLOSE LOCK:" WSFS.
+      *
+           GOBACK.
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE progb.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([variable-length SEQUENTIAL data integrity])
 AT_KEYWORDS([runfile record OPEN])
 
@@ -115,12 +256,12 @@ AT_DATA([prog.cob], [
        DATA DIVISION.
        FILE SECTION.
        FD TEST-XML00 RECORD VARYING FROM 5 TO 500 CHARACTERS.
-       01 E-ENR                          PIC X(500).
+       01 E-ENR          PIC X(500).
        WORKING-STORAGE SECTION.
-       01 ST-TEST  PIC X(2).
-       01 W-TYPE   PIC 9(03) VALUE ZERO.
+       01 ST-TEST        PIC X(2).
+       01 W-TYPE         PIC 9(03) VALUE ZERO.
        01 EOF-TEST-XML   PIC 9(03) VALUE ZERO.
-       01 COUNT-PASS   PIC 9(02) VALUE ZERO.
+       01 COUNT-PASS     PIC 9(02) VALUE ZERO.
        PROCEDURE DIVISION.
        DEBUT.
            OPEN INPUT  TEST-XML00
@@ -1806,8 +1947,9 @@ AT_DATA([prog.cob], [
                MOVE ALL "*"                  TO CM-TAPE.
 
            WRITE TSPFL-RECORD.
-           IF CUST-STAT NOT = "00"
-           AND CUST-STAT NOT = "02"
+      *    Note: some ISAM implementations do not support status 02
+           IF  CUST-STAT NOT = "02"
+           AND CUST-STAT NOT = "00"
                DISPLAY "Key: " TSPFL-KEY ", Status: " CUST-STAT
                                  UPON CONSOLE.
 
@@ -7015,9 +7157,9 @@ AT_DATA([prog.cob], [
            MOVE "~~~" TO f-key1-2
            START f KEY = f-key1-1
            READ f NEXT
-           IF (f-status <> "00") OR
-                   (file1-serial <> 4)
-               DISPLAY "FAILED 1: status " f-status "-"
+           IF (f-status <> "00")
+           OR (file1-serial <> 4)
+               DISPLAY "FAILED 1: status " f-status " - "
                        "serial: " file1-serial
            END-IF
 
@@ -7025,9 +7167,9 @@ AT_DATA([prog.cob], [
            MOVE "~~~" TO f-key1-2
            START f KEY < f-key1-1
            READ f PREVIOUS
-           IF (f-status <> "00") OR
-                   (file1-serial <> 3)
-               DISPLAY "FAILED 2: status " f-status "-"
+           IF (f-status <> "00")
+           OR (file1-serial <> 3)
+               DISPLAY "FAILED 2: status " f-status " - "
                        "serial: " file1-serial
            END-IF
 
@@ -7035,9 +7177,9 @@ AT_DATA([prog.cob], [
            MOVE "~~~" TO f-key1-2
            START f KEY > f-key1-1
            READ f NEXT
-           IF (f-status <> "00") OR
-                   (file1-serial <> 4)
-               DISPLAY "FAILED 3: status " f-status "-"
+           IF (f-status <> "00")
+           OR (file1-serial <> 4)
+               DISPLAY "FAILED 3: status " f-status " - "
                        "serial: " file1-serial
            END-IF
 
@@ -7045,9 +7187,9 @@ AT_DATA([prog.cob], [
            MOVE "~~~" TO f-key2-2
            START f KEY = f-key2-1
            READ f NEXT
-           IF (f-status <> "00") OR
-                   (file1-serial <> 4)
-               DISPLAY "FAILED 4: status " f-status "-"
+           IF (f-status <> "00")
+           OR (file1-serial <> 4)
+               DISPLAY "FAILED 4: status " f-status " - "
                        "serial: " file1-serial
            END-IF
 
@@ -7055,9 +7197,9 @@ AT_DATA([prog.cob], [
            MOVE "~~~" TO f-key2-2
            START f KEY < f-key2-1
            READ f PREVIOUS
-           IF (f-status <> "00") OR
-                   (file1-serial <> 3)
-               DISPLAY "FAILED 5: status " f-status "-"
+           IF (f-status <> "00")
+           OR (file1-serial <> 3)
+               DISPLAY "FAILED 5: status " f-status " - "
                        "serial: " file1-serial
            END-IF
 
@@ -7065,9 +7207,9 @@ AT_DATA([prog.cob], [
            MOVE "~~~" TO f-key2-2
            START f KEY > f-key2-1
            READ f NEXT
-           IF (f-status <> "00") OR
-                   (file1-serial <> 4)
-               DISPLAY "FAILED 6: status " f-status "-"
+           IF (f-status <> "00")
+           OR (file1-serial <> 4)
+               DISPLAY "FAILED 6: status " f-status " - "
                        "serial: " file1-serial
            END-IF
 
@@ -7075,12 +7217,12 @@ AT_DATA([prog.cob], [
            START f KEY > f-key3-1
            READ f NEXT
       *  CHECK: Return file-status "02" if duplicates exist
-           IF (f-status <> "02"
-      *    Depends on xISAM implementation and the way BDB is used (not yet
-      *    implemented in 3.x)
-            AND f-status <> "00"
-               ) OR file1-serial <> 3
-               DISPLAY "FAILED 7: status " f-status "-"
+      *    Depends on xISAM implementation and also on the way BDB is used
+           IF (f-status <> "02" 
+            AND f-status <> "00")
+           OR (file1-serial <> 3)
+               DISPLAY "FAILED 7: status " f-status " - "
+                       "serial: " file1-serial
            END-IF
            CLOSE f
            STOP RUN
@@ -12288,6 +12430,425 @@ AT_CHECK([diff reference prog.out], [0], [], [])
 AT_CLEANUP
 
 
+# This is only supported by the BDB backend
+AT_SETUP([INDEXED file manipulation under ASCII/EBCDIC collation])
+AT_KEYWORDS([runfile WRITE DELETE READ EBCDIC])
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" != "db"])
+
+AT_DATA([prog.cpy], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. prog.
+
+       ENVIRONMENT DIVISION.
+
+       CONFIGURATION SECTION.
+       OBJECT-COMPUTER.
+           PROGRAM COLLATING SEQUENCE IS DISORDERED.
+       SPECIAL-NAMES.
+           ALPHABET DISORDERED IS "WVUTSRJIHGFEDCB".
+
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT MY-FILE ASSIGN TO "testfile"
+               ORGANIZATION IS INDEXED
+               ACCESS IS DYNAMIC
+               FILE-COLSEQ
+               KEY-COLSEQ
+               RECORD KEY IS MY-PKEY
+               ALTERNATE RECORD KEY IS MY-AKEY1 WITH DUPLICATES
+               ALTERNATE RECORD KEY IS MY-AKEY2 WITH DUPLICATES.
+
+       DATA DIVISION.
+
+       FILE SECTION.
+       FD  MY-FILE.
+       01  MY-REC.
+           05  MY-PKEY   PIC X(3).
+           05  MY-AKEY1  PIC X(3).
+           05  MY-AKEY2  BINARY-LONG.
+           05  MY-DATA   PIC 9.
+
+       WORKING-STORAGE SECTION.
+       01  DONE-READING  PIC 9.
+
+       PROCEDURE DIVISION.
+
+           OPEN OUTPUT MY-FILE
+
+           DISPLAY "WRITING DATA"
+
+           MOVE "CCC" TO MY-PKEY
+           MOVE "888" TO MY-AKEY1
+           MOVE 43 TO MY-AKEY2
+           MOVE 1 TO MY-DATA
+           WRITE MY-REC
+
+           MOVE "ZZZ" TO MY-PKEY
+           MOVE "AAA" TO MY-AKEY1
+           MOVE 40 TO MY-AKEY2
+           MOVE 2 TO MY-DATA
+           WRITE MY-REC
+
+           MOVE "DDD" TO MY-PKEY
+           MOVE "777" TO MY-AKEY1
+           MOVE 42 TO MY-AKEY2
+           MOVE 3 TO MY-DATA
+           WRITE MY-REC
+
+           MOVE "XXX" TO MY-PKEY
+           MOVE "VVV" TO MY-AKEY1
+           MOVE 42 TO MY-AKEY2
+           MOVE 4 TO MY-DATA
+           WRITE MY-REC
+
+           MOVE "666" TO MY-PKEY
+           MOVE "AAA" TO MY-AKEY1
+           MOVE 41 TO MY-AKEY2
+           MOVE 5 TO MY-DATA
+           WRITE MY-REC
+
+           MOVE "222" TO MY-PKEY
+           MOVE "555" TO MY-AKEY1
+           MOVE 44 TO MY-AKEY2
+           MOVE 6 TO MY-DATA
+           WRITE MY-REC
+
+           CLOSE MY-FILE
+
+
+           OPEN I-O MY-FILE
+
+           DISPLAY "DELETING DATA"
+
+           MOVE "ZZZ" TO MY-PKEY
+           DELETE MY-FILE
+
+           MOVE "XXX" TO MY-PKEY
+           DELETE MY-FILE
+
+           CLOSE MY-FILE
+
+
+           OPEN INPUT MY-FILE
+
+           DISPLAY "READING BY PKEY"
+
+           MOVE 0 TO DONE-READING
+           MOVE SPACES TO MY-PKEY
+           START MY-FILE KEY >= MY-PKEY
+
+           PERFORM UNTIL NOT DONE-READING = 0
+               READ MY-FILE NEXT
+                   AT END MOVE 1 TO DONE-READING
+               END-READ
+               IF DONE-READING = 0
+                   DISPLAY MY-PKEY " " MY-AKEY1
+                       " " MY-AKEY2 " " MY-DATA
+               END-IF
+           END-PERFORM
+
+           DISPLAY "READING BY AKEY1"
+
+           MOVE 0 TO DONE-READING
+           MOVE SPACES TO MY-AKEY1
+           START MY-FILE KEY >= MY-AKEY1
+
+           PERFORM UNTIL NOT DONE-READING = 0
+               READ MY-FILE NEXT
+                   AT END MOVE 1 TO DONE-READING
+               END-READ
+               IF DONE-READING = 0
+                   DISPLAY MY-PKEY " " MY-AKEY1
+                       " " MY-AKEY2 " " MY-DATA
+               END-IF
+           END-PERFORM
+
+           DISPLAY "READING BY AKEY2"
+
+           MOVE 0 TO DONE-READING
+           MOVE ZERO TO MY-AKEY2
+           START MY-FILE KEY >= MY-AKEY2
+
+           PERFORM UNTIL NOT DONE-READING = 0
+               READ MY-FILE NEXT
+                   AT END MOVE 1 TO DONE-READING
+               END-READ
+               IF DONE-READING = 0
+                   DISPLAY MY-PKEY " " MY-AKEY1
+                       " " MY-AKEY2 " " MY-DATA
+               END-IF
+           END-PERFORM
+
+           CLOSE MY-FILE
+
+
+           DISPLAY "DONE"
+
+           STOP RUN.
+])
+
+AT_DATA([reference_ascii],
+[WRITING DATA
+DELETING DATA
+READING BY PKEY
+222 555 +0000000044 6
+666 AAA +0000000041 5
+CCC 888 +0000000043 1
+DDD 777 +0000000042 3
+READING BY AKEY1
+222 555 +0000000044 6
+DDD 777 +0000000042 3
+CCC 888 +0000000043 1
+666 AAA +0000000041 5
+READING BY AKEY2
+666 AAA +0000000041 5
+DDD 777 +0000000042 3
+CCC 888 +0000000043 1
+222 555 +0000000044 6
+DONE
+])
+
+AT_DATA([reference_ascii_ebcdic],
+[WRITING DATA
+DELETING DATA
+READING BY PKEY
+222 555 +0000000044 6
+666 AAA +0000000041 5
+CCC 888 +0000000043 1
+DDD 777 +0000000042 3
+READING BY AKEY1
+666 AAA +0000000041 5
+222 555 +0000000044 6
+DDD 777 +0000000042 3
+CCC 888 +0000000043 1
+READING BY AKEY2
+666 AAA +0000000041 5
+DDD 777 +0000000042 3
+CCC 888 +0000000043 1
+222 555 +0000000044 6
+DONE
+])
+
+AT_DATA([reference_ebcdic],
+[WRITING DATA
+DELETING DATA
+READING BY PKEY
+CCC 888 +0000000043 1
+DDD 777 +0000000042 3
+222 555 +0000000044 6
+666 AAA +0000000041 5
+READING BY AKEY1
+666 AAA +0000000041 5
+222 555 +0000000044 6
+DDD 777 +0000000042 3
+CCC 888 +0000000043 1
+READING BY AKEY2
+666 AAA +0000000041 5
+DDD 777 +0000000042 3
+CCC 888 +0000000043 1
+222 555 +0000000044 6
+DONE
+])
+
+AT_DATA([reference_ebcdic_ascii],
+[WRITING DATA
+DELETING DATA
+READING BY PKEY
+CCC 888 +0000000043 1
+DDD 777 +0000000042 3
+222 555 +0000000044 6
+666 AAA +0000000041 5
+READING BY AKEY1
+222 555 +0000000044 6
+DDD 777 +0000000042 3
+CCC 888 +0000000043 1
+666 AAA +0000000041 5
+READING BY AKEY2
+666 AAA +0000000041 5
+DDD 777 +0000000042 3
+CCC 888 +0000000043 1
+222 555 +0000000044 6
+DONE
+])
+
+# Testing ASCII file collating sequence using clause
+AT_DATA([prog1.cob], [
+       COPY "prog.cpy" REPLACING
+         ==FILE-COLSEQ== BY ==COLLATING SEQUENCE IS ASCII==
+         ==KEY-COLSEQ== BY ====.
+])
+AT_CHECK([$COMPILE -Wno-unfinished prog1.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog1 1>prog1.out], [0], [], [])
+AT_CHECK([diff reference_ascii prog1.out], [0], [], [])
+
+# Testing ASCII file collating sequence using flag
+AT_DATA([prog2.cob], [
+       COPY "prog.cpy" REPLACING
+         ==FILE-COLSEQ== BY ====
+         ==KEY-COLSEQ== BY ====.
+])
+AT_CHECK([$COMPILE -Wno-unfinished -fdefault-file-colseq=ASCII prog2.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog2 1>prog2.out], [0], [], [])
+AT_CHECK([diff reference_ascii prog2.out], [0], [], [])
+
+
+# Testing ASCII file collating sequence + EBCDIC key collating sequence using clauses
+AT_DATA([prog3.cob], [
+       COPY "prog.cpy" REPLACING
+         ==FILE-COLSEQ== BY ==COLLATING SEQUENCE IS ASCII==
+         ==KEY-COLSEQ== BY ==COLLATING SEQUENCE OF MY-AKEY1 IS EBCDIC==.
+])
+AT_CHECK([$COMPILE -Wno-unfinished prog3.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog3 1>prog3.out], [0], [], [])
+AT_CHECK([diff reference_ascii_ebcdic prog3.out], [0], [], [])
+
+# Testing ASCII file collating sequence using flag + EBCDIC key collating sequence using clause
+AT_DATA([prog4.cob], [
+       COPY "prog.cpy" REPLACING
+         ==FILE-COLSEQ== BY ====
+         ==KEY-COLSEQ== BY ==COLLATING SEQUENCE OF MY-AKEY1 IS EBCDIC==.
+])
+AT_CHECK([$COMPILE -Wno-unfinished -fdefault-file-colseq=ASCII prog4.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog4 1>prog4.out], [0], [], [])
+AT_CHECK([diff reference_ascii_ebcdic prog4.out], [0], [], [])
+
+# Testing EBCDIC file collating sequence using clause
+AT_DATA([prog5.cob], [
+       COPY "prog.cpy" REPLACING
+         ==FILE-COLSEQ== BY ==COLLATING SEQUENCE IS EBCDIC==
+         ==KEY-COLSEQ== BY ==COLLATING SEQUENCE OF MY-AKEY1 IS EBCDIC==.
+])
+AT_CHECK([$COMPILE -Wno-unfinished prog5.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog5 1>prog5.out], [0], [], [])
+AT_CHECK([diff reference_ebcdic prog5.out], [0], [], [])
+
+# Testing EBCDIC file collating sequence using flag
+AT_DATA([prog6.cob], [
+       COPY "prog.cpy" REPLACING
+         ==FILE-COLSEQ== BY ====
+         ==KEY-COLSEQ== BY ====.
+])
+AT_CHECK([$COMPILE -Wno-unfinished -fdefault-file-colseq=EBCDIC prog6.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog6 1>prog6.out], [0], [], [])
+AT_CHECK([diff reference_ebcdic prog6.out], [0], [], [])
+
+# Testing EBCDIC file collating sequence + ASCII key collating sequence using clauses
+AT_DATA([prog7.cob], [
+       COPY "prog.cpy" REPLACING
+         ==FILE-COLSEQ== BY ==COLLATING SEQUENCE IS EBCDIC==
+         ==KEY-COLSEQ== BY ==COLLATING SEQUENCE OF MY-AKEY1 IS ASCII==.
+])
+AT_CHECK([$COMPILE -Wno-unfinished prog7.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog7 1>prog7.out], [0], [], [])
+AT_CHECK([diff reference_ebcdic_ascii prog7.out], [0], [], [])
+
+# Testing EBCDIC file collating sequence using flag + ASCII key collating sequence using clause
+AT_DATA([prog8.cob], [
+       COPY "prog.cpy" REPLACING
+         ==FILE-COLSEQ== BY ====
+         ==KEY-COLSEQ== BY ==COLLATING SEQUENCE OF MY-AKEY1 IS ASCII==.
+])
+AT_CHECK([$COMPILE -Wno-unfinished -fdefault-file-colseq=EBCDIC prog8.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog8 1>prog8.out], [0], [], [])
+AT_CHECK([diff reference_ebcdic_ascii prog8.out], [0], [], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([INDEXED file numeric keys ordering])
+AT_KEYWORDS([runfile])
+
+# BUG: non-display numeric keys are currently ordered lexicographically
+# with respect to their binary representation, which is incorrect.
+# Could be fixed with a custom comparison function (BDB)
+# or using key types other than CHARTYPE (ISAM).
+AT_XFAIL_IF([true])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. prog.
+
+       ENVIRONMENT DIVISION.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT MY-FILE ASSIGN TO "testfile"
+               ORGANIZATION IS INDEXED
+               ACCESS IS DYNAMIC
+               RECORD KEY IS MY-PKEY.
+
+       DATA DIVISION.
+       FILE SECTION.
+       FD  MY-FILE.
+       01  MY-REC.
+           05  MY-PKEY   BINARY-LONG.
+           05  MY-DATA   PIC 9.
+
+       WORKING-STORAGE SECTION.
+       01  DONE-READING  PIC 9.
+
+       PROCEDURE DIVISION.
+
+           OPEN OUTPUT MY-FILE
+
+           DISPLAY "WRITING DATA"
+
+           MOVE 255 TO MY-PKEY
+           MOVE 1 TO MY-DATA
+           WRITE MY-REC
+
+           MOVE 256 TO MY-PKEY
+           MOVE 2 TO MY-DATA
+           WRITE MY-REC
+
+           MOVE 65535 TO MY-PKEY
+           MOVE 3 TO MY-DATA
+           WRITE MY-REC
+
+           MOVE 65536 TO MY-PKEY
+           MOVE 4 TO MY-DATA
+           WRITE MY-REC
+
+           CLOSE MY-FILE
+
+
+           OPEN INPUT MY-FILE
+
+           DISPLAY "READING BY PKEY"
+
+           MOVE 0 TO DONE-READING
+           MOVE 0 TO MY-PKEY
+           START MY-FILE KEY >= MY-PKEY
+
+           PERFORM UNTIL NOT DONE-READING = 0
+               READ MY-FILE NEXT
+                   AT END MOVE 1 TO DONE-READING
+               END-READ
+               IF DONE-READING = 0
+                   DISPLAY MY-PKEY " " MY-DATA
+               END-IF
+           END-PERFORM
+
+           CLOSE MY-FILE
+
+           DISPLAY "DONE" WITH NO ADVANCING
+
+           STOP RUN.
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog], [0],
+[WRITING DATA
+READING BY PKEY
++0000000255 1
++0000000256 2
++0000065535 3
++0000065536 4
+DONE], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([TURN EC-I-O])
 AT_KEYWORDS([runfile directive])
 
@@ -12658,7 +13219,7 @@ AT_CLEANUP
 
 
 AT_SETUP([LINE SEQUENTIAL data])
-AT_KEYWORDS([runfile])
+AT_KEYWORDS([runfile LS_NULLS LS_VALIDATE])
 
 AT_DATA([prog.cob], [
        IDENTIFICATION DIVISION.
@@ -12683,17 +13244,19 @@ AT_DATA([prog.cob], [
            10  CM-TYPE                         PICTURE X.
            10  CM-COMPANY                      PICTURE X(25).
            10  CM-DISK                         PICTURE X(8).
-           10  CM-NO-TERMINALS                 PICTURE 9(4) COMP-4.
-           10  CM-PK-DATE                      PICTURE S9(14) COMP-3.
+           10  CM-NO-TERMINALS                 PICTURE 9(2) COMP-4.
+           10  CM-NO-TERMINALS2                PICTURE 9(2) COMP-4.
+           10  CM-PK-DATE                      PICTURE S9(9) COMP-3.
 
        WORKING-STORAGE SECTION.
 
-       78  MAX-SUB           VALUE  4.
+       78  MAX-SUB           VALUE  5.
        77  CUST-STAT                           PICTURE X(2).
 
        01  TEST-DATA.
 
          02  DATA-CUST-NUM-TBL.
+           05  FILLER PIC X(8) VALUE "   00000".
            05  FILLER PIC X(8) VALUE "ALP00000".
            05  FILLER PIC X(8) VALUE "BET00000".
            05  FILLER PIC X(8) VALUE "GAM00000".
@@ -12702,6 +13265,7 @@ AT_DATA([prog.cob], [
          02  DATA-CUST-NUM REDEFINES DATA-CUST-NUM-TBL
                                        PIC X(8) OCCURS MAX-SUB.
          02  DATA-COMPANY-TBL.
+           05  FILLER PIC X(25) VALUE "SPACE COMPANY            ".
            05  FILLER PIC X(25) VALUE "ALPHA ELECTRICAL CO. LTD.".
            05  FILLER PIC X(25) VALUE "BETA SHOE MFG. INC.      ".
            05  FILLER PIC X(25) VALUE "GAMMA X-RAY TECHNOLOGY   ".
@@ -12709,6 +13273,7 @@ AT_DATA([prog.cob], [
          02  DATA-COMPANY  REDEFINES DATA-COMPANY-TBL
                                        PIC X(25) OCCURS MAX-SUB.
          02  DATA-ADDRESS-2-TBL.
+           05  FILLER PIC X(10) VALUE "EARTH     ".
            05  FILLER PIC X(10) VALUE "NEW YORK  ".
            05  FILLER PIC X(10) VALUE "ATLANTA   ".
            05  FILLER PIC X(10) VALUE "WASHINGTON".
@@ -12717,11 +13282,20 @@ AT_DATA([prog.cob], [
                                        PIC X(10) OCCURS MAX-SUB.
 
          02  DATA-NO-TERMINALS-TBL.
+           05  FILLER PIC 9(3) VALUE 9.
+           05  FILLER PIC 9(3) VALUE 9.
+           05  FILLER PIC 9(3) VALUE 9.
+           05  FILLER PIC 9(3) VALUE 9.
+           05  FILLER PIC 9(3) VALUE 9.
+         02  DATA-NO-TERMINALS REDEFINES DATA-NO-TERMINALS-TBL
+                                       PIC 9(3) OCCURS MAX-SUB.
+         02  DATA-NO-TERMINALS-TBL2.
+           05  FILLER PIC 9(3) VALUE 50.
            05  FILLER PIC 9(3) VALUE 10.
            05  FILLER PIC 9(3) VALUE 13.
            05  FILLER PIC 9(3) VALUE 3.
            05  FILLER PIC 9(3) VALUE 254.
-         02  DATA-NO-TERMINALS REDEFINES DATA-NO-TERMINALS-TBL
+         02  DATA-NO-TERMINALS2 REDEFINES DATA-NO-TERMINALS-TBL2
                                        PIC 9(3) OCCURS MAX-SUB.
        01  WORK-AREA.
            05  SUB                             BINARY-SHORT UNSIGNED.
@@ -12763,10 +13337,21 @@ AT_DATA([prog.cob], [
            READ FLATFILE
            IF CUST-STAT NOT = "00"
              DISPLAY "Read Status: " CUST-STAT
+      *      ignore truncation and skip next record (not portable to EBCDIC)
+             IF CUST-STAT = "06"
+                PERFORM SHOW-RECORD
+                READ FLATFILE
+                MOVE "00" TO CUST-STAT
+             END-IF
            ELSE
-             DISPLAY "Read  " CM-CUST-NUM
-                     " Trms:" CM-NO-TERMINALS
+             PERFORM SHOW-RECORD
            END-IF.
+           
+
+       SHOW-RECORD.
+           DISPLAY "Read  " CM-CUST-NUM
+                   " Trms:" CM-NO-TERMINALS
+                   "-"      CM-NO-TERMINALS2.
 
        LOADFILE.
            OPEN OUTPUT FLATFILE.
@@ -12781,9 +13366,13 @@ AT_DATA([prog.cob], [
            MOVE DATA-CUST-NUM      (SUB)     TO CM-CUST-NUM.
            MOVE DATA-COMPANY       (SUB)     TO CM-COMPANY.
            MOVE DATA-NO-TERMINALS  (SUB)     TO CM-NO-TERMINALS.
-           MOVE 20070319                     TO CM-PK-DATE.
-           IF SUB = 1 OR 4 OR 6
-               MOVE -20070319                 TO CM-PK-DATE.
+           MOVE DATA-NO-TERMINALS2 (SUB)     TO CM-NO-TERMINALS2.
+           IF SUB = 1
+               MOVE 505050505                TO CM-PK-DATE
+           ELSE IF SUB = 4 OR 6
+               MOVE -20070319                TO CM-PK-DATE
+           ELSE
+               MOVE 20070319                 TO CM-PK-DATE.
 
            IF  ODD-RECORD
                MOVE "8417"                   TO CM-DISK
@@ -12795,17 +13384,20 @@ AT_DATA([prog.cob], [
                        DATA-CUST-NUM (SUB).
 ])
 
-AT_CHECK([$COMPILE prog.cob], [0], [], [])
+AT_CHECK([$COMPILE -fno-trunc prog.cob], [0], [], [])
 
 AT_CHECK([$COBCRUN_DIRECT ./prog], [0],
 [MF Load data
 MF Open Sts: 00
-Read  ALP00000 Trms:0010
-Read  BET00000 Trms:0013
-Read  GAM00000 Trms:0003
-Read  DEL00000 Trms:0254
+Read     00000 Trms:009-050
+Read  ALP00000 Trms:009-010
+Read  BET00000 Trms:009-013
+Read  GAM00000 Trms:009-003
+Read  DEL00000 Trms:009-254
 Read Status: 10
 Std Open Sts: 00
+Read Status: 06
+Read     00000 Trms:000-009
 Read Status: 09
 Std Load data
 Error status 71 writing record ALP00000

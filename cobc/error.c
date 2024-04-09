@@ -28,9 +28,19 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
 
 #include "cobc.h"
 #include "tree.h"
+
+#ifdef	_WIN32
+#if !defined(__BORLANDC__) && !defined(__WATCOMC__) && !defined(__ORANGEC__)
+#include <direct.h> // _getcwd
+#define	getcwd		_getcwd
+#endif
+#endif
 
 enum cb_error_kind {
 	CB_KIND_ERROR,
@@ -57,6 +67,32 @@ static void
 print_error_prefix (const char *file, int line, const char *prefix)
 {
 	if (file) {
+		char *absfile = NULL ;
+		if (cb_diagnostics_absolute_paths
+		 && strcmp (file, COB_DASH) != 0
+		 && file[0] != '/'
+		 && file[0] != '\\'
+		 && file[1] != ':'){
+			int filelen = strlen (file);
+			int dirlen = 256;
+			char *cwd ;
+			absfile = cobc_malloc( dirlen + 1 + filelen + 1 );
+			cwd = getcwd (absfile, dirlen);
+			if (cwd != NULL ){
+#ifdef HAVE_SYS_STAT_H
+				struct stat st;
+#endif
+				dirlen = strlen (cwd);
+				absfile[dirlen] = '/';
+				memcpy (absfile+dirlen+1, file, filelen+1);
+#ifdef HAVE_SYS_STAT_H
+				if (!stat (absfile,&st))
+#endif
+				{
+					file = absfile;
+				}
+			}
+		}
 		if (line <= 0) {
 			fprintf (stderr, "%s: ", file);
 		} else if (cb_msg_style == CB_MSG_STYLE_MSC) {
@@ -64,6 +100,7 @@ print_error_prefix (const char *file, int line, const char *prefix)
 		} else {
 			fprintf (stderr, "%s:%d: ", file, line);
 		}
+		if (absfile) cobc_free (absfile);
 	}
 	if (prefix) {
 		fprintf (stderr, "%s", prefix);
@@ -450,7 +487,8 @@ cb_warning_internal (const enum cb_warn_opt opt, const char *fmt, va_list ap)
 		return pref;
 	}
 	if (pref == COBC_WARN_AS_ERROR) {
-		if (++errorcount > cb_max_errors) {
+		errorcount++;
+		if (cb_max_errors && errorcount > cb_max_errors) {
 			cobc_too_many_errors ();
 		}
 	} else {
@@ -483,7 +521,8 @@ cb_error_always (const char *fmt, ...)
 	if (sav_lst_file) {
 		return;
 	}
-	if (++errorcount > cb_max_errors) {
+	errorcount++;
+	if (cb_max_errors && errorcount > cb_max_errors) {
 		cobc_too_many_errors ();
 	}
 }
@@ -517,7 +556,8 @@ cb_error_internal (const char *fmt, va_list ap)
 	if (ignore_error && pref != COBC_WARN_AS_ERROR) {
 		warningcount++;
 	} else {
-		if (++errorcount > cb_max_errors) {
+		errorcount++;
+		if (cb_max_errors && errorcount > cb_max_errors) {
 			cobc_too_many_errors ();
 		}
 	}
@@ -541,7 +581,7 @@ cb_perror (const int config_error, const char *fmt, ...)
 	va_list ap;
 
 	if (config_error) {
-		configuration_error_head();
+		configuration_error_head ();
 	}
 
 	va_start (ap, fmt);
@@ -549,7 +589,8 @@ cb_perror (const int config_error, const char *fmt, ...)
 	va_end (ap);
 
 
-	if (++errorcount > cb_max_errors) {
+	errorcount++;
+	if (cb_max_errors && errorcount > cb_max_errors) {
 		cobc_too_many_errors ();
 	}
 }
@@ -580,7 +621,8 @@ cb_plex_warning (const enum cb_warn_opt opt, const size_t sline, const char *fmt
 		return;
 	}
 	if (pref == COBC_WARN_AS_ERROR) {
-		if (++errorcount > cb_max_errors) {
+		errorcount++;
+		if (cb_max_errors && errorcount > cb_max_errors) {
 			cobc_too_many_errors ();
 		}
 	} else {
@@ -600,7 +642,8 @@ cb_plex_error (const size_t sline, const char *fmt, ...)
 	if (sav_lst_file) {
 		return;
 	}
-	if (++errorcount > cb_max_errors) {
+	errorcount++;
+	if (cb_max_errors && errorcount > cb_max_errors) {
 		cobc_too_many_errors ();
 	}
 }
@@ -706,11 +749,12 @@ configuration_error (const char *fname, const int line,
 	putc ('\n', stderr);
 	fflush (stderr);
 
-	if (sav_lst_file) {
+	if (sav_lst_file || finish_error == 2) {
 		return;
 	}
 
-	if (++errorcount > cb_max_errors) {
+	errorcount++;
+	if (cb_max_errors && errorcount > cb_max_errors) {
 		cobc_too_many_errors ();
 	}
 }
@@ -733,7 +777,8 @@ cb_warning_x_internal (const enum cb_warn_opt opt, cb_tree x, const char *fmt, v
 		return pref;
 	}
 	if (pref == COBC_WARN_AS_ERROR) {
-		if (++errorcount > cb_max_errors) {
+		errorcount++;
+		if (cb_max_errors && errorcount > cb_max_errors) {
 			cobc_too_many_errors ();
 		}
 	} else {
@@ -778,7 +823,8 @@ cb_warning_dialect_x (const enum cb_support tag, cb_tree x, const char *fmt, ...
 		return ret;
 	}
 	if (tag == CB_ERROR || tag == CB_UNCONFORMABLE) {
-		if (++errorcount > cb_max_errors) {
+		errorcount++;
+		if (cb_max_errors && errorcount > cb_max_errors) {
 			cobc_too_many_errors ();
 		}
 	} else {
@@ -891,7 +937,8 @@ cb_error_x_internal (cb_tree x, const char *fmt, va_list ap)
 	if (ignore_error && pref != COBC_WARN_AS_ERROR) {
 		warningcount++;
 	} else {
-		if (++errorcount > cb_max_errors) {
+		errorcount++;
+		if (cb_max_errors && errorcount > cb_max_errors) {
 			cobc_too_many_errors ();
 		}
 	}
@@ -1209,7 +1256,7 @@ ambiguous_error (cb_tree x)
 
 /* error routine for flex */
 void
-flex_fatal_error (const char *msg, const char * filename, const int line_num)
+flex_fatal_error (const char *msg, const char *filename, const int line_num)
 {
 	/* LCOV_EXCL_START */
 	cobc_err_msg (_("fatal error: %s"), msg);

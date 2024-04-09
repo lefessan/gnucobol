@@ -2196,6 +2196,11 @@ cb_build_program (struct cb_program *last_program, const int nest_level)
 	if (cb_call_extfh) {
 		p->extfh = cobc_parse_strdup (cb_call_extfh);
 	}
+
+	p->prof_current_section = -1;
+	p->prof_current_paragraph = -1;
+	p->prof_current_call = -1;
+
 	/* Save current program as actual at it's level */
 	container_progs[nest_level] = p;
 	if (nest_level
@@ -4661,9 +4666,12 @@ validate_file (struct cb_file *f, cb_tree name)
 
 static void
 validate_indexed_key_field (struct cb_file *f, struct cb_field *records,
-					cb_tree key, struct cb_key_component *component_list)
+					cb_tree key, struct cb_key_component *component_list,
+					struct cb_alt_key *cbak)
 {
 	cb_tree			key_ref;
+	cb_tree			l;
+
 	struct cb_field		*k;
 	struct cb_field		*p;
 	struct cb_field		*v;
@@ -4730,6 +4738,18 @@ validate_indexed_key_field (struct cb_file *f, struct cb_field *records,
 						  " needs to be at least %d"), f->record_min, k->name, field_end);
 		}
 	}
+
+	/* get key collating sequence, if any */
+	for (l = f->collating_sequence_keys; l; l = CB_CHAIN (l)) {
+		cb_tree alpha_key = CB_VALUE (l);
+		if (key_ref == cb_ref (CB_PAIR_Y (alpha_key))) {
+			if (cbak == NULL) {
+				f->collating_sequence_key = CB_PAIR_X (alpha_key);
+			} else {
+				cbak->collating_sequence_key = CB_PAIR_X (alpha_key);
+			}
+		}
+	}
 }
 
 void
@@ -4771,7 +4791,7 @@ finalize_file (struct cb_file *f, struct cb_field *records)
 		struct cb_alt_key	*cbak;
 		if (f->key) {
 			validate_indexed_key_field (f, records,
-				f->key, f->component_list);
+				f->key, f->component_list, NULL);
 		}
 		for (cbak = f->alt_key_list; cbak; cbak = cbak->next) {
 			if (f->flag_global) {
@@ -4781,7 +4801,7 @@ finalize_file (struct cb_file *f, struct cb_field *records)
 				}
 			}
 			validate_indexed_key_field (f, records,
-				cbak->key, cbak->component_list);
+				cbak->key, cbak->component_list, cbak);
 		}
 	}
 
@@ -5998,14 +6018,16 @@ cb_build_binary_op (cb_tree x, const enum cb_binary_op_op op, cb_tree y)
 		 && !(CB_FIELD_PTR (x)->usage == CB_USAGE_COMP_5
 		  || CB_FIELD_PTR (x)->usage == CB_USAGE_COMP_X)) {
 			cb_error_x (CB_TREE(current_statement), 
-					_("%s should be COMP-X/COMP-5 for logical operator"), CB_FIELD_PTR (x)->name);
+					_("%s should be COMP-X/COMP-5 for logical operator"),
+					CB_FIELD_PTR (x)->name);
 			return cb_error_node;
 		}
 		if ((CB_REF_OR_FIELD_P (y)) 
 		 && !(CB_FIELD_PTR (y)->usage == CB_USAGE_COMP_5
 		  || CB_FIELD_PTR (y)->usage == CB_USAGE_COMP_X)) {
 			cb_error_x (CB_TREE(current_statement), 
-					_("%s should be COMP-X/COMP-5 for logical operator"), CB_FIELD_PTR (y)->name);
+					_("%s should be COMP-X/COMP-5 for logical operator"),
+					CB_FIELD_PTR (y)->name);
 			return cb_error_node;
 		}
 		if (cb_constant_folding
@@ -6382,9 +6404,7 @@ cb_build_binary_op (cb_tree x, const enum cb_binary_op_op op, cb_tree y)
 cb_tree
 cb_build_binary_list (cb_tree l, const int op)
 {
-	cb_tree e;
-
-	e = CB_VALUE (l);
+	cb_tree e = CB_VALUE (l);
 	for (l = CB_CHAIN (l); l; l = CB_CHAIN (l)) {
 		e = cb_build_binary_op (e, op, CB_VALUE (l));
 	}
@@ -6656,7 +6676,7 @@ cb_build_alter (const cb_tree source, const cb_tree target)
 /* GO TO */
 
 cb_tree
-cb_build_goto (const cb_tree target, const cb_tree depending)
+cb_build_goto (const cb_tree target, const cb_tree depending, int flags)
 {
 	struct cb_goto *p;
 
@@ -6664,6 +6684,7 @@ cb_build_goto (const cb_tree target, const cb_tree depending)
 		       sizeof (struct cb_goto));
 	p->target = target;
 	p->depending = depending;
+	p->flags = flags;
 	return CB_TREE (p);
 }
 
@@ -7413,6 +7434,215 @@ cb_build_ml_suppress_checks (struct cb_ml_generate_tree *tree)
 	return CB_TREE (check);
 }
 
+
+enum cb_colseq cb_default_colseq = CB_COLSEQ_NATIVE;
+enum cb_colseq cb_default_file_colseq = CB_COLSEQ_NATIVE;
+
+/* Decipher character conversion table names */
+static int
+cb_deciph_colseq_name (const char * const name, enum cb_colseq *colseq)
+{
+	if (!cb_strcasecmp (name, "ASCII")) {
+		*colseq = CB_COLSEQ_ASCII;
+	} else if (!cb_strcasecmp (name, "EBCDIC")) {
+		*colseq = CB_COLSEQ_EBCDIC;
+	} else if (!cb_strcasecmp (name, "NATIVE")) {
+		*colseq = CB_COLSEQ_NATIVE;
+	} else {
+		return 1;
+	}
+	return 0;
+}
+
+int
+cb_deciph_default_colseq_name (const char * const name)
+{
+	return cb_deciph_colseq_name (name, &cb_default_colseq);
+}
+
+int
+cb_deciph_default_file_colseq_name (const char * const name)
+{
+	return cb_deciph_colseq_name (name, &cb_default_file_colseq);
+}
+
+/* Use constant strings to replace string comparisons by more
+ * efficient pointer comparisons */
+const char *cob_prof_function_call_str = "cob_prof_function_call";
+
+void
+cb_prof_procedure_division (struct cb_program *program,
+			    const char *source_file,
+			    int source_line)
+{
+	/* invariant: program always has index 0 */
+	procedure_list_add (
+		program,
+		COB_PROF_PROCEDURE_MODULE,
+		program->orig_program_id,
+		0,
+		source_file,
+		source_line);
+}
+
+/* Returns a tree node for a funcall to one of the profiling
+ functions, with the index of the procedure as argument (and a second
+ argument for the entry point if meaningful). If the program, section
+ or paragraph are being entered for the first time, register them into
+ the procedure_list of the program.
+
+ To avoid lookups, the current section and current paragraph are kept
+ in the program record for immediate use when exiting.
+*/
+cb_tree
+cb_build_prof_call (enum cb_prof_call prof_call,
+		    struct cb_program  *program,
+		    struct cb_label  *section,
+		    struct cb_label  *paragraph,
+		    const char  *entry,
+		    cb_tree location)
+{
+	const char  *func_name = cob_prof_function_call_str;
+	int          func_arg1 = -1;
+	int          func_arg2 = -1;
+
+	switch (prof_call){
+
+	case COB_PROF_ENTER_SECTION:
+
+		/* allocate section record and remember current section */
+		program->prof_current_section =
+			procedure_list_add (
+				program,
+				COB_PROF_PROCEDURE_SECTION,
+				section->name,
+				/* the current section will have
+				 * procedure_list_list as index */
+				program->procedure_list_len,
+				section->common.source_file,
+				section->common.source_line);
+		program->prof_current_paragraph = -1;
+		func_arg1 = program->prof_current_section;
+		break;
+
+	case COB_PROF_ENTER_PARAGRAPH:
+
+		/* allocate section record and remember current section */
+		program->prof_current_paragraph =
+			procedure_list_add (
+				program,
+				COB_PROF_PROCEDURE_PARAGRAPH,
+				paragraph->name,
+				program->prof_current_section,
+				paragraph->common.source_file,
+				paragraph->common.source_line);
+		func_arg1 = program->prof_current_paragraph;
+		break;
+
+		/* In the case of an ENTRY statement, add code before
+		 * to the falling-through paragraph to avoid
+		 * re-registering the entry into the paragraph. */
+	case COB_PROF_STAYIN_PARAGRAPH:
+
+		func_arg1 = program->prof_current_paragraph;
+		break;
+
+	case COB_PROF_USE_PARAGRAPH_ENTRY:
+
+		func_arg1 = program->prof_current_paragraph;
+		func_arg2 =
+			procedure_list_add (
+				program,
+				COB_PROF_PROCEDURE_ENTRY,
+				entry,
+				/* section field of entry is in fact its paragraph */
+				program->prof_current_paragraph,
+				location->source_file,
+				location->source_line);
+		break;
+
+	case COB_PROF_EXIT_PARAGRAPH:
+
+		func_arg1 = program->prof_current_paragraph;
+		/* Do not reinitialize, because we may have several of these
+		   EXIT_PARAGRAPH, for example at EXIT SECTION.
+		   program->prof_current_paragraph = -1; */
+		break;
+
+	case COB_PROF_EXIT_SECTION:
+
+		func_arg1 = program->prof_current_section;
+		/* reset current paragraph and section */
+		program->prof_current_section = -1;
+		program->prof_current_paragraph = -1;
+		break;
+
+	case COB_PROF_ENTER_CALL:
+
+		/* allocate call record and remember current call */
+		program->prof_current_call =
+			procedure_list_add (
+				program,
+				COB_PROF_PROCEDURE_CALL,
+				NULL,
+				program->prof_current_paragraph,
+				paragraph->common.source_file,
+				paragraph->common.source_line);
+		func_arg1 = program->prof_current_call;
+		break;
+
+	case COB_PROF_EXIT_CALL:
+
+		/* We need to patch the last procedure to add the callee name and loc */
+		program->procedure_list_last->proc.text = cobc_main_strdup (entry);
+		program->procedure_list_last->proc.file = location->source_file;
+		program->procedure_list_last->proc.line = location->source_line;
+
+		func_arg1 = program->prof_current_call;
+		program->prof_current_call = -1;
+		break;
+
+	}
+	if (func_arg2 < 0){
+		return CB_BUILD_FUNCALL_2 (func_name, cb_int (prof_call), cb_int (func_arg1));
+	}
+	return CB_BUILD_FUNCALL_3 (func_name, cb_int (prof_call), cb_int (func_arg1), cb_int (func_arg2));
+}
+
+/* Allocate a procedure description record and add it at the end of
+ * the procedure_list of the current program. The index of the
+ * procedure will be the position in the list. There is an invariant
+ * that 0 is reserved for the record of the program module. */
+int
+procedure_list_add (
+	struct cb_program *program,
+	enum cob_prof_procedure_kind kind,
+	const char *text,
+	int section,
+	const char *file,
+	int line)
+{
+	struct cb_procedure_list	*p;
+	int ret = program->procedure_list_len ;
+
+	p = cobc_main_malloc (sizeof (struct cb_procedure_list));
+	if (text){ p->proc.text = cobc_main_strdup (text); }
+	p->proc.kind = kind;
+	p->proc.file = file;
+	p->proc.line = line;
+	p->proc.section = section;
+	p->next = NULL;
+
+	if (program->procedure_list == NULL){
+		program->procedure_list = p;
+	} else {
+		program->procedure_list_last->next = p;
+	}
+	program->procedure_list_last = p;
+
+	program->procedure_list_len++;
+	return ret;
+}
 
 #ifndef	HAVE_DESIGNATED_INITS
 void

@@ -1,4 +1,4 @@
-## Copyright (C) 2014-2023 Free Software Foundation, Inc.
+## Copyright (C) 2014-2024 Free Software Foundation, Inc.
 ## Written by Simon Sobisch, Brian Tiffin
 ##
 ## This file is part of GnuCOBOL.
@@ -148,18 +148,27 @@ AT_DATA([prog2.cob], [
            DISPLAY TEST-VAR NO ADVANCING
            END-DISPLAY
            STOP RUN.
+       COPY 'CRUD2.CPY'.
 ])
 
 AT_CHECK([$COBC -fsyntax-only -fdiagnostics-plain-output -Wall prog2.cob], [1], [],
 [prog2.cob:7: error: CRUD.CPY: No such file or directory
+prog2.cob:15: error: CRUD2.CPY: No such file or directory
 prog2.cob:6: warning: numeric value is expected [[-Wothers]]
 ])
 
-AT_CHECK([$COBC -fsyntax-only -fdiagnostics-plain-output -fmax-errors=0 prog2.cob], [97], [],
+AT_CHECK([$COBC -fsyntax-only -fdiagnostics-plain-output -fmax-errors=0 -Wall prog2.cob], [1], [],
 [prog2.cob:7: error: CRUD.CPY: No such file or directory
-cobc: too many errors [[-fmax-errors=0]]
+prog2.cob:15: error: CRUD2.CPY: No such file or directory
+prog2.cob:6: warning: numeric value is expected [[-Wothers]]
+])
 
-cobc: aborting compile of prog2.cob at line 7 (unknown: unknown)
+AT_CHECK([$COBC -fsyntax-only -fdiagnostics-plain-output -fmax-errors=1 prog2.cob], [97], [],
+[prog2.cob:7: error: CRUD.CPY: No such file or directory
+prog2.cob:15: error: CRUD2.CPY: No such file or directory
+cobc: too many errors [[-fmax-errors=1]]
+
+cobc: aborting compile of prog2.cob at line 15 (unknown: unknown)
 ])
 
 AT_CHECK([$COBC -fsyntax-only -fdiagnostics-plain-output -Wfatal-errors prog2.cob], [97], [],
@@ -420,6 +429,68 @@ AT_DATA([prog.cob], [
 
 AT_CHECK([$COMPILE "$(_return_path "$(pwd)/prog.cob")"], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [OK], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([save-temps in sub-directory])
+AT_KEYWORDS([runmisc])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       PROCEDURE        DIVISION.
+           DISPLAY "OK" NO ADVANCING
+           END-DISPLAY.
+           EXIT PROGRAM.
+])
+
+AT_CHECK([mkdir debug])
+
+AT_CHECK([$COMPILE -save-temps=debug -o prog.exe prog.cob])
+AT_CHECK([$COBCRUN_DIRECT ./prog.exe], [0], [OK])
+AT_CHECK([test -f debug/prog.$COB_OBJECT_EXT])
+AT_CHECK([test -f debug/prog.c])
+AT_CHECK([test -f debug/prog.s], [1])
+AT_CHECK([test -f debug/prog.i])
+AT_CHECK([test -f debug/prog.c.h])
+AT_CHECK([test -f debug/prog.c.l.h])
+
+# Check with -c
+
+AT_CHECK([test -f prog.$COB_OBJECT_EXT], [1])
+AT_CHECK([$COMPILE -save-temps=debug -c prog.cob])
+AT_CHECK([test -f prog.$COB_OBJECT_EXT])
+AT_CHECK([$COMPILE -save-temps=debug -c -o program.$COB_OBJECT_EXT prog.cob])
+AT_CHECK([test -f program.$COB_OBJECT_EXT])
+
+# Check with -S
+
+AT_CHECK([test -f prog.s], [1])
+AT_CHECK([$COMPILE -save-temps=debug -S prog.cob])
+AT_CHECK([test -f prog.s])
+AT_CHECK([$COMPILE -save-temps=debug -S -o program.s prog.cob])
+AT_CHECK([test -f program.s])
+
+# Check with -C
+
+AT_CHECK([test -f prog.c], [1])
+AT_CHECK([$COMPILE -save-temps=debug -C prog.cob])
+AT_CHECK([test -f prog.c])
+AT_CHECK([test -f prog.c.h])
+AT_CHECK([test -f prog.c.l.h])
+AT_CHECK([$COMPILE -save-temps=debug -C -o program.c prog.cob])
+AT_CHECK([test -f program.c])
+AT_CHECK([test -f program.c.h])
+AT_CHECK([test -f program.c.l.h])
+
+# Check with -E
+
+AT_CHECK([test -f prog.i], [1])
+AT_CHECK([$COMPILE -save-temps=debug -E -o prog.i prog.cob])
+AT_CHECK([test -f prog.i])
+AT_CHECK([$COMPILE -save-temps=debug -E -o program.i prog.cob])
+AT_CHECK([test -f program.i])
 
 AT_CLEANUP
 
@@ -1000,5 +1071,71 @@ AT_CHECK([$COBC -fdiagnostics-plain-output -fdiagnostics-show-caret -Wno-others 
  > <EOF>
 ]])
 
+AT_CHECK([$COMPILE -fdiagnostics-absolute-paths -Wall prog.cob 2> compiler.output], [1])
+
+AT_CHECK([$SED -e "s|$PWD|HOME|" compiler.output], [0],
+[HOME/prog.cob:7: error: CRUD.CPY: No such file or directory
+HOME/prog.cob:6: warning: numeric value is expected
+HOME/prog.cob:14: warning: ignoring redundant .
+])
+
 AT_CLEANUP
 
+
+AT_SETUP([check include header file])
+#AT_KEYWORDS([include])
+
+AT_DATA([file.h], [
+COB_EXT_IMPORT void f (char *, long);
+])
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       PROCEDURE        DIVISION.
+           CALL "f" USING "Hello".
+])
+
+# No check, program seems correct
+
+AT_CHECK([$COBC -m -fstatic-call prog.cob], [0], [], [])
+
+# We ignore the error output, as it depends on the C compiler in use
+
+AT_CHECK([$COBC -m --include "$PWD/file.h" -fstatic-call prog.cob], [1], [], [ignore])
+AT_DATA([prog2.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 long USAGE BINARY-C-LONG.
+       PROCEDURE        DIVISION.
+           CALL "f" USING "Hello" BY VALUE long RETURNING NOTHING.
+])
+
+AT_CHECK([$COBC -m --include "$PWD/file.h" -fstatic-call prog2.cob], [0], [], [])
+
+AT_CHECK([$COBC -I . -m --include "file.h" -fstatic-call prog2.cob], [0], [], [])
+
+# We can use --copy to check a CALL against a prototype. However, this
+# feature is not fully supported by GnuCOBOL yet, so we get some
+# warnings. For exemple:
+# * not putting RETURNING triggers an error
+# * putting RETURNING NOTHING is not supported
+# * putting RETURNING OMITTED is ok, but triggers a warning (see stderr)
+
+AT_DATA([f.copy], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. f PROTOTYPE.
+       DATA DIVISION.
+       LINKAGE SECTION.
+       01  a PIC X(20).
+       01  b BINARY-C-LONG.
+       PROCEDURE DIVISION USING a BY VALUE b RETURNING OMITTED.
+       END PROGRAM f.
+])
+
+AT_CHECK([$COMPILE_MODULE -Wno-unfinished --copy "f.copy" -fstatic-call prog2.cob], [0], [],
+[prog2.cob:8: warning: unexpected RETURNING item
+])
+
+AT_CLEANUP

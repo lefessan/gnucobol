@@ -50,13 +50,15 @@ FILE *fmemopen (void *buf, size_t size, const char *mode);
 #define	COB_LIB_EXPIMP
 #include "coblocal.h"
 
-/*	NOTE - The following variable should be uncommented when
-	it is known that dlopen(NULL) is borked.
-	This is known to be true for some PA-RISC HP-UX 11.11 systems.
+/*	NOTE:
+	COB_BORKED_DLOPEN should be set with LIBCOB_CFFLAGS=-DCOB_BORKED_DLOPEN
+	when it is known that either dlopen(NULL) is borked or dlclose is a no-op.
+	The first is known to be true for some PA-RISC HP-UX 11.11 systems.
 	This is fixed with HP patch PHSS_28871. (There are newer but this
 	fixes dlopen/dlsym problems)
+	The second (no-op dlclose) is the case with musl, see 
+	https://wiki.musl-libc.org/functional-differences-from-glibc.html#Unloading_libraries
 */
-/* #define COB_BORKED_DLOPEN */
 
 #ifdef	_WIN32
 
@@ -300,7 +302,6 @@ cob_set_library_path ()
 	char		*p;
 	char		*pstr;
 	size_t		i;
-	struct stat	st;
 
 	int 		flag;
 
@@ -391,9 +392,12 @@ cob_set_library_path ()
 
 		/* check if directory
 		   (note: entries like X:\ _must_ be specified with trailing slash !) */
-		if (stat (p, &st) || !(S_ISDIR (st.st_mode))) {
-			/* possibly raise a warning, maybe only if explicit asked */
-			continue;
+		{
+			struct stat	st;
+			if (stat (p, &st) || !(S_ISDIR (st.st_mode))) {
+				/* possibly raise a warning, maybe only if explicit asked */
+				continue;
+			}
 		}
 
 		/* remove trailing slash from entry (always added on use) */
@@ -657,25 +661,9 @@ insert (const char *name, void *func, lt_dlhandle handle,
 	p->func = func;
 	p->handle = handle;
 	p->module = module;
-	if (path) {
-#if	defined(HAVE_CANONICALIZE_FILE_NAME)
-		/* Malloced path or NULL */
-		p->path = canonicalize_file_name (path);
-#elif	defined(HAVE_REALPATH)
-		char	*s;
 
-		s = cob_malloc ((size_t)COB_NORMAL_BUFF);
-		if (realpath (path, s) != NULL) {
-			p->path = cob_strdup (s);
-		}
-		cob_free (s);
-#elif	defined	(_WIN32)
-		/* Malloced path or NULL */
-		p->path = _fullpath (NULL, path, 1);
-#endif
-		if (!p->path) {
-			p->path = cob_strdup (path);
-		}
+	if (path) {
+		p->path = cob_path_to_absolute (path);
 	}
 	p->no_phys_cancel = nocanc;
 	val = hash ((const unsigned char *)name);

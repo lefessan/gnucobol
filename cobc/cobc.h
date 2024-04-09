@@ -473,6 +473,8 @@ extern FILE			*cb_listing_file;
 extern FILE			*cb_src_list_file;
 extern FILE			*cb_depend_file;
 extern struct cb_text_list	*cb_depend_list;
+extern struct cb_text_list	*cb_copy_list;
+extern struct cb_text_list	*cb_include_file_list;
 extern struct cb_text_list	*cb_include_list;
 extern struct cb_text_list	*cb_intrinsic_list;
 extern struct cb_text_list	*cb_extension_list;
@@ -652,6 +654,7 @@ extern void		cb_plex_error (const size_t,
 					 const char *, ...) COB_A_FORMAT23;
 extern unsigned int	cb_plex_verify (const size_t, const enum cb_support,
 					const char *);
+extern const char *cb_copy_find_file (char *name, int has_ext);
 extern void		configuration_warning (const char *, const int,
 					 const char *, ...) COB_A_FORMAT34;
 extern void		configuration_error (const char *, const int,
@@ -660,6 +663,8 @@ extern char *		cb_get_strerror (void);
 extern void		cb_add_error_to_listing (const char *, int, const char *, char *);
 DECLNORET extern void		flex_fatal_error (const char *, const char *,
 					 const int) COB_A_NORETURN;
+
+DECLNORET extern void		cobc_terminate_exit (const char *, const char *) COB_A_NORETURN;
 
 extern void		cobc_set_listing_header_code (void);
 

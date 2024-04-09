@@ -3478,3 +3478,65 @@ MANUAL_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
 
 AT_CLEANUP
 
+AT_SETUP([simple ACCEPT field WITH UPDATE])
+AT_KEYWORDS([screen])
+
+AT_SKIP_IF([test "$COB_HAS_CURSES" != "yes"])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       77 var           pic x(11) value 'ignore this'.
+       01  success-flag PIC X VALUE 'y'.
+           88  success  VALUE 'Y', 'y'.
+
+       PROCEDURE        DIVISION.
+           display "Press ENTER if you see an ""y"" "
+                   at 0302
+           accept success-flag update.
+
+           IF success AND COB-CRT-STATUS = 0
+               GOBACK RETURNING 0
+           ELSE
+               GOBACK RETURNING 1
+           END-IF
+           .
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+MANUAL_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([VALUE ALL in SCREEN SECTION])
+
+AT_SKIP_IF([test "$COB_HAS_CURSES" != "yes"])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. SCREEN-VALUE-ALL.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+
+       SCREEN SECTION.
+       01 SCREEN001 BLANK SCREEN AUTO-SKIP.
+           03 SCR01 BACKGROUND-COLOR 2 FOREGROUND-COLOR 7.
+             05 LINE 02 COL 001 PIC X(50) VALUE ALL '-'.
+
+       PROCEDURE DIVISION.
+           DISPLAY 'Press ENTER if you see a sequence of ""-""'
+           AT 0101 END-DISPLAY
+           DISPLAY ' ' AT 0201 END-DISPLAY
+           ACCEPT SCREEN001
+           ACCEPT OMITTED
+           GOBACK.
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+MANUAL_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
+
+AT_CLEANUP
