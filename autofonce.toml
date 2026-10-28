@@ -1,0 +1,37 @@
+[project]
+# name to use to infer config
+name = "gnucobol"
+
+# files used to locate the project top directory
+#   and to set the AUTOFONCE_SOURCE_DIR
+source_anchors = [ "tests/testsuite.at", "!" ]
+
+# files used to locate the project build directory
+#   where the _autofonce/ directory will be created
+#   and to set the AUTOFONCE_BUILD_DIR
+#   use "!" to trigger an error if build dir is mandatory
+build_anchors = [ "cobc/cobc", "!" ]
+
+# paths in project sources that are good candidates to
+#   be tested as build dirs. Useful to run autofonce
+#   from outside the build directory
+build_dir_candidates = [ "_build" ]
+
+[testsuites]
+# alias = "path-from-topdir"
+[testsuites.tests]
+file = "tests/testsuite.at"
+path = [ "tests/testsuite.src"]
+env = "testsuite"
+
+[testsuites.gnu3]
+file = "tests.gnu3/testsuite.at"
+path = [ "tests.gnu3/testsuite.src"]
+env = "testsuite_gnu3"
+
+[envs]
+# env_name = """..."""
+# env_name = "<local-path-to-env-file"
+testsuite = "<tests/autofonce.env.sh"
+testsuite_gnu3 = "<tests.gnu3/autofonce.env.sh"
+
