@@ -254,6 +254,29 @@ de spécial.
 
 ## 5. Conventions dans libcob
 
+**Noms `_ctx` et compatibilité (décidé le 2026-10-29).** Une fonction qui
+prend le contexte s'appelle `NOM_ctx (cob_context *ctx, ...)` ; l'ancien
+nom `NOM (...)` est conservé avec sa signature d'origine et appelle
+`NOM_ctx (COB_CTX_COMPAT, ...)`, c'est-à-dire avec le contexte courant
+du thread. Conséquences :
+- compatibilité des sources : le code C utilisateur, `cobcapi.h`,
+  `cobcrun`, `cobfile` et les tests en C sont inchangés ;
+- compatibilité binaire en mode « un seul contexte » : un module compilé
+  par un ancien `cobc` appelle les anciens noms (y compris
+  `cob_module_global_enter`) et fonctionne (vérifié avec des modules
+  compilés au commit `9b07acac`) ; il n'est pas réentrant (WORKING-STORAGE
+  en `static`) : `COB_CTX_COMPAT` devra lever une erreur quand plusieurs
+  contextes sont utilisés (T1.5) ;
+- le code généré et libcob n'appellent que les noms `_ctx` (vérifié par
+  script : aucun appel interne aux anciens noms) ;
+- les fonctions de compatibilité sont placées juste après la fonction
+  `_ctx` correspondante (même bloc `#ifdef`) ; pour une fonction
+  variadique, le corps est dans `static NOM_va_ctx (..., va_list)` (les
+  `va_start` y deviennent des `va_copy`), appelé par `NOM_ctx` et par
+  `NOM` ;
+- les fonctions auxiliaires générées par `codeoptim.c` gardent leur nom
+  (table `ctx_helpers` de codegen.c).
+
 - Toute fonction exportée qui touche un état : `ctx` en premier
   paramètre. Les fonctions pures (conversion sans état, comparaison de
   champs sans collating…) peuvent ne pas le prendre ; à décider fonction
@@ -410,9 +433,9 @@ Vérifiée par `build_aux/list-mutable-globals.sh` en CI :
 - (si nécessaire) le pointeur vers l'unique `cob_runtime` utilisé par
   les handlers de signaux.
 
-## 10 bis. Fonctions exportées sans `ctx` (état après T1.2)
+## 10 bis. Fonctions exportées sans variante `_ctx` (état après T1.2)
 
-Toutes les fonctions exportées de libcob prennent `ctx`, sauf :
+Toutes les fonctions exportées de libcob ont une variante `NOM_ctx`, sauf :
 - **pures** (aucun état) : `cob_s32_pow`, `cob_s64_pow`,
   `cob_valid_date_format`, `cob_valid_time_format`,
   `cob_valid_datetime_format`, `cob_get_name_hash`,
@@ -456,7 +479,7 @@ premier travail de T1.3.
 | EXTERNAL par contexte | oui | confirmer en T3 |
 | Windows : locale par thread | `_configthreadlocale` | à valider |
 | Bibliothèques ISAM non thread-safe | mutex global | voir EXTERNALS |
-| Refus des modules compilés avec l'ancien schéma (aujourd'hui : plantage) | renommer `cob_module_global_enter` (échec « undefined symbol » au chargement) | à décider (impact sur les noms) |
+| Modules compilés avec l'ancien schéma | acceptés via les anciens noms (compatibilité, §5), en mode un seul contexte | décidé le 2026-10-29 ; erreur en mode multi-contexte à faire en T1.5 |
 | Fonctions libcob appelées directement depuis COBOL par `CALL` | garder l'ABI C pour celles qui sont documentées comme appelables | à recenser |
 
 ## 12. Correspondance avec les étapes
