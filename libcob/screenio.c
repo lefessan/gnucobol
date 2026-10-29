@@ -4299,7 +4299,7 @@ field_display_at_curpos (cob_field *f,
 
 /* DISPLAY scr-name */
 void
-cob_screen_display (cob_screen *s, cob_field *line, cob_field *column,
+cob_screen_display (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
 		    const int zero_line_col_allowed)
 {
 	int	sline;
@@ -4313,7 +4313,7 @@ cob_screen_display (cob_screen *s, cob_field *line, cob_field *column,
 
 /* ACCEPT scr-name */
 void
-cob_screen_accept (cob_screen *s, cob_field *line, cob_field *column,
+cob_screen_accept (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
 		   cob_field *ftimeout, const int zero_line_col_allowed)
 {
 	int	sline;
@@ -4326,7 +4326,7 @@ cob_screen_accept (cob_screen *s, cob_field *line, cob_field *column,
 
 /* DISPLAY scr-item WITH/AT */
 void
-cob_display_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+cob_display_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
 {
 	cob_field *line = NULL;
 	cob_field *column = NULL;
@@ -4403,7 +4403,7 @@ cob_display_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...
 
 /* ACCEPT scr-item WITH/AT */
 void
-cob_accept_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+cob_accept_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
 {
 	cob_field *line = NULL;
 	cob_field *column = NULL;
@@ -4484,7 +4484,7 @@ cob_accept_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
 
 /* DISPLAY scr-item WITH/AT - compat-function for < 3.2 */
 void
-cob_field_display (cob_field *f, cob_field *line, cob_field *column,
+cob_field_display (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
 		  cob_field *fgc, cob_field *bgc, cob_field *fscroll,
 		  cob_field *size_is, const cob_flags_t fattr)
 {
@@ -4502,7 +4502,7 @@ cob_field_display (cob_field *f, cob_field *line, cob_field *column,
 
 /* ACCEPT scr-item WITH/AT - compat-function for < 3.2 */
 void
-cob_field_accept (cob_field *f, cob_field *line, cob_field *column,
+cob_field_accept (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
 		  cob_field *fgc, cob_field *bgc, cob_field *fscroll,
 		  cob_field *ftimeout, cob_field *prompt, cob_field *size_is,
 		  const cob_flags_t fattr)
@@ -4605,7 +4605,7 @@ cob_get_char (void)
 
 /* get a C string with given max-length - returns keyboard status */
 int
-cob_get_text (char *text, int size)
+cob_get_text (cob_context *ctx, char *text, int size)
 {
 	cob_field	field;
 	cob_field_attr	attr;
@@ -4771,7 +4771,7 @@ cob_exit_screen_from_signal (int signal_safe_only)
 
 /* DISPLAY scr-name */
 void
-cob_screen_display (cob_screen *s, cob_field *line, cob_field *column,
+cob_screen_display (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
 		   const int zero_line_col_allowed)
 {
 	COB_UNUSED (s);
@@ -4783,7 +4783,7 @@ cob_screen_display (cob_screen *s, cob_field *line, cob_field *column,
 
 /* ACCEPT scr-name */
 void
-cob_screen_accept (cob_screen *s, cob_field *line,
+cob_screen_accept (cob_context *ctx, cob_screen *s, cob_field *line,
 		   cob_field *column, cob_field *ftimeout,
 		   const int zero_line_col_allowed)
 {
@@ -4803,7 +4803,7 @@ cob_screen_accept (cob_screen *s, cob_field *line,
 
 /* DISPLAY scr-item WITH/AT */
 void
-cob_display_field (cob_field *f, const cob_flags_t fattr, const char * parms, ...)
+cob_display_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char * parms, ...)
 {
 	COB_UNUSED (f);
 	COB_UNUSED (fattr);
@@ -4813,7 +4813,7 @@ cob_display_field (cob_field *f, const cob_flags_t fattr, const char * parms, ..
 
 /* ACCEPT scr-item WITH/AT */
 void
-cob_accept_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+cob_accept_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
 {
 	static int first_accept = 1;
 	COB_UNUSED (f);
@@ -4829,7 +4829,7 @@ cob_accept_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
 
 /* DISPLAY scr-item WITH/AT - compat-function for < 3.2 */
 void
-cob_field_display (cob_field *f, cob_field *line, cob_field *column,
+cob_field_display (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
 		  cob_field *fgc, cob_field *bgc, cob_field *fscroll,
 		  cob_field *size_is, const cob_flags_t fattr)
 {
@@ -4839,12 +4839,12 @@ cob_field_display (cob_field *f, cob_field *line, cob_field *column,
 	COB_UNUSED (bgc);
 	COB_UNUSED (fscroll);
 	COB_UNUSED (size_is);
-	cob_display_field (f, fattr, "");
+	cob_display_field (ctx, f, fattr, "");
 }
 
 /* ACCEPT scr-item WITH/AT - compat-function for < 3.2 */
 void
-cob_field_accept (cob_field *f, cob_field *line, cob_field *column,
+cob_field_accept (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
 		  cob_field *fgc, cob_field *bgc, cob_field *fscroll,
 		  cob_field *ftimeout, cob_field *prompt,
 		  cob_field *size_is, const cob_flags_t fattr)
@@ -4857,7 +4857,7 @@ cob_field_accept (cob_field *f, cob_field *line, cob_field *column,
 	COB_UNUSED (ftimeout);
 	COB_UNUSED (prompt);
 	COB_UNUSED (size_is);
-	cob_accept_field (f, fattr, "");
+	cob_accept_field (ctx, f, fattr, "");
 }
 
 /* internal function to temporarily set "extended screen mode"
@@ -4881,7 +4881,7 @@ cob_sys_clear_screen (void)
 #endif	/* WITH_EXTENDED_SCREENIO */
 
 void
-cob_screen_line_col (cob_field *f, const int get_columns)
+cob_screen_line_col (cob_context *ctx, cob_field *f, const int get_columns)
 {
 	init_cob_screen_if_needed ();
 #ifdef	WITH_EXTENDED_SCREENIO
@@ -4923,7 +4923,7 @@ cob_sys_sound_bell (void)
 }
 
 void
-cob_accept_escape_key (cob_field *f)
+cob_accept_escape_key (cob_context *ctx, cob_field *f)
 {
 	int status = COB_ACCEPT_STATUS;
 	/* Note: MF + ACU set this to a 9(2) item, we do a translation here

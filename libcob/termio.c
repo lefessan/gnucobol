@@ -441,7 +441,7 @@ cob_display (cob_context *ctx, const int to_device, const int newline, const int
 		int		i;
 		for (i = 0; i < varcnt; ++i) {
 			cob_field	*f = va_arg (args, cob_field *);
-			cob_field_display (f, NULL, NULL, NULL, NULL,
+			cob_field_display (ctx, f, NULL, NULL, NULL, NULL,
 					   NULL, NULL, nlattr);
 		}
 	} else {
@@ -1012,7 +1012,7 @@ cob_accept (cob_context *ctx, cob_field *f)
 	cob_field	temp;
 
 	if (cobglobptr->cob_screen_initialized) {
-		cob_field_accept (f, NULL, NULL, NULL, NULL,
+		cob_field_accept (ctx, f, NULL, NULL, NULL, NULL,
 				  NULL, NULL, NULL, NULL,
 				  COB_SCREEN_PROMPT);
 		return;

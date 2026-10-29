@@ -2381,18 +2381,18 @@ COB_EXPIMP void		cob_runtime_warning_external	(cob_context *, const char *, cons
 /*******************************/
 /* Functions in screenio.c */
 
-COB_EXPIMP void		cob_screen_line_col	(cob_field *, const int);
-COB_EXPIMP void		cob_screen_display	(cob_screen *, cob_field *,
+COB_EXPIMP void		cob_screen_line_col	(cob_context *, cob_field *, const int);
+COB_EXPIMP void		cob_screen_display	(cob_context *, cob_screen *, cob_field *,
 					 cob_field *, const int);
-COB_EXPIMP void		cob_screen_accept	(cob_screen *, cob_field *,
+COB_EXPIMP void		cob_screen_accept	(cob_context *, cob_screen *, cob_field *,
 					 cob_field *, cob_field *,
 					 const int);
-COB_EXPIMP void		cob_accept_field	(cob_field *, const cob_flags_t, const char *, ...);
-COB_EXPIMP void		cob_display_field	(cob_field *, const cob_flags_t, const char *, ...);
-COB_EXPIMP void		cob_field_display	(cob_field *, cob_field *, cob_field *,
+COB_EXPIMP void		cob_accept_field	(cob_context *, cob_field *, const cob_flags_t, const char *, ...);
+COB_EXPIMP void		cob_display_field	(cob_context *, cob_field *, const cob_flags_t, const char *, ...);
+COB_EXPIMP void		cob_field_display	(cob_context *, cob_field *, cob_field *, cob_field *,
 					 cob_field *, cob_field *, cob_field *,
 					 cob_field *, const cob_flags_t);
-COB_EXPIMP void		cob_field_accept	(cob_field *, cob_field *, cob_field *,
+COB_EXPIMP void		cob_field_accept	(cob_context *, cob_field *, cob_field *, cob_field *,
 					 cob_field *, cob_field *, cob_field *,
 					 cob_field *, cob_field *, cob_field *,
 					 const cob_flags_t);
@@ -2400,7 +2400,7 @@ COB_EXPIMP int		cob_display_text (const char *);
 COB_EXPIMP int		cob_display_formatted_text (const char *, ...);
 COB_EXPIMP int		cob_get_char	(void);
 COB_EXPIMP void		cob_set_cursor_pos	(int, int);
-COB_EXPIMP void		cob_accept_escape_key	(cob_field *);
+COB_EXPIMP void		cob_accept_escape_key	(cob_context *, cob_field *);
 COB_EXPIMP int		cob_sys_clear_screen	(void);
 COB_EXPIMP int		cob_sys_sound_bell	(void);
 COB_EXPIMP int		cob_sys_get_scr_size	(unsigned char *, unsigned char *);
@@ -2409,7 +2409,7 @@ COB_EXPIMP int		cob_sys_scr_dump	(unsigned char *);
 COB_EXPIMP int		cob_sys_scr_restore	(unsigned char *);
 COB_EXPIMP int		cob_sys_window		(unsigned char*, unsigned char *);
 COB_EXPIMP int		cob_sys_get_char	(unsigned char *);
-COB_EXPIMP int		cob_get_text		(char *, int);
+COB_EXPIMP int		cob_get_text		(cob_context *, char *, int);
 COB_EXPIMP int		cob_get_scr_cols	(void);
 COB_EXPIMP int		cob_get_scr_lines	(void);
 COB_EXPIMP int		cob_sys_get_csr_pos	(unsigned char *);
