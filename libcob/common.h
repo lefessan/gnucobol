@@ -1894,6 +1894,18 @@ typedef struct __cob_global {
 #endif
 } cob_global;
 
+/* Runtime (one per process) and execution context (one per task / run unit),
+   see TXSERIES-T1-DESIGN.md; the context is passed explicitly as first
+   argument, the "current context" of a thread is only used at the entry
+   of programs and other boundaries */
+
+typedef struct cob_runtime	cob_runtime;	/* opaque */
+
+typedef struct cob_context {
+	cob_runtime		*rt;
+	cob_global		glob;
+} cob_context;
+
 #ifndef COB_WITHOUT_JMP
 /* Low level jump structure */
 struct cobjmp_buf {
@@ -1949,10 +1961,15 @@ COB_EXPIMP void	cob_init			(const int, char **);
 COB_EXPIMP void	cob_init_nomain		(const int, char **);
 COB_EXPIMP void	cob_common_init		(void *);
 
-COB_EXPIMP int	cob_module_global_enter	(cob_module **, cob_global **,
-						 const int, const int, const unsigned int *);
-COB_EXPIMP void	cob_module_enter		(cob_module **, cob_global **,
-						 const int);
+COB_EXPIMP cob_context	*cob_get_current_context	(void);
+COB_EXPIMP cob_context	*cob_context_enter	(cob_context *);
+COB_EXPIMP void		cob_context_leave	(cob_context *);
+
+COB_EXPIMP int	cob_module_global_enter	(cob_context **, cob_module **,
+						 cob_global **, const int, const int,
+						 const unsigned int *);
+COB_EXPIMP void	cob_module_enter		(cob_context **, cob_module **,
+						 cob_global **, const int);
 COB_EXPIMP void	cob_module_leave		(cob_module *);
 
 COB_EXPIMP void	cob_module_free	(cob_module **);
