@@ -566,7 +566,7 @@ cob_inspect_init_intern (struct cob_inspect_state *st, cob_field *var, const cob
 	st->mark_min = st->mark_max = 0;
 }
 void
-cob_inspect_init (cob_field *var, const cob_u32_t replacing)
+cob_inspect_init (cob_context *ctx, cob_field *var, const cob_u32_t replacing)
 {
 	cob_inspect_init_intern (&share_inspect_state, var, replacing);
 }
@@ -587,7 +587,7 @@ cob_inspect_init_converting_intern (struct cob_inspect_state *st, cob_field *var
 	st->replacing = 0;	/* only set for pre 3.2 compat because of cob_inspect_finish */
 }
 void
-cob_inspect_init_converting (cob_field *var)
+cob_inspect_init_converting (cob_context *ctx, cob_field *var)
 {
 	cob_inspect_init_converting_intern (&share_inspect_state, var);
 }
@@ -599,7 +599,7 @@ cob_inspect_start_intern (struct cob_inspect_state *st)
 	st->end = st->data + st->size;
 }
 void
-cob_inspect_start (void)
+cob_inspect_start (cob_context *ctx)
 {
 	cob_inspect_start_intern (&share_inspect_state);
 }
@@ -612,7 +612,7 @@ cob_inspect_before_intern (struct cob_inspect_state *st, const cob_field *str)
 		st->end = data_pos;
 }
 void
-cob_inspect_before (const cob_field *str)
+cob_inspect_before (cob_context *ctx, const cob_field *str)
 {
 	cob_inspect_before_intern (&share_inspect_state, str);
 }
@@ -627,7 +627,7 @@ cob_inspect_after_intern (struct cob_inspect_state *st, const cob_field *str)
 		st->start = st->end;
 }
 void
-cob_inspect_after (const cob_field *str)
+cob_inspect_after (cob_context *ctx, const cob_field *str)
 {
 	cob_inspect_after_intern (&share_inspect_state, str);
 }
@@ -689,7 +689,7 @@ cob_inspect_characters_intern (struct cob_inspect_state *st, cob_field *f1)
 	set_inspect_mark (st, pos, len);
 }
 void
-cob_inspect_characters (cob_field *f1)
+cob_inspect_characters (cob_context *ctx, cob_field *f1)
 {
 	cob_inspect_characters_intern (&share_inspect_state, f1);
 }
@@ -701,7 +701,7 @@ cob_inspect_all_intern (struct cob_inspect_state *st, cob_field *f1, cob_field *
 	inspect_common (st, f1, f2);
 }
 void
-cob_inspect_all (cob_field *f1, cob_field *f2)
+cob_inspect_all (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	cob_inspect_all_intern (&share_inspect_state, f1, f2);
 }
@@ -713,7 +713,7 @@ cob_inspect_leading_intern (struct cob_inspect_state *st, cob_field *f1, cob_fie
 	inspect_common (st, f1, f2);
 }
 void
-cob_inspect_leading (cob_field *f1, cob_field *f2)
+cob_inspect_leading (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	cob_inspect_leading_intern (&share_inspect_state, f1, f2);
 }
@@ -725,7 +725,7 @@ cob_inspect_first_intern (struct cob_inspect_state *st, cob_field *f1, cob_field
 	inspect_common (st, f1, f2);
 }
 void
-cob_inspect_first (cob_field *f1, cob_field *f2)
+cob_inspect_first (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	cob_inspect_first_intern (&share_inspect_state, f1, f2);
 }
@@ -737,7 +737,7 @@ cob_inspect_trailing_intern (struct cob_inspect_state *st, cob_field *f1, cob_fi
 	inspect_common (st, f1, f2);
 }
 void
-cob_inspect_trailing (cob_field *f1, cob_field *f2)
+cob_inspect_trailing (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	cob_inspect_trailing_intern (&share_inspect_state, f1, f2);
 }
@@ -855,7 +855,7 @@ end:
 	}
 }
 void
-cob_inspect_converting (const cob_field *f1, const cob_field *f2)
+cob_inspect_converting (cob_context *ctx, const cob_field *f1, const cob_field *f2)
 {
 	cob_inspect_converting_intern (&share_inspect_state, f1, f2);
 }
@@ -888,7 +888,7 @@ cob_inspect_translating_intern (struct cob_inspect_state *st, const unsigned cha
 	}
 }
 void
-cob_inspect_translating (const unsigned char* conv_table)
+cob_inspect_translating (cob_context *ctx, const unsigned char* conv_table)
 {
 	cob_inspect_translating_intern (&share_inspect_state, conv_table);
 }
@@ -923,7 +923,7 @@ cob_inspect_finish_intern (struct cob_inspect_state *st)
 	}
 }
 void
-cob_inspect_finish (void)
+cob_inspect_finish (cob_context *ctx)
 {
 	cob_inspect_finish_intern (&share_inspect_state);
 }
@@ -962,7 +962,7 @@ cob_string_init_intern (struct cob_string_state *st, cob_field *dst, cob_field *
 	}
 }
 void
-cob_string_init (cob_field *dst, cob_field *ptr)
+cob_string_init (cob_context *ctx, cob_field *dst, cob_field *ptr)
 {
 	cob_string_init_intern (&share_string_state, dst, ptr);
 }
@@ -981,7 +981,7 @@ cob_string_delimited_intern (struct cob_string_state *st, cob_field *dlm)
 	}
 }
 void
-cob_string_delimited (cob_field *dlm)
+cob_string_delimited (cob_context *ctx, cob_field *dlm)
 {
 	cob_string_delimited_intern (&share_string_state, dlm);
 }
@@ -1023,7 +1023,7 @@ cob_string_append_intern (struct cob_string_state *st, cob_field *src)
 	}
 }
 void
-cob_string_append (cob_field *src)
+cob_string_append (cob_context *ctx, cob_field *src)
 {
 	cob_string_append_intern (&share_string_state, src);
 }
@@ -1036,7 +1036,7 @@ cob_string_finish_intern (struct cob_string_state *st)
 	}
 }
 void
-cob_string_finish (void)
+cob_string_finish (cob_context *ctx)
 {
 	cob_string_finish_intern (&share_string_state);
 }
@@ -1097,7 +1097,7 @@ cob_unstring_init_intern (
 	}
 }
 void
-cob_unstring_init (
+cob_unstring_init (cob_context *ctx, 
 	cob_field *src,
 	cob_field *ptr,
 	const size_t num_dlm
@@ -1114,7 +1114,7 @@ cob_unstring_delimited_intern (struct cob_unstring_state *st, cob_field *dlm, co
 	st->ndlms++;
 }
 void
-cob_unstring_delimited (cob_field *dlm, const cob_u32_t all)
+cob_unstring_delimited (cob_context *ctx, cob_field *dlm, const cob_u32_t all)
 {
 	cob_unstring_delimited_intern (&share_unstring_state, dlm, all);
 }
@@ -1259,7 +1259,7 @@ cob_unstring_into_intern (
 	}
 }
 void
-cob_unstring_into (
+cob_unstring_into (cob_context *ctx, 
 	cob_field *dst,
 	cob_field *dlm,
 	cob_field *cnt
@@ -1274,7 +1274,7 @@ cob_unstring_tallying_intern (struct cob_unstring_state *st, cob_field *f)
 	cob_add_int (f, st->count, 0);
 }
 void
-cob_unstring_tallying (cob_field *f)
+cob_unstring_tallying (cob_context *ctx, cob_field *f)
 {
 	cob_unstring_tallying_intern (&share_unstring_state, f);
 }
@@ -1292,7 +1292,7 @@ cob_unstring_finish_intern (struct cob_unstring_state *st)
 	}
 }
 void
-cob_unstring_finish (void)
+cob_unstring_finish (cob_context *ctx)
 {
 	cob_unstring_finish_intern (&share_unstring_state);
 }

@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h (cob_bcd_cmp_zero), strings.c: INSPECT / STRING / UNSTRING
+	  functions take the context
 	* coblocal.h, common.c (cob_exit_common, cob_get_global_ptr,
 	  cob_module_global_enter, cob_module_enter, cob_init), common.h
 	  (cob_common_init): runtime / execution context and current context of

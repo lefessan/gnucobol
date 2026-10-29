@@ -5001,6 +5001,28 @@ output_funcall_item (cb_tree x, const int i, unsigned int func_nolitcast)
    TODO (T1.2): during the migration file by file, the list of converted
    functions; at the end, replaced by "all cob_ functions" */
 static const char *const ctx_functions[] = {
+	"cob_inspect_after",
+	"cob_inspect_all",
+	"cob_inspect_before",
+	"cob_inspect_characters",
+	"cob_inspect_converting",
+	"cob_inspect_finish",
+	"cob_inspect_first",
+	"cob_inspect_init",
+	"cob_inspect_init_converting",
+	"cob_inspect_leading",
+	"cob_inspect_start",
+	"cob_inspect_trailing",
+	"cob_inspect_translating",
+	"cob_string_append",
+	"cob_string_delimited",
+	"cob_string_finish",
+	"cob_string_init",
+	"cob_unstring_delimited",
+	"cob_unstring_finish",
+	"cob_unstring_init",
+	"cob_unstring_into",
+	"cob_unstring_tallying",
 	NULL
 };
 

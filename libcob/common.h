@@ -2200,30 +2200,30 @@ COB_EXPIMP int	cob_bcd_cmp_zero	(cob_field *);
 /*******************************/
 /* Functions in strings.c */
 
-COB_EXPIMP void cob_inspect_init	(cob_field *, const cob_u32_t);
-COB_EXPIMP void cob_inspect_init_converting	(cob_field *);
-COB_EXPIMP void cob_inspect_start	(void);
-COB_EXPIMP void cob_inspect_before	(const cob_field *);
-COB_EXPIMP void cob_inspect_after	(const cob_field *);
-COB_EXPIMP void cob_inspect_characters	(cob_field *);
-COB_EXPIMP void cob_inspect_all		(cob_field *, cob_field *);
-COB_EXPIMP void cob_inspect_leading	(cob_field *, cob_field *);
-COB_EXPIMP void cob_inspect_first	(cob_field *, cob_field *);
-COB_EXPIMP void cob_inspect_trailing	(cob_field *, cob_field *);
-COB_EXPIMP void cob_inspect_converting	(const cob_field *, const cob_field *);
-COB_EXPIMP void cob_inspect_translating (const unsigned char *);
-COB_EXPIMP void cob_inspect_finish	(void);
+COB_EXPIMP void cob_inspect_init	(cob_context *, cob_field *, const cob_u32_t);
+COB_EXPIMP void cob_inspect_init_converting	(cob_context *, cob_field *);
+COB_EXPIMP void cob_inspect_start	(cob_context *);
+COB_EXPIMP void cob_inspect_before	(cob_context *, const cob_field *);
+COB_EXPIMP void cob_inspect_after	(cob_context *, const cob_field *);
+COB_EXPIMP void cob_inspect_characters	(cob_context *, cob_field *);
+COB_EXPIMP void cob_inspect_all		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_leading	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_first	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_trailing	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_converting	(cob_context *, const cob_field *, const cob_field *);
+COB_EXPIMP void cob_inspect_translating (cob_context *, const unsigned char *);
+COB_EXPIMP void cob_inspect_finish	(cob_context *);
 
-COB_EXPIMP void cob_string_init		(cob_field *, cob_field *);
-COB_EXPIMP void cob_string_delimited	(cob_field *);
-COB_EXPIMP void cob_string_append	(cob_field *);
-COB_EXPIMP void cob_string_finish	(void);
+COB_EXPIMP void cob_string_init		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_string_delimited	(cob_context *, cob_field *);
+COB_EXPIMP void cob_string_append	(cob_context *, cob_field *);
+COB_EXPIMP void cob_string_finish	(cob_context *);
 
-COB_EXPIMP void cob_unstring_init	(cob_field *, cob_field *, const size_t);
-COB_EXPIMP void cob_unstring_delimited	(cob_field *, const cob_u32_t);
-COB_EXPIMP void cob_unstring_into	(cob_field *, cob_field *, cob_field *);
-COB_EXPIMP void cob_unstring_tallying	(cob_field *);
-COB_EXPIMP void cob_unstring_finish	(void);
+COB_EXPIMP void cob_unstring_init	(cob_context *, cob_field *, cob_field *, const size_t);
+COB_EXPIMP void cob_unstring_delimited	(cob_context *, cob_field *, const cob_u32_t);
+COB_EXPIMP void cob_unstring_into	(cob_context *, cob_field *, cob_field *, cob_field *);
+COB_EXPIMP void cob_unstring_tallying	(cob_context *, cob_field *);
+COB_EXPIMP void cob_unstring_finish	(cob_context *);
 
 COB_EXPIMP const char *COB_SPACES_ALPHABETIC;	/* PIC X/A/U SPACES */
 #define COB_SPACES_ALPHABETIC_BYTE_LENGTH 1024
