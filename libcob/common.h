@@ -2963,10 +2963,10 @@ COB_EXPIMP char * cob_path_to_absolute (cob_context *, const char *path);
 /***************************/
 /* Functions in reportio.c */
 /***************************/
-COB_EXPIMP int  cob_report_initiate	(cob_report *);
-COB_EXPIMP int  cob_report_terminate(cob_report *);
-COB_EXPIMP int  cob_report_generate	(cob_report *, cob_report_line *);
-COB_EXPIMP void cob_report_suppress	(cob_report *, cob_report_line *);
+COB_EXPIMP int  cob_report_initiate	(cob_context *, cob_report *);
+COB_EXPIMP int  cob_report_terminate(cob_context *, cob_report *);
+COB_EXPIMP int  cob_report_generate	(cob_context *, cob_report *, cob_report_line *);
+COB_EXPIMP void cob_report_suppress	(cob_context *, cob_report *, cob_report_line *);
 
 /**********************/
 /* Functions in mlio.c */
