@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_param): intrinsic functions take the context
 	* codegen.c (output_integer, output_long_integer, propagate_table,
 	  output_call_by_value_args, output_call, output_xml_parse, ...),
 	  codeoptim.c (cob_gen_optim): MOVE, arithmetic and C-API data

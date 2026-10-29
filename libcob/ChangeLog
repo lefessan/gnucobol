@@ -1,6 +1,12 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* cobcapi.c (cob_put_field_str), common.h (cob_xml_parse,
+	  cob_intr_binop, cob_valid_time_format, cob_intr_when_compiled,
+	  cob_intr_upper_case, cob_intr_lower_case, ...), intrinsic.c (numval,
+	  cob_intr_test_numval, cob_intr_test_numval_c), screenio.c
+	  (valid_field_data, format_field): intrinsic functions take the
+	  context
 	* cobcapi.c (cob_get_dbl_param, cob_put_dbl_param, cob_get_s64_param,
 	  cob_get_u64_param, cob_get_picx_param, cob_put_field_str, ...),
 	  common.c (cob_move_intermediate, cob_move_to_group_as_alnum,
