@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c: screen ACCEPT / DISPLAY functions take the context
 	* codegen.c: ACCEPT / DISPLAY / DUMP functions take the context
 	* codegen.c (output_stmt, output_file_initialization,
 	  output_internal_function): file I/O functions take the context

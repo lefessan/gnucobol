@@ -1,6 +1,11 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h (cob_runtime_warning_external, cob_screen_display,
+	  cob_screen_accept, cob_field_display, cob_set_cursor_pos,
+	  cob_sys_get_char), screenio.c (cob_field_display, cob_field_accept),
+	  termio.c (cob_display, cob_accept): screen ACCEPT / DISPLAY functions
+	  take the context
 	* common.c (cob_dump_sub, cob_dump_symbols), common.h, termio.c: ACCEPT
 	  / DISPLAY / DUMP functions take the context
 	* call.c (insert), common.c (cob_sig_handler,
