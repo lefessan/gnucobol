@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_internal_function): runtime / execution context and
+	  current context of the thread
 	* parser.y (check_not_88_level): no cast of the reference to an
 	  undefined item (the error node) into a field: internal error after
 	  the error 'not defined', for example on ADDRESS OF

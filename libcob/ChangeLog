@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h, common.c (cob_exit_common, cob_get_global_ptr,
+	  cob_module_global_enter, cob_module_enter, cob_init), common.h
+	  (cob_common_init): runtime / execution context and current context of
+	  the thread
 	* flmdb.c (local_file): close /proc/partitions, opened at each OPEN of
 	  an LMDB file and never closed (one file descriptor lost per OPEN)
 	* fileio.c (cob_file_open): the child process of a bidirectional

@@ -12936,7 +12936,8 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_local ("static cob_module\t*module = NULL;\n\n");
 	}
 
-	output_local ("/* Global variable pointer */\n");
+	output_local ("/* Execution context and global variable pointer */\n");
+	output_local ("cob_context\t\t*ctx;\n");
 	output_local ("cob_global\t\t*cob_glob_ptr;\n\n");
 
 
@@ -13103,6 +13104,8 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	if (prog->prog_type == COB_MODULE_TYPE_PROGRAM) {
 		output_line ("/* CANCEL callback */");
 		output_line ("if (entry < 0) {");
+		output_line ("\tctx = cob_get_current_context ();");
+		output_line ("\tcob_glob_ptr = &ctx->glob;");
 		output_line ("\tif (entry == -20)");
 		output_line ("\t\tgoto P_clear_decimal;");
 		output_line ("\tgoto P_cancel;");
@@ -13111,9 +13114,9 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	}
 
 	output_line ("/* Check initialized, check module allocated, */");
-	output_line ("/* set global pointer, */");
+	output_line ("/* get context and global pointer, */");
 	output_line ("/* push module stack, save call parameter count */");
-	output_line ("if (cob_module_global_enter (&module, &cob_glob_ptr, %d, entry, %sname_hash))",
+	output_line ("if (cob_module_global_enter (&ctx, &module, &cob_glob_ptr, %d, entry, %sname_hash))",
 				      cb_flag_implicit_init, CB_PREFIX_STRING);
 	if (prog->prog_type == COB_MODULE_TYPE_FUNCTION) {
 		output_line ("\treturn NULL;");

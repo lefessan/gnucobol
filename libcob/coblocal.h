@@ -227,6 +227,16 @@
     #define COB_TLS	static	/* fallback definition */
 #endif
 
+/* TODO (T1.2/T1.3): context for callers that do not receive it yet;
+   every use must disappear when 'ctx' is propagated */
+#define COB_CTX_TODO	(cob_get_current_context ())
+
+/* Runtime structure (one per process), opaque outside of libcob;
+   filled in T1.3 when the global state is moved */
+struct cob_runtime {
+	int		reserved;
+};
+
 /* Global settings structure */
 
 typedef struct __cob_settings {

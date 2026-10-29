@@ -310,6 +310,14 @@ static const char		*cob_last_progid = NULL;
 static cob_global		*cobglobptr = NULL;
 static cob_settings		*cobsetptr = NULL;
 
+/* TODO (T1.3): single runtime and context until the state is moved */
+static cob_runtime		*cob_main_runtime = NULL;
+static cob_context		*cob_main_context = NULL;
+
+/* The only thread-local variable of the runtime: the current context
+   of the thread, read at boundaries only */
+COB_TLS cob_context		*cob_current_context = NULL;
+
 static enum cob_module_unload	module_unload = COB_IMMEDIATE;
 
 static int			last_exception_code;	/* Last exception: code */
@@ -804,8 +812,18 @@ cob_exit_common (void)
 		if (cobglobptr->cob_main_argv0) {
 			cob_free ((void *)(cobglobptr->cob_main_argv0));
 		}
-		cob_free (cobglobptr);
 		cobglobptr = NULL;
+	}
+	if (cob_main_context) {
+		if (cob_current_context == cob_main_context) {
+			cob_current_context = NULL;
+		}
+		cob_free (cob_main_context);
+		cob_main_context = NULL;
+	}
+	if (cob_main_runtime) {
+		cob_free (cob_main_runtime);
+		cob_main_runtime = NULL;
 	}
 	if (cobsetptr) {
 		void 	*data;
@@ -3664,9 +3682,32 @@ cob_get_global_ptr (void)
 	return cobglobptr;
 }
 
+cob_context *
+cob_get_current_context (void)
+{
+	return cob_current_context;
+}
+
+/* make 'ctx' the current context of the thread, returns the previous one */
+cob_context *
+cob_context_enter (cob_context *ctx)
+{
+	cob_context	*prev = cob_current_context;
+	cob_current_context = ctx;
+	return prev;
+}
+
+/* restore the context 'prev' returned by cob_context_enter */
+void
+cob_context_leave (cob_context *prev)
+{
+	cob_current_context = prev;
+}
+
 int
-cob_module_global_enter (cob_module **module, cob_global **mglobal,
-		  const int auto_init, const int entry, const unsigned int *name_hash)
+cob_module_global_enter (cob_context **ctx, cob_module **module,
+		  cob_global **mglobal, const int auto_init, const int entry,
+		  const unsigned int *name_hash)
 {
 	/* Check initialized */
 	if (!cob_initialized) {
@@ -3677,8 +3718,14 @@ cob_module_global_enter (cob_module **module, cob_global **mglobal,
 		}
 	}
 
+	/* Get the context of the thread */
+	*ctx = cob_current_context;
+	if (*ctx == NULL) {
+		cob_fatal_error (COB_FERROR_INITIALIZED);
+	}
+
 	/* Set global pointer */
-	*mglobal = cobglobptr;
+	*mglobal = &(*ctx)->glob;
 
 	/* Was caller a COBOL module */
 	if (name_hash != NULL
@@ -3757,10 +3804,10 @@ cob_module_global_enter (cob_module **module, cob_global **mglobal,
 }
 
 void
-cob_module_enter (cob_module **module, cob_global **mglobal,
-		  const int auto_init)
+cob_module_enter (cob_context **ctx, cob_module **module,
+		  cob_global **mglobal, const int auto_init)
 {
-	(void)cob_module_global_enter (module, mglobal, auto_init, 0, 0);
+	(void)cob_module_global_enter (ctx, module, mglobal, auto_init, 0, 0);
 }
 
 void
@@ -10711,8 +10758,12 @@ cob_init (const int argc, char **argv)
 	if (argc && argv)
 		cob_setup_env (argv[0]);
 
-	/* Get global structure */
-	cobglobptr = cob_malloc (sizeof (cob_global));
+	/* Get runtime, context and global structure */
+	cob_main_runtime = cob_malloc (sizeof (cob_runtime));
+	cob_main_context = cob_malloc (sizeof (cob_context));
+	cob_main_context->rt = cob_main_runtime;
+	(void)cob_context_enter (cob_main_context);
+	cobglobptr = &cob_main_context->glob;
 	cobglobptr->cob_call_params = 0;
 
 	cob_set_main_argv0 (argc, argv);
