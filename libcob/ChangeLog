@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h (cob_prof_init_module, cob_prof_exit_section,
+	  cob_prof_use_paragraph_entry), profiling.c
+	  (cob_prof_use_paragraph_entry, cob_prof_goto, cob_prof_end):
+	  profiling functions take the context
 	* common.h (cob_is_xml_namechar, cob_xml_generate, cob_json_generate),
 	  mlio.c (xml_process_next_event): XML / JSON functions take the
 	  context

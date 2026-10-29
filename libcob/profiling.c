@@ -166,7 +166,7 @@ cob_init_prof (cob_global *lptr, cob_settings *sptr)
 }
 
 struct cob_prof_module *
-cob_prof_init_module (cob_module *module,
+cob_prof_init_module (cob_context *ctx, cob_module *module,
 		      struct cob_prof_procedure *procedures,
 		      size_t procedure_count)
 {
@@ -243,7 +243,7 @@ cob_prof_realloc_arrays (void)
 }
 
 void
-cob_prof_enter_procedure (struct cob_prof_module *info, int proc_idx)
+cob_prof_enter_procedure (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	cob_ns_time t;
 
@@ -266,7 +266,7 @@ cob_prof_enter_procedure (struct cob_prof_module *info, int proc_idx)
 }
 
 void
-cob_prof_exit_procedure (struct cob_prof_module *info, int proc_idx)
+cob_prof_exit_procedure (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	/* Exit all the sections/paragraphs */
 	cob_ns_time t;
@@ -291,7 +291,7 @@ cob_prof_exit_procedure (struct cob_prof_module *info, int proc_idx)
 }
 
 void
-cob_prof_enter_section (struct cob_prof_module *info, int proc_idx)
+cob_prof_enter_section (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	if (!is_active) return;
 	/* We do not measure time on section enter/exit, we use the cumulative time
@@ -300,15 +300,15 @@ cob_prof_enter_section (struct cob_prof_module *info, int proc_idx)
 }
 
 void
-cob_prof_use_paragraph_entry (struct cob_prof_module *info,
+cob_prof_use_paragraph_entry (cob_context *ctx, struct cob_prof_module *info,
 			      int paragraph_idx, int entry_idx){
 	if (!is_active) return;
 	info->called_count[entry_idx] ++;
-	cob_prof_enter_procedure (info, paragraph_idx);
+	cob_prof_enter_procedure (ctx, info, paragraph_idx);
 }
 
 void
-cob_prof_exit_section (struct cob_prof_module *info, int proc_idx)
+cob_prof_exit_section (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	/* For now, nothing to do */
 	COB_UNUSED (info);
@@ -316,7 +316,7 @@ cob_prof_exit_section (struct cob_prof_module *info, int proc_idx)
 }
 
 void
-cob_prof_goto (struct cob_prof_module *info)
+cob_prof_goto (cob_context *ctx, struct cob_prof_module *info)
 {
 	int curr_proc;
 	struct cob_prof_module *curr_info;
@@ -329,7 +329,7 @@ cob_prof_goto (struct cob_prof_module *info)
 	curr_info = called_runtimes[current_idx];
 
 	if (curr_info->procedures[curr_proc].kind == COB_PROF_PROCEDURE_PARAGRAPH){
-		cob_prof_exit_procedure (curr_info, curr_proc);
+		cob_prof_exit_procedure (ctx, curr_info, curr_proc);
 	}
 }
 
@@ -531,7 +531,7 @@ cob_prof_end ()
 	if (!cobsetptr || !is_active || !prof_info_list) return;
 
 	while (current_idx >= 0) {
-		cob_prof_exit_procedure (called_runtimes[current_idx],
+		cob_prof_exit_procedure (COB_CTX_TODO, called_runtimes[current_idx],
 					 called_procedures[current_idx]);
 	}
 

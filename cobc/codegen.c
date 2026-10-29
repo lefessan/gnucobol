@@ -5314,6 +5314,13 @@ static const char *const ctx_functions[] = {
 	"cob_pointer_manip",
 	"cob_pre_open",
 	"cob_pre_open_def",
+	"cob_prof_enter_procedure",
+	"cob_prof_enter_section",
+	"cob_prof_exit_procedure",
+	"cob_prof_exit_section",
+	"cob_prof_goto",
+	"cob_prof_init_module",
+	"cob_prof_use_paragraph_entry",
 	"cob_put_comp1",
 	"cob_put_comp2",
 	"cob_put_indirect_field",
@@ -5451,27 +5458,27 @@ output_funcall (cb_tree x)
 
 		case COB_PROF_EXIT_PARAGRAPH:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_exit_procedure (prof_info, %d)", proc_idx);
+			output ("cob_prof_exit_procedure (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_ENTER_SECTION:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_enter_section (prof_info, %d)", proc_idx);
+			output ("cob_prof_enter_section (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_EXIT_SECTION:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_exit_section (prof_info, %d)", proc_idx);
+			output ("cob_prof_exit_section (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_ENTER_CALL:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_enter_procedure (prof_info, %d)", proc_idx);
+			output ("cob_prof_enter_procedure (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_EXIT_CALL:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_exit_procedure (prof_info, %d)", proc_idx);
+			output ("cob_prof_exit_procedure (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_ENTER_PARAGRAPH:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_enter_procedure (prof_info, %d);", proc_idx);
+			output ("cob_prof_enter_procedure (ctx, prof_info, %d);", proc_idx);
 			output_newline ();
 			output_prefix ();
 			output ("fallthrough_label = 0");
@@ -5481,7 +5488,7 @@ output_funcall (cb_tree x)
 			int entry_idx = CB_INTEGER(p->argv[2])->val;
 			output ("if (!fallthrough_label)");
 			output_block_open ();
-			output_line ("cob_prof_use_paragraph_entry (prof_info, %d, %d);",
+			output_line ("cob_prof_use_paragraph_entry (ctx, prof_info, %d, %d);",
 				     paragraph_idx, entry_idx);
 			output_block_close ();
 			output_line ("else");
@@ -9322,7 +9329,7 @@ output_goto (struct cb_goto *p)
 	if (cb_flag_prof) {
 		/* Output this only if we are exiting the paragraph... */
 		if ( !(p->flags & CB_GOTO_FLAG_SAME_PARAGRAPH) ){
-			output_line ("cob_prof_goto (prof_info);");
+			output_line ("cob_prof_goto (ctx, prof_info);");
 		}
 	}
 
@@ -13920,7 +13927,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	if (cb_flag_prof) {
 		output_line ("if (!prof_info) {");
 		output_line (
-			"\tprof_info = cob_prof_init_module (module, prof_procedures, %d);",
+			"\tprof_info = cob_prof_init_module (ctx, module, prof_procedures, %d);",
 			prog->procedure_list_len);
 		output_line ("}");
 
@@ -13928,7 +13935,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		   we keep pointers to static data there. */
 		output_line ("if (prof_info) { module->flag_no_phys_canc = 1; }");
 
-		output_line ("cob_prof_enter_procedure (prof_info, 0);");
+		output_line ("cob_prof_enter_procedure (ctx, prof_info, 0);");
 	}
 	if (cb_flag_stack_extended) {
 		/* entry marker = first frameptr is the one with
@@ -14041,7 +14048,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		}
 	}
 	if (cb_flag_prof){
-		output_line ("cob_prof_exit_procedure (prof_info, 0);");
+		output_line ("cob_prof_exit_procedure (ctx, prof_info, 0);");
 	}
 	if (!prog->flag_recursive) {
 		output_line ("/* Decrement module active count */");
