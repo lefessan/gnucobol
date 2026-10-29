@@ -523,17 +523,17 @@ parseFile (cob_file *fl, const char *select, int rcsz,
 	getRecsz (fl, defs);
 
 	if (strcmp (select,"INPUT") == 0) {
-		cob_pre_open_def (fl, defs, fileindef, 1);
+		cob_pre_open_def (cob_get_current_context (), fl, defs, fileindef, 1);
 		getRecsz (fl, fileindef);
 	} else if (fileindef[0] > ' ') {
 		fl->nkeys = 0;
 		getRecsz (fl, fileindef);
 		sprintf(both,"%s %s",fileindef, defs);
-		cob_pre_open_def (fl, both, val, 0);
+		cob_pre_open_def (cob_get_current_context (), fl, both, val, 0);
 		if (fl->assign
 		 && fl->assign->data) {
 			flsts = makeField (2);
-			cob_delete_file (fl, flsts, 0);
+			cob_delete_file (cob_get_current_context (), fl, flsts, 0);
 			dropField (flsts);
 			sprintf(filename,"%s.dat",fl->assign->data);
 			unlink (filename);
@@ -542,7 +542,7 @@ parseFile (cob_file *fl, const char *select, int rcsz,
 		}
 		getRecsz (fl, val);
 	} else {
-		cob_pre_open_def (fl, defs, NULL, 0);
+		cob_pre_open_def (cob_get_current_context (), fl, defs, NULL, 0);
 	}
 }
 
@@ -855,7 +855,7 @@ copyFile (cob_file *fi, cob_file *fo, int skip, int ncopy)
 	}
 	fi->flag_keycheck = 0;
 	fi->flag_auto_type = 1;
-	cob_open (fi, COB_OPEN_INPUT, 0, fists);
+	cob_open (cob_get_current_context (), fi, COB_OPEN_INPUT, 0, fists);
 	if (memcmp(fists->data,"00",2) != 0) {
 		printf("Status %.2s opening %s for input\n",fists->data,fi->assign->data);
 		return 1;
@@ -865,7 +865,7 @@ copyFile (cob_file *fi, cob_file *fo, int skip, int ncopy)
 		fo->keys[0].field = makeField9 (COB_MAX_DIGITS);
 	}
 
-	cob_open (fo, COB_OPEN_OUTPUT, 0, fosts);
+	cob_open (cob_get_current_context (), fo, COB_OPEN_OUTPUT, 0, fosts);
 	if (memcmp(fosts->data,"00",2) != 0) {
 		printf("Status %.2s opening %s for output\n",fosts->data,fo->assign->data);
 		return 1;
@@ -873,7 +873,7 @@ copyFile (cob_file *fi, cob_file *fo, int skip, int ncopy)
 	/* Copy data */
 	written = recs = 0;
 	while (1) {
-		cob_read_next (fi, fists, COB_READ_NEXT);
+		cob_read_next (cob_get_current_context (), fi, fists, COB_READ_NEXT);
 		if (fists->data[0] > '0') {
 			if (memcmp(fists->data,"10",2) != 0)
 				printf("READ status %.2s\n",fists->data);
@@ -884,7 +884,7 @@ copyFile (cob_file *fi, cob_file *fo, int skip, int ncopy)
 		 && recs <= skip)
 			continue;
 		memcpy (fo->record->data, fi->record->data, fi->record_max);
-		cob_write (fo, fo->record, 0, fosts, 0);
+		cob_write (cob_get_current_context (), fo, fo->record, 0, fosts, 0);
 		if (fosts->data[0] > '0') {
 			printf("WRITE status %.2s\n",fosts->data);
 			break;
@@ -900,9 +900,9 @@ copyFile (cob_file *fi, cob_file *fo, int skip, int ncopy)
 		printf("Read %d records and wrote %d records\n",recs,written);
 
 	/* Close files */
-	cob_close (fi, fists, 0, 0);
+	cob_close (cob_get_current_context (), fi, fists, 0, 0);
 	dropField (fists);
-	cob_close (fo, fosts, 0, 0);
+	cob_close (cob_get_current_context (), fo, fosts, 0, 0);
 	dropField (fosts);
 	return 0;
 }

@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_stmt, output_file_initialization,
+	  output_internal_function): file I/O functions take the context
 	* codegen.c (output_integer, output_long_integer, output_param,
 	  output_initialize_chaining, output_init_comment_and_source_ref,
 	  output_memory_check_call, ...), codeoptim.c (cob_gen_optim): runtime

@@ -1275,7 +1275,7 @@ cob_sig_handler (int sig)
 
 	if (cobsetptr
 	&& !in_stop_run)
-		cob_rollback ();
+		cob_rollback (COB_CTX_TODO);
 	in_stop_run = 1;
 
 	/* Skip dumping for SIGTERM, SIGINT and "other process" issue's SIGHUP, SIGPIPE */
@@ -3519,9 +3519,9 @@ call_exit_handlers_and_terminate (void)
 	if (cobsetptr
 	 && !in_stop_run) {
 		if (cobsetptr->cob_stop_run_commit > 0) 
-			cob_commit ();
+			cob_commit (COB_CTX_TODO);
 		else
-			cob_rollback ();
+			cob_rollback (COB_CTX_TODO);
 	}
 	in_stop_run = 1;
 	if (exit_hdlrs != NULL) {
@@ -10698,7 +10698,7 @@ void cob_set_main_argv0 (const int argc, char **argv)
 	/* note: consider proc_pidpath for Mac OS X, if needed */
 
 	if (argc && argv && argv[0]) {
-		cobglobptr->cob_main_argv0 = cob_path_to_absolute (argv[0]);
+		cobglobptr->cob_main_argv0 = cob_path_to_absolute (COB_CTX_TODO, argv[0]);
 	} else {
 		cobglobptr->cob_main_argv0 = cob_strdup (_("unknown"));
 	}

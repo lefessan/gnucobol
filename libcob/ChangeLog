@@ -1,6 +1,15 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (insert), common.c (cob_sig_handler,
+	  call_exit_handlers_and_terminate, cob_set_main_argv0), common.h
+	  (cob_accept, cob_file_external_addr, cob_file_malloc,
+	  cob_file_create, cob_file_set_attr, cob_file_set_key, ...), fextfh.c
+	  (cob_extfh_start, cob_extfh_read, cob_file_fcd_adrs,
+	  cob_file_fcdkey_adrs), fileio.c (cob_put_qbl, cob_file_external_addr,
+	  cob_open, cob_commit, cob_rollback, cob_file_sort_using, ...), foci.c
+	  (oci_start, oci_read), fodbc.c (odbc_start, odbc_read), reportio.c
+	  (write_rec): file I/O functions take the context
 	* call.c (set_resolve_error, cache_preload, cob_resolve_internal,
 	  cob_call_error, cob_resolve, cob_resolve_cobol, ...), cconv.c
 	  (cob_load_collation), cobcapi.c (get_value, cob_parse_field),

@@ -5046,6 +5046,7 @@ static const char *const ctx_functions[] = {
 	"cob_check_ref_mod_detailed",
 	"cob_check_ref_mod_minimal",
 	"cob_check_subscript",
+	"cob_close",
 	"cob_cmp",
 	"cob_cmp_float",
 	"cob_cmp_int",
@@ -5054,6 +5055,7 @@ static const char *const ctx_functions[] = {
 	"cob_cmp_packed",
 	"cob_cmp_uint",
 	"cob_command_line",
+	"cob_commit",
 	"cob_continue_after",
 	"cob_correct_numeric",
 	"cob_decimal_add",
@@ -5073,6 +5075,8 @@ static const char *const ctx_functions[] = {
 	"cob_decimal_set_llint",
 	"cob_decimal_set_ullint",
 	"cob_decimal_sub",
+	"cob_delete",
+	"cob_delete_file",
 	"cob_display_arg_number",
 	"cob_display_command_line",
 	"cob_display_env_value",
@@ -5081,7 +5085,41 @@ static const char *const ctx_functions[] = {
 	"cob_div_quotient",
 	"cob_div_remainder",
 	"cob_external_addr",
+	"cob_extfh_close",
+	"cob_extfh_delete",
+	"cob_extfh_open",
+	"cob_extfh_read",
+	"cob_extfh_read_next",
+	"cob_extfh_rewrite",
+	"cob_extfh_start",
+	"cob_extfh_write",
 	"cob_fatal_error",
+	"cob_file_complete",
+	"cob_file_create",
+	"cob_file_destroy",
+	"cob_file_external_addr",
+	"cob_file_fcd_adrs",
+	"cob_file_fcdkey_adrs",
+	"cob_file_free",
+	"cob_file_malloc",
+	"cob_file_release",
+	"cob_file_return",
+	"cob_file_set_attr",
+	"cob_file_set_key",
+	"cob_file_set_key_extra",
+	"cob_file_set_linage",
+	"cob_file_set_lock",
+	"cob_file_set_retry",
+	"cob_file_sort_close",
+	"cob_file_sort_giving",
+	"cob_file_sort_giving_extfh",
+	"cob_file_sort_init",
+	"cob_file_sort_init_key",
+	"cob_file_sort_options",
+	"cob_file_sort_using",
+	"cob_file_sort_using_extfh",
+	"cob_file_xfdname",
+	"cob_findkey",
 	"cob_free_alloc",
 	"cob_func",
 	"cob_function_return",
@@ -5259,7 +5297,11 @@ static const char *const ctx_functions[] = {
 	"cob_numeric_cmp",
 	"cob_numeric_display_cmp",
 	"cob_numeric_display_cmp_zero",
+	"cob_open",
+	"cob_path_to_absolute",
 	"cob_pointer_manip",
+	"cob_pre_open",
+	"cob_pre_open_def",
 	"cob_put_comp1",
 	"cob_put_comp2",
 	"cob_put_indirect_field",
@@ -5275,6 +5317,8 @@ static const char *const ctx_functions[] = {
 	"cob_put_u64_compx",
 	"cob_put_u64_pic9",
 	"cob_putenv",
+	"cob_read",
+	"cob_read_next",
 	"cob_ready_trace",
 	"cob_reset_trace",
 	"cob_resolve",
@@ -5282,6 +5326,8 @@ static const char *const ctx_functions[] = {
 	"cob_resolve_error",
 	"cob_resolve_func",
 	"cob_restore_func",
+	"cob_rewrite",
+	"cob_rollback",
 	"cob_runtime_error",
 	"cob_runtime_hint",
 	"cob_runtime_warning",
@@ -5302,6 +5348,7 @@ static const char *const ctx_functions[] = {
 	"cob_set_runtime_option",
 	"cob_set_switch",
 	"cob_stack_trace",
+	"cob_start",
 	"cob_stop_error",
 	"cob_stop_run",
 	"cob_string_append",
@@ -5321,12 +5368,14 @@ static const char *const ctx_functions[] = {
 	"cob_trace_para",
 	"cob_trace_sect",
 	"cob_trace_statement",
+	"cob_unlock_file",
 	"cob_unsetenv",
 	"cob_unstring_delimited",
 	"cob_unstring_finish",
 	"cob_unstring_init",
 	"cob_unstring_into",
 	"cob_unstring_tallying",
+	"cob_write",
 	NULL
 };
 
@@ -10403,12 +10452,12 @@ output_stmt (cb_tree x)
 			/* LCOV_EXCL_STOP */
 
 			if (p->flag_retry_forever) {
-				output_line ("cob_file_set_retry (%s%s,COB_RETRY_FOREVER,0);",
+				output_line ("cob_file_set_retry (ctx, %s%s,COB_RETRY_FOREVER,0);",
 									CB_PREFIX_FILE, fl->cname);
 			} else
 			if (p->flag_retry_times) {
 				output_prefix ();
-				output ("cob_file_set_retry (%s%s,COB_RETRY_TIMES,",
+				output ("cob_file_set_retry (ctx, %s%s,COB_RETRY_TIMES,",
 									CB_PREFIX_FILE, fl->cname);
 				output_integer (p->retry);
 				output (");");
@@ -10416,14 +10465,14 @@ output_stmt (cb_tree x)
 			} else
 			if (p->flag_retry_seconds) {
 				output_prefix ();
-				output ("cob_file_set_retry (%s%s,COB_RETRY_SECONDS,",
+				output ("cob_file_set_retry (ctx, %s%s,COB_RETRY_SECONDS,",
 									CB_PREFIX_FILE, fl->cname);
 				output_integer (p->retry);
 				output (");");
 				output_newline ();
 			} else
 			if (p->flag_advancing_lock) {
-				output_line ("cob_file_set_retry (%s%s,COB_ADVANCING_LOCK,0);",
+				output_line ("cob_file_set_retry (ctx, %s%s,COB_ADVANCING_LOCK,0);",
 									CB_PREFIX_FILE, fl->cname);
 			}
 		}
@@ -10786,7 +10835,7 @@ output_file_initialization (struct cb_file *f)
 		strcpy (extname, "NULL");
 	}
 	/* TODO: generate enum names here */
-	output_line ("cob_file_create (&%s, %s, \"%s\",", file_name, extname, f->name);
+	output_line ("cob_file_create (ctx, &%s, %s, \"%s\",", file_name, extname, f->name);
 	output_indent_level += 17;
 	output_line ("%s,%s,%d,",org_name,acc_name,f->optional);
 	output_line ("%s,%s,%d,%d,%d,",fmt_name,features,nkeys,f->record_min,f->record_max);
@@ -10804,7 +10853,7 @@ output_file_initialization (struct cb_file *f)
 	 || f->organization == COB_ORG_INDEXED) {
 		struct cb_alt_key	*l;
 		output_prefix ();
-		output ("cob_file_set_key (%s, 0, ", file_name);
+		output ("cob_file_set_key (ctx, %s, 0, ", file_name);
 		if (f->organization == COB_ORG_RELATIVE
 		 && f->key == NULL) {
 			output ("&%s%s_recnum", CB_PREFIX_FIELD, f->cname);
@@ -10817,7 +10866,7 @@ output_file_initialization (struct cb_file *f)
 			cb_tree col = get_indexed_file_key_colseq (f, NULL);
 			if (col != NULL) {
 				output_prefix ();
-				output ("cob_file_set_key_extra (%s, 0, -1, -1, NULL, ", file_name);
+				output ("cob_file_set_key_extra (ctx, %s, 0, -1, -1, NULL, ", file_name);
 				output_param (col, -1);
 				output (");");
 				output_newline ();
@@ -10825,7 +10874,7 @@ output_file_initialization (struct cb_file *f)
 		}
 		for (l = f->alt_key_list; l; l = l->next) {
 			output_prefix ();
-			output ("cob_file_set_key (%s, %d, ", file_name, nkeys);
+			output ("cob_file_set_key (ctx, %s, %d, ", file_name, nkeys);
 			output_param (l->key, -1);
 			if (l->keycompress)
 				output (", (%d << 8) + %d, 0" , l->keycompress, l->duplicates);
@@ -10849,7 +10898,7 @@ output_file_initialization (struct cb_file *f)
 				cb_tree col = get_indexed_file_key_colseq (f, l);
 				if (col != NULL) {
 					output_prefix ();
-					output ("cob_file_set_key_extra (%s, %d, -1, -1, NULL, ", file_name, nkeys);
+					output ("cob_file_set_key_extra (ctx, %s, %d, -1, -1, NULL, ", file_name, nkeys);
 					output_param (col, -1);
 					output (");");
 					output_newline ();
@@ -10863,7 +10912,7 @@ output_file_initialization (struct cb_file *f)
 	 || f->record_depending
 	 || strcmp(file_features,"0") != 0) {
 		output_prefix ();
-		output ("cob_file_set_attr (%s,",file_name);
+		output ("cob_file_set_attr (ctx, %s,",file_name);
 		if (f->record_depending) {
 			output_param (f->record_depending, -1);
 		} else {
@@ -10880,7 +10929,7 @@ output_file_initialization (struct cb_file *f)
 	if (f->lock_mode) {
 		strcpy(nxt,"");
 		output_prefix ();
-		output ("cob_file_set_lock (%s,",file_name);
+		output ("cob_file_set_lock (ctx, %s,",file_name);
 		if ((f->lock_mode & COB_LOCK_OPEN_EXCLUSIVE)) {
 			output("%sCOB_LOCK_OPEN_EXCLUSIVE",nxt);
 			strcpy(nxt,"|");
@@ -10913,7 +10962,7 @@ output_file_initialization (struct cb_file *f)
 
 	if (f->linage) {
 		output_prefix ();
-		output ("cob_file_set_linage (%s,",file_name);
+		output ("cob_file_set_linage (ctx, %s,",file_name);
 		output_param (f->linage, -1);
 		output (",");
 		output_param (f->linage_ctr, -1);
@@ -10948,7 +10997,7 @@ output_file_initialization (struct cb_file *f)
 		if ((f->flag_sql_xfd || cb_all_files_xfd)
 		 && cb_flag_sql_xfd) {
 			if (f->sql_name) {
-				output_line ("cob_file_xfdname (%s%s, \"%s\");", 
+				output_line ("cob_file_xfdname (ctx, %s%s, \"%s\");", 
 								CB_PREFIX_FILE, f->cname, f->sql_name);
 			}
 			output_xfd_file (f);
@@ -11001,7 +11050,7 @@ output_file_initialization (struct cb_file *f)
 		}
 	}
 
-	output_line ("cob_file_complete (%s);",file_name);
+	output_line ("cob_file_complete (ctx, %s);",file_name);
 	output_newline ();
 }
 
@@ -14367,10 +14416,10 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 			/* CHECKME: Shouldn't we raise a runtime warning when still open? */
 			output_line ("if (%s%s->open_mode != COB_OPEN_CLOSED)",
 					CB_PREFIX_FILE, fl->cname);
-			output_line ("\tcob_close (%s%s, NULL, COB_CLOSE_NORMAL, 1);",
+			output_line ("\tcob_close (ctx, %s%s, NULL, COB_CLOSE_NORMAL, 1);",
 					CB_PREFIX_FILE, fl->cname);
 			if (!fl->flag_external) {
-				output_line ("cob_file_destroy (&%s%s);",
+				output_line ("cob_file_destroy (ctx, &%s%s);",
 					CB_PREFIX_FILE, fl->cname);
 			}
 		} else {

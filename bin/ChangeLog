@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* cobfile.c (parseFile, copyFile): file I/O functions take the context
 	* cobcrun.c (main): runtime support functions take the context
 	* cobcrun.c (main): CALL / CANCEL / resolve functions take the context
 
