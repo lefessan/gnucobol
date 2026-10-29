@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md: status with "TXSERIES-T1-DESIGN.md: _ctx names and
+	  compatibility functions"
 	* TXSERIES-PLAN.md: new file, status with "TXSeries compatibility: plan
 	  and design of the reentrant runtime"
 	* configure.ac: DISPLAY handler of the host

@@ -381,6 +381,9 @@ Conséquences pour `cobc/codegen.c` :
    suite de tests sans régression. Exceptions listées dans
    `TXSERIES-T1-DESIGN.md` §10 bis ; 882 `COB_CTX_TODO` restent pour
    T1.3.
+   Puis, le même jour : les fonctions qui prennent le contexte sont
+   renommées `NOM_ctx`, les anciens noms restent pour la compatibilité
+   (sources, et binaire en mode un seul contexte ; DESIGN §5).
    (J2 : T1.2 — `ctx` passé partout (changement d'ABI), état encore
    unique.)
 3. **J3** : T1.3 + T1.4 — libcob sans état global mutable, thread-safe.
