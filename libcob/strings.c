@@ -493,7 +493,7 @@ inspect_common (
 				alloc_figurative (f1, f2);
 				f1 = &alpha_fld;
 			} else {
-				cob_set_exception (COB_EC_RANGE_INSPECT_SIZE);
+				cob_set_exception (COB_CTX_TODO, COB_EC_RANGE_INSPECT_SIZE);
 				return;
 			}
 		}
@@ -770,7 +770,7 @@ cob_inspect_converting_intern (
 			alloc_figurative (f2, f1);
 			f2 = &alpha_fld;
 		} else {
-			cob_set_exception (COB_EC_RANGE_INSPECT_SIZE);
+			cob_set_exception (COB_CTX_TODO, COB_EC_RANGE_INSPECT_SIZE);
 			goto end;
 		}
 	}
@@ -957,7 +957,7 @@ cob_string_init_intern (struct cob_string_state *st, cob_field *dst, cob_field *
 	if (st->ptr) {
 		st->offset = cob_get_int (COB_CTX_TODO, st->ptr) - 1;
 		if (st->offset < 0 || st->offset >= (int)st->dst->size) {
-			cob_set_exception (COB_EC_OVERFLOW_STRING);
+			cob_set_exception (COB_CTX_TODO, COB_EC_OVERFLOW_STRING);
 		}
 	}
 }
@@ -1019,7 +1019,7 @@ cob_string_append_intern (struct cob_string_state *st, cob_field *src)
 		size = (int)(st->dst->size - st->offset);
 		memcpy (st->dst->data + st->offset, src->data, (size_t)size);
 		st->offset += size;
-		cob_set_exception (COB_EC_OVERFLOW_STRING);
+		cob_set_exception (COB_CTX_TODO, COB_EC_OVERFLOW_STRING);
 	}
 }
 void
@@ -1092,7 +1092,7 @@ cob_unstring_init_intern (
 	if (st->ptr) {
 		st->offset = cob_get_int (COB_CTX_TODO, st->ptr) - 1;
 		if (st->offset < 0 || st->offset >= (int)st->src->size) {
-			cob_set_exception (COB_EC_OVERFLOW_UNSTRING);
+			cob_set_exception (COB_CTX_TODO, COB_EC_OVERFLOW_UNSTRING);
 		}
 	}
 }
@@ -1284,7 +1284,7 @@ cob_unstring_finish_intern (struct cob_unstring_state *st)
 {
 	if (st->offset < (int)st->src->size) {
 		/* overflow from any iteration -> overflow exception */
-		cob_set_exception (COB_EC_OVERFLOW_UNSTRING);
+		cob_set_exception (COB_CTX_TODO, COB_EC_OVERFLOW_UNSTRING);
 	}
 
 	if (st->ptr) {

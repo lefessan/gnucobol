@@ -409,7 +409,7 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 			}
 			fp = fopen (cobsetptr->cob_display_punch_filename, mode);
 			if (fp == NULL) {
-				cob_runtime_warning (_("cannot open %s (=%s)"),
+				cob_runtime_warning (COB_CTX_TODO, _("cannot open %s (=%s)"),
 					"COB_DISPLAY_PUNCH_FILE", cobsetptr->cob_display_punch_filename);
 				cob_free (cobsetptr->cob_display_punch_filename);
 				cobsetptr->cob_display_punch_filename = NULL;
@@ -421,10 +421,10 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 		if (cobsetptr->cob_display_punch_file) {
 			fp = cobsetptr->cob_display_punch_file;
 		} else {
-			cob_set_exception (COB_EC_IMP_DISPLAY);	/* come back to this later... */
+			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_DISPLAY);	/* come back to this later... */
 			if (!no_syspunch_error_raised) {
 				no_syspunch_error_raised = 1;
-				cob_runtime_warning (_("COB_DISPLAY_PUNCH_FILE is invalid, output to SYSPUNCH skipped"));
+				cob_runtime_warning (COB_CTX_TODO, _("COB_DISPLAY_PUNCH_FILE is invalid, output to SYSPUNCH skipped"));
 			}
 			return;
 		}
@@ -1050,7 +1050,7 @@ cob_accept (cob_field *f)
 	for (; size < COB_MEDIUM_MAX; ) {
 		ipchr = getchar ();
 		if (ipchr == EOF) {
-			cob_set_exception (COB_EC_IMP_ACCEPT);
+			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_ACCEPT);
 			if (!size) {
 				size = 1;
 				p[0] = ' ';

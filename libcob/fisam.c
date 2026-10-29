@@ -339,8 +339,8 @@ indexed_keydesc (cob_file *f, struct keydesc *kd, cob_file_key *key)
 	/* LCOV_EXCL_START */
 	if (key->count_components < 1) {
 		/* Should not happen as this was generated pre GC 3.0 */
-		cob_runtime_error ("file i/o version mismatch");
-		cob_stop_run (1);
+		cob_runtime_error (COB_CTX_TODO, "file i/o version mismatch");
+		cob_stop_run (COB_CTX_TODO, 1);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -360,7 +360,7 @@ indexed_keydesc (cob_file *f, struct keydesc *kd, cob_file_key *key)
 	/* LCOV_EXCL_START */
 	if (key->count_components > max_keycomp) {
 		/* not translated as this is safety guard unlikely to be ever triggered */
-		cob_runtime_warning ("module specifies %d key components, "
+		cob_runtime_warning (COB_CTX_TODO, "module specifies %d key components, "
 			"%s runtime ignores all parts greater than %d",
 			key->count_components, isam_name, max_keycomp);
 		key->count_components = max_keycomp;

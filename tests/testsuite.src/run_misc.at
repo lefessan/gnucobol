@@ -5063,11 +5063,11 @@ main (int argc, char **argv)
    /* call COBOL program */
    cob_ret = cob_call (cob_get_current_context (), argv[1], 2, cob_argv);
 
-   cob_runtime_hint("program exited normally, "
+   cob_runtime_hint(cob_get_current_context (), "program exited normally, "
        "without STOP RUN with status %d", cob_ret);
 
    /* Clean up and terminate - This does not return */
-   cob_stop_run (cob_ret);
+   cob_stop_run (cob_get_current_context (), cob_ret);
 }
 ]])
 
@@ -5160,35 +5160,35 @@ main (int argc, char **argv)
    case 0:  /* program coming back */
 
       /* Clean up and terminate runtime */
-      cob_runtime_hint ("program exited with return code %d",
-         cob_last_exit_code ());
+      cob_runtime_hint (cob_get_current_context (), "program exited with return code %d",
+         cob_last_exit_code (cob_get_current_context ()));
       cob_tidy ();
       break;
 
    case 1:  /* normal exit */
-      cob_runtime_hint ("STOP RUN with return code %d",
-         cob_last_exit_code ());
+      cob_runtime_hint (cob_get_current_context (), "STOP RUN with return code %d",
+         cob_last_exit_code (cob_get_current_context ()));
       break;
 
    case -1:  /* error exit */
-      cob_runtime_hint ("error exit with return code %d and error \"%s\"",
-         cob_last_exit_code (), cob_last_runtime_error ());
+      cob_runtime_hint (cob_get_current_context (), "error exit with return code %d and error \"%s\"",
+         cob_last_exit_code (cob_get_current_context ()), cob_last_runtime_error (cob_get_current_context ()));
       break;
 
    case -2:  /* hard error exit */
-      cob_runtime_hint ("hard error exit with return code %d and error \"%s\"",
-         cob_last_exit_code (), cob_last_runtime_error ());
+      cob_runtime_hint (cob_get_current_context (), "hard error exit with return code %d and error \"%s\"",
+         cob_last_exit_code (cob_get_current_context ()), cob_last_runtime_error (cob_get_current_context ()));
       break;
 
    case -3:  /* signal handler  exit */
-      cob_runtime_hint ("signal handler exit with signal %d and error \"%s\"",
-         cob_last_exit_code (), cob_last_runtime_error ());
+      cob_runtime_hint (cob_get_current_context (), "signal handler exit with signal %d and error \"%s\"",
+         cob_last_exit_code (cob_get_current_context ()), cob_last_runtime_error (cob_get_current_context ()));
       break;
 
    default:
-      cob_runtime_hint ("unexpected return from cob_call_with_exception_check, "
+      cob_runtime_hint (cob_get_current_context (), "unexpected return from cob_call_with_exception_check, "
          "last exit code %d, last error \"%s\"",
-         cob_last_exit_code (), cob_last_runtime_error ());
+         cob_last_exit_code (cob_get_current_context ()), cob_last_runtime_error (cob_get_current_context ()));
       break;
    }
    return 0;
@@ -5262,7 +5262,7 @@ main (int argc, char **argv)
    cob_ret = cob_call_entry (cob_get_current_context (), (void*)callee, 1, p1);
 
    /* Clean up and terminate - This does not return */
-   cob_stop_run (cob_ret);
+   cob_stop_run (cob_get_current_context (), cob_ret);
 }
 ]])
 
@@ -5319,7 +5319,7 @@ main (int argc, char **argv)
    cob_ret = cob_call_cobol (cob_get_current_context (), "callee", 2, p1, p2);
 
    /* Clean up and terminate - This does not return */
-   cob_stop_run (cob_ret);
+   cob_stop_run (cob_get_current_context (), cob_ret);
 }
 ]])
 
@@ -19093,7 +19093,7 @@ main (int argc, char **argv)
    int i;
 
    /* portable version from libcob */
-   (void)cob_unsetenv("COB_IS_RUNNING_IN_TESTMODE");
+   (void)cob_unsetenv(cob_get_current_context (), "COB_IS_RUNNING_IN_TESTMODE");
 
    cob_init (argc, argv);
 

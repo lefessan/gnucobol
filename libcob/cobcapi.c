@@ -866,7 +866,7 @@ get_value (int pos, cob_module  *mod, char *field_ref, char *fld)
 		if (i < 0) {
 			return pos;
 		}
-		cob_sym_get_field (&s, sym, i);
+		cob_sym_get_field (COB_CTX_TODO, &s, sym, i);
 		cob_get_field_str (&s, numval, sizeof(numval));
 		strcpy(fld,numval);
 	} else {
@@ -911,7 +911,7 @@ cob_parse_field (cob_module  *mod, cob_field *f, char *field_ref)
 	 || strcasecmp (sym[k].name, fld1[0]) != 0) {
 		return 1;
 	}
-	cob_sym_get_field (f, sym, k);
+	cob_sym_get_field (COB_CTX_TODO, f, sym, k);
 	if (f->data == NULL)
 		return 1;
 	refbgn = reflen = 0;

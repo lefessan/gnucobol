@@ -201,7 +201,7 @@ set_xml_code (const enum xml_code_status code)
 static void
 set_xml_exception (const enum xml_code_status code)
 {
-	cob_set_exception (COB_EC_XML_IMP);
+	cob_set_exception (COB_CTX_TODO, COB_EC_XML_IMP);
 	set_xml_code (code);
 }
 
@@ -485,7 +485,7 @@ set_json_code (const enum json_code_status code)
 static void
 set_json_exception (const enum json_code_status code)
 {
-	cob_set_exception (COB_EC_JSON_IMP);
+	cob_set_exception (COB_CTX_TODO, COB_EC_JSON_IMP);
 	set_json_code (code);
 }
 
@@ -894,8 +894,8 @@ generate_content (xmlTextWriterPtr writer, cob_ml_tree *tree,
 	if (COB_FIELD_IS_FP (content)) {
 		/* TO-DO: Implement! */
 		/* TO-DO: Stop compilation if float in field */
-		cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-		cob_fatal_error (COB_FERROR_XML);
+		cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+		cob_fatal_error (COB_CTX_TODO, COB_FERROR_XML);
 	} else if (COB_FIELD_IS_NUMERIC (content)) {
 		x_content = get_xml_num (content, decimal_point);
 	} else {
@@ -1056,14 +1056,14 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, cJSON *out
 	} else if (tree->content) {
 		if (name == NULL) {
 			/* TO-DO: Handle correctly, that's possibly an internal error! */
-			cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_FERROR_JSON);
+			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error (COB_CTX_TODO, COB_FERROR_JSON);
 		}
 		if (COB_FIELD_IS_FP (tree->content)) {
 			/* TO-DO: Implement! */
 			/* TO-DO: Stop compilation if float in field */
-			cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_FERROR_JSON);
+			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error (COB_CTX_TODO, COB_FERROR_JSON);
 		} else if (COB_FIELD_IS_NUMERIC (tree->content)) {
 			content = get_json_num (tree->content, decimal_point);
 			/*
@@ -1130,14 +1130,14 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, json_objec
 	} else if (tree->content) {
 		if (name == NULL) {
 			/* TO-DO: Handle correctly, that's possibly an internal error! */
-			cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_FERROR_JSON);
+			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error (COB_CTX_TODO, COB_FERROR_JSON);
 		}
 		if (COB_FIELD_IS_FP (tree->content)) {
 			/* TO-DO: Implement! */
 			/* TO-DO: Stop compilation if float in field */
-			cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_FERROR_JSON);
+			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error (COB_CTX_TODO, COB_FERROR_JSON);
 		} else if (COB_FIELD_IS_NUMERIC (tree->content)) {
 			content = get_json_num (tree->content, decimal_point);
 			/*
@@ -1247,7 +1247,7 @@ cob_xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 	/* no field */
 	if (!out || !tree) {
 		set_xml_exception (XML_INTERNAL_ERROR);
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 	}
 	/* LINKAGE or BASED item without data */
 	if (!out->data) {
@@ -1324,7 +1324,7 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 			set_xml_event (EVENT_EXCEPTION);
 			return -1;
 #else
-			cob_fatal_error (COB_FERROR_CODEGEN);
+			cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 #endif
 		}
 		*saved_state = cob_malloc (sizeof (struct xml_state));
@@ -1403,7 +1403,7 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		} else {
 			/* fatal runtime error,
 			   TODO: at least a runtime warning, likely runtime exit */
-			cob_set_exception (COB_EC_XML);
+			cob_set_exception (COB_CTX_TODO, COB_EC_XML);
 			xml_free_parse_memory (state);
 			*saved_state = NULL;
 			return 1;
@@ -1416,7 +1416,7 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		if (COB_MODULE_PTR->xml_mode == COB_XML_XMLNSS) {
 			/* fatal runtime error,
 			   TODO: at least a runtime warning, likely runtime exit */
-			cob_set_exception (COB_EC_XML);
+			cob_set_exception (COB_CTX_TODO, COB_EC_XML);
 		} else {
 			set_xml_code (-1);
 		}
@@ -1606,10 +1606,10 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 	switch (state) {
 	case XML_PARSER_VALIDATION_SETUP:
 		if (err->file) {
-			cob_runtime_warning (_("XML PARSE setup for VALIDATE FILE %s:%d (%d): %s"),
+			cob_runtime_warning (COB_CTX_TODO, _("XML PARSE setup for VALIDATE FILE %s:%d (%d): %s"),
 				err->file, err->line, err->code, err->message);
 		} else {
-			cob_runtime_warning (_("XML PARSE setup for VALIDATE FILE (%d): %s"),
+			cob_runtime_warning (COB_CTX_TODO, _("XML PARSE setup for VALIDATE FILE (%d): %s"),
 				err->code, err->message);
 		}		
 		set_xml_event (EVENT_EXCEPTION);
@@ -1618,7 +1618,7 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 		set_xml_code_parsing_error (err->code);
 		break;
 	case XML_PARSER_VALIDATION_SETUP_MEM:
-		cob_runtime_warning (_("XML PARSE setup for VALIDATE (%d): %s"),
+		cob_runtime_warning (COB_CTX_TODO, _("XML PARSE setup for VALIDATE (%d): %s"),
 			err->code, err->message);
 		set_xml_event (EVENT_EXCEPTION);
 		parse_state->last_xml_code = XML_PARSE_ERROR_FATAL;
@@ -1633,7 +1633,7 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 		break;
 	default:
 		/* not translated as unplanned */
-		cob_runtime_warning ("XML PARSE state %d on %s:%d (%d): %s",
+		cob_runtime_warning (COB_CTX_TODO, "XML PARSE state %d on %s:%d (%d): %s",
 			state, err->file, err->line, err->code, err->message);
 	}
 
@@ -1858,7 +1858,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (_("%s is unfinished"),
+		cob_runtime_warning (COB_CTX_TODO, _("%s is unfinished"),
 			"XML PARSE");
 	}
 
@@ -2043,7 +2043,7 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 	COB_UNUSED (decimal_point);
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (_("runtime is not configured to support %s"),
+		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"XML");
 	}
 	set_xml_exception (XML_INTERNAL_ERROR);
@@ -2063,7 +2063,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (_("runtime is not configured to support %s"),
+		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"XML");
 	}
 
@@ -2188,7 +2188,7 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 
 	if (first_json) {
 		first_json = 0;
-		cob_runtime_warning (_("runtime is not configured to support %s"),
+		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"JSON");
 	}
 	set_json_exception (JSON_INTERNAL_ERROR);

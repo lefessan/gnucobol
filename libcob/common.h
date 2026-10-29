@@ -1933,22 +1933,22 @@ COB_EXPIMP void		print_info	(void);
 COB_EXPIMP void		print_info_detailed	(const int);
 COB_EXPIMP int		cob_load_config	(void);
 COB_EXPIMP void		print_runtime_conf	(void);
-COB_EXPIMP cob_field_attr *cob_alloc_attr(int type, int digits, int scale, int flags);
-COB_EXPIMP void		cob_sym_get_field (cob_field *f, cob_symbol *sym, int k);
-COB_EXPIMP int		cob_sym_get_occurs (cob_symbol *sym, int k);
+COB_EXPIMP cob_field_attr *cob_alloc_attr(cob_context *, int type, int digits, int scale, int flags);
+COB_EXPIMP void		cob_sym_get_field (cob_context *, cob_field *f, cob_symbol *sym, int k);
+COB_EXPIMP int		cob_sym_get_occurs (cob_context *, cob_symbol *sym, int k);
 COB_EXPIMP void		cob_setup_env (const char *progname); 
 COB_EXPIMP char *	cob_getenv_value (const char *ename);
 COB_EXPIMP const char *	cob_relocate_string (const char *str);
 
-COB_EXPIMP void		cob_set_exception	(const int);
-COB_EXPIMP int		cob_last_exception_is	(const int);
+COB_EXPIMP void		cob_set_exception	(cob_context *, const int);
+COB_EXPIMP int		cob_last_exception_is	(cob_context *, const int);
 
-COB_EXPIMP int		cob_last_exit_code	(void);
-COB_EXPIMP const char*	cob_last_runtime_error	(void);
+COB_EXPIMP int		cob_last_exit_code	(cob_context *);
+COB_EXPIMP const char*	cob_last_runtime_error	(cob_context *);
 
-COB_EXPIMP void		cob_runtime_hint	(const char *, ...) COB_A_FORMAT12;
-COB_EXPIMP void		cob_runtime_error	(const char *, ...) COB_A_FORMAT12;
-COB_EXPIMP void		cob_runtime_warning	(const char *, ...) COB_A_FORMAT12;
+COB_EXPIMP void		cob_runtime_hint	(cob_context *, const char *, ...) COB_A_FORMAT23;
+COB_EXPIMP void		cob_runtime_error	(cob_context *, const char *, ...) COB_A_FORMAT23;
+COB_EXPIMP void		cob_runtime_warning	(cob_context *, const char *, ...) COB_A_FORMAT23;
 
 COB_EXPIMP void		cob_cleanup_thread (void);
 
@@ -1970,13 +1970,13 @@ COB_EXPIMP int	cob_module_global_enter	(cob_context **, cob_module **,
 						 const unsigned int *);
 COB_EXPIMP void	cob_module_enter		(cob_context **, cob_module **,
 						 cob_global **, const int);
-COB_EXPIMP void	cob_module_leave		(cob_module *);
+COB_EXPIMP void	cob_module_leave		(cob_context *, cob_module *);
 
-COB_EXPIMP void	cob_module_free	(cob_module **);
+COB_EXPIMP void	cob_module_free	(cob_context *, cob_module **);
 
-DECLNORET COB_EXPIMP void	cob_stop_run	(const int) COB_A_NORETURN;
-DECLNORET COB_EXPIMP void	cob_stop_error	(void) COB_A_NORETURN;
-DECLNORET COB_EXPIMP void	cob_fatal_error	(const enum cob_fatal_error) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_stop_run	(cob_context *, const int) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_stop_error	(cob_context *) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_fatal_error	(cob_context *, const enum cob_fatal_error) COB_A_NORETURN;
 DECLNORET COB_EXPIMP void	cob_hard_failure_internal (const char *) COB_A_NORETURN;
 DECLNORET COB_EXPIMP void	cob_hard_failure (void) COB_A_NORETURN;
 
@@ -1985,57 +1985,57 @@ COB_EXPIMP void	*cob_realloc			(void *, const size_t, const size_t) COB_A_MALLOC
 COB_EXPIMP char	*cob_strdup				(const char *);
 COB_EXPIMP void	cob_free			(void *);
 COB_EXPIMP void	*cob_fast_malloc		(const size_t) COB_A_MALLOC;
-COB_EXPIMP void	*cob_cache_malloc		(const size_t) COB_A_MALLOC;
-COB_EXPIMP void	*cob_cache_realloc		(void *, const size_t);
-COB_EXPIMP void	cob_cache_free			(void *);
+COB_EXPIMP void	*cob_cache_malloc		(cob_context *, const size_t) COB_A_MALLOC;
+COB_EXPIMP void	*cob_cache_realloc		(cob_context *, void *, const size_t);
+COB_EXPIMP void	cob_cache_free			(cob_context *, void *);
 
-COB_EXPIMP void	cob_set_locale			(cob_field *, const int);
+COB_EXPIMP void	cob_set_locale			(cob_context *, cob_field *, const int);
 
 COB_EXPIMP int 	cob_setenv		(const char *, const char *, int);
-COB_EXPIMP int 	cob_unsetenv		(const char *);
+COB_EXPIMP int 	cob_unsetenv		(cob_context *, const char *);
 COB_EXPIMP char	*cob_getenv_direct		(const char *);
 COB_EXPIMP char *cob_expand_env_string	(const char *);
 COB_EXPIMP char	*cob_getenv			(const char *);
-COB_EXPIMP int	cob_putenv			(char *);
-COB_EXPIMP cob_field	*cob_function_return (cob_field *);
+COB_EXPIMP int	cob_putenv			(cob_context *, char *);
+COB_EXPIMP cob_field	*cob_function_return (cob_context *, cob_field *);
 
 COB_EXPIMP void	cob_check_version		(const char *, const char *,
 						 const int);
 
-COB_EXPIMP struct cob_func_loc *cob_save_func	(cob_field **,
+COB_EXPIMP struct cob_func_loc *cob_save_func	(cob_context *, cob_field **,
 									const int, const int, ...);
-COB_EXPIMP void	cob_restore_func		(struct cob_func_loc *);
+COB_EXPIMP void	cob_restore_func		(cob_context *, struct cob_func_loc *);
 
-COB_EXPIMP void	cob_accept_arg_number		(cob_field *);
-COB_EXPIMP void	cob_accept_arg_value		(cob_field *);
-COB_EXPIMP void	cob_accept_command_line		(cob_field *);
-COB_EXPIMP void	cob_accept_date			(cob_field *);
-COB_EXPIMP void	cob_accept_date_yyyymmdd	(cob_field *);
-COB_EXPIMP void	cob_accept_day			(cob_field *);
-COB_EXPIMP void	cob_accept_day_yyyyddd		(cob_field *);
-COB_EXPIMP void	cob_accept_day_of_week		(cob_field *);
-COB_EXPIMP void	cob_accept_environment		(cob_field *);
-COB_EXPIMP void	cob_accept_exception_status	(cob_field *);
-COB_EXPIMP void	cob_accept_time			(cob_field *);
-COB_EXPIMP void	cob_accept_microsecond_time (cob_field *);
-COB_EXPIMP void	cob_accept_user_name		(cob_field *);
-COB_EXPIMP void	cob_display_command_line	(cob_field *);
-COB_EXPIMP void	cob_display_environment		(const cob_field *);
-COB_EXPIMP void	cob_display_env_value		(const cob_field *);
-COB_EXPIMP void	cob_display_arg_number		(cob_field *);
-COB_EXPIMP char *cob_get_env (const char *envname, char *envused);
-COB_EXPIMP void	cob_get_environment		(const cob_field *, cob_field *);
-COB_EXPIMP void	cob_set_environment		(const cob_field *,
+COB_EXPIMP void	cob_accept_arg_number		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_arg_value		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_command_line		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_date			(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_date_yyyymmdd	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_day			(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_day_yyyyddd		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_day_of_week		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_environment		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_exception_status	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_time			(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_microsecond_time (cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_user_name		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_display_command_line	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_display_environment		(cob_context *, const cob_field *);
+COB_EXPIMP void	cob_display_env_value		(cob_context *, const cob_field *);
+COB_EXPIMP void	cob_display_arg_number		(cob_context *, cob_field *);
+COB_EXPIMP char *cob_get_env (cob_context *, const char *envname, char *envused);
+COB_EXPIMP void	cob_get_environment		(cob_context *, const cob_field *, cob_field *);
+COB_EXPIMP void	cob_set_environment		(cob_context *, const cob_field *,
 						 const cob_field *);
-COB_EXPIMP void	cob_chain_setup			(void *, const size_t,
+COB_EXPIMP void	cob_chain_setup			(cob_context *, void *, const size_t,
 						 const size_t);
-COB_EXPIMP void	cob_allocate			(unsigned char **, cob_field *,
+COB_EXPIMP void	cob_allocate			(cob_context *, unsigned char **, cob_field *,
 						 cob_field *, cob_field *);
-COB_EXPIMP void	cob_free_alloc			(unsigned char **, unsigned char *);
-COB_EXPIMP void	cob_continue_after		(cob_field *);
+COB_EXPIMP void	cob_free_alloc			(cob_context *, unsigned char **, unsigned char *);
+COB_EXPIMP void	cob_continue_after		(cob_context *, cob_field *);
 COB_EXPIMP int	cob_extern_init			(void);
 COB_EXPIMP int	cob_tidy			(void);
-COB_EXPIMP char	*cob_command_line		(int, int *, char ***,
+COB_EXPIMP char	*cob_command_line		(cob_context *, int, int *, char ***,
 						 char ***, char **);
 
 COB_EXPIMP void	cob_incr_temp_iteration 	(void);
@@ -2088,17 +2088,17 @@ COB_EXPIMP int	cob_sys_extfh		(const void *, void *);
 
 /* Utilities */
 
-COB_EXPIMP void	cob_trace_sect		(const char *);
-COB_EXPIMP void	cob_trace_para		(const char *);
-COB_EXPIMP void	cob_trace_entry		(const char *);
-COB_EXPIMP void	cob_trace_exit		(const char *);
-COB_EXPIMP void	cob_trace_statement		(const enum cob_statement);
+COB_EXPIMP void	cob_trace_sect		(cob_context *, const char *);
+COB_EXPIMP void	cob_trace_para		(cob_context *, const char *);
+COB_EXPIMP void	cob_trace_entry		(cob_context *, const char *);
+COB_EXPIMP void	cob_trace_exit		(cob_context *, const char *);
+COB_EXPIMP void	cob_trace_statement		(cob_context *, const enum cob_statement);
 
-COB_EXPIMP void			*cob_external_addr	(const char *, const int);
-COB_EXPIMP unsigned char	*cob_get_pointer	(const void *);
-COB_EXPIMP void			cob_ready_trace		(void);
-COB_EXPIMP void			cob_reset_trace		(void);
-COB_EXPIMP void			cob_nop (void);
+COB_EXPIMP void			*cob_external_addr	(cob_context *, const char *, const int);
+COB_EXPIMP unsigned char	*cob_get_pointer	(cob_context *, const void *);
+COB_EXPIMP void			cob_ready_trace		(cob_context *);
+COB_EXPIMP void			cob_reset_trace		(cob_context *);
+COB_EXPIMP void			cob_nop (cob_context *);
 
 /* Call from outside to set/read/re-evaluate libcob options */
 enum cob_runtime_option_switch {
@@ -2108,11 +2108,11 @@ enum cob_runtime_option_switch {
 	COB_SET_RUNTIME_DISPLAY_PUNCH_FILE = 3,	/* 'p' is  FILE *  */
 	COB_SET_RUNTIME_DUMP_FILE = 4	/* 'p' is  FILE *  */
 };
-COB_EXPIMP void			cob_set_runtime_option		(enum cob_runtime_option_switch opt, void *p);
-COB_EXPIMP void			*cob_get_runtime_option		(enum cob_runtime_option_switch opt);
+COB_EXPIMP void			cob_set_runtime_option		(cob_context *, enum cob_runtime_option_switch opt, void *p);
+COB_EXPIMP void			*cob_get_runtime_option		(cob_context *, enum cob_runtime_option_switch opt);
 
-COB_EXPIMP void			cob_stack_trace (void *target);		/* 'target' is FILE *  */
-COB_EXPIMP void			cob_backtrace	(void *target, int count);		/* 'target' is FILE *  */
+COB_EXPIMP void			cob_stack_trace (cob_context *, void *target);		/* 'target' is FILE *  */
+COB_EXPIMP void			cob_backtrace	(cob_context *, void *target, int count);		/* 'target' is FILE *  */
 
 #define COB_GET_LINE_NUM(n) ( n & 0xFFFFF )
 #define COB_GET_FILE_NUM(n) ( (n >> 20) & 0xFFF)
@@ -2149,53 +2149,53 @@ COB_EXPIMP void	cob_raise		(int);
 
 /* Switch */
 
-COB_EXPIMP int	cob_get_switch		(const int);
-COB_EXPIMP void	cob_set_switch		(const int, const int);
+COB_EXPIMP int	cob_get_switch		(cob_context *, const int);
+COB_EXPIMP void	cob_set_switch		(cob_context *, const int, const int);
 
 /* Comparison */
 
-COB_EXPIMP int	cob_cmp			(cob_field *, cob_field *);
+COB_EXPIMP int	cob_cmp			(cob_context *, cob_field *, cob_field *);
 
 /* Class check */
 
-COB_EXPIMP int	cob_is_omitted		(const cob_field *);
-COB_EXPIMP int	cob_is_numeric		(const cob_field *);
-COB_EXPIMP int	cob_is_alpha		(const cob_field *);
-COB_EXPIMP int	cob_is_upper		(const cob_field *);
-COB_EXPIMP int	cob_is_lower		(const cob_field *);
+COB_EXPIMP int	cob_is_omitted		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_numeric		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_alpha		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_upper		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_lower		(cob_context *, const cob_field *);
 
 /* Table sort */
 
-COB_EXPIMP void	cob_table_sort_init	(const size_t, const unsigned char *);
-COB_EXPIMP void	cob_table_sort_init_key	(cob_field *, const int,
+COB_EXPIMP void	cob_table_sort_init	(cob_context *, const size_t, const unsigned char *);
+COB_EXPIMP void	cob_table_sort_init_key	(cob_context *, cob_field *, const int,
 					 const unsigned int);
-COB_EXPIMP void	cob_table_sort		(cob_field *, const int);
+COB_EXPIMP void	cob_table_sort		(cob_context *, cob_field *, const int);
 
 /* Run-time error checking */
 
-COB_EXPIMP void	cob_check_numeric	(const cob_field *, const char *);
-COB_EXPIMP void	cob_correct_numeric	(cob_field *);
-COB_EXPIMP void	cob_check_based		(const unsigned char *, const char *);
-COB_EXPIMP void	cob_check_linkage	(const unsigned char *, const char *);
-COB_EXPIMP void	cob_check_odo		(const int, const int, const int,
+COB_EXPIMP void	cob_check_numeric	(cob_context *, const cob_field *, const char *);
+COB_EXPIMP void	cob_correct_numeric	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_check_based		(cob_context *, const unsigned char *, const char *);
+COB_EXPIMP void	cob_check_linkage	(cob_context *, const unsigned char *, const char *);
+COB_EXPIMP void	cob_check_odo		(cob_context *, const int, const int, const int,
 					 const char *, const char *);
-COB_EXPIMP void	cob_check_subscript	(const int, const int,
+COB_EXPIMP void	cob_check_subscript	(cob_context *, const int, const int,
 					 const char *, const int);
-COB_EXPIMP void	cob_check_ref_mod_detailed	(const char *, const int, const int,
+COB_EXPIMP void	cob_check_ref_mod_detailed	(cob_context *, const char *, const int, const int,
 					 const int, const int, const int);
-COB_EXPIMP void	cob_check_ref_mod_minimal	(const char *,
+COB_EXPIMP void	cob_check_ref_mod_minimal	(cob_context *, const char *,
 					 const int, const int);
-COB_EXPIMP void	cob_check_beyond_exit (const char *);
-COB_EXPIMP void	cob_check_fence 	(const char *, const char *,
+COB_EXPIMP void	cob_check_beyond_exit (cob_context *, const char *);
+COB_EXPIMP void	cob_check_fence 	(cob_context *, const char *, const char *,
 					 const enum cob_statement, const char *);
 
 
 /* Comparison functions */
-COB_EXPIMP int	cob_numeric_cmp		(cob_field *, cob_field *);
-COB_EXPIMP int	cob_bcd_cmp		(cob_field *, cob_field *);
-COB_EXPIMP int	cob_numeric_display_cmp		(cob_field *, cob_field *);
-COB_EXPIMP int	cob_numeric_display_cmp_zero	(cob_field *);
-COB_EXPIMP int	cob_bcd_cmp_zero	(cob_field *);
+COB_EXPIMP int	cob_numeric_cmp		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP int	cob_bcd_cmp		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP int	cob_numeric_display_cmp		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP int	cob_numeric_display_cmp_zero	(cob_context *, cob_field *);
+COB_EXPIMP int	cob_bcd_cmp_zero	(cob_context *, cob_field *);
 
 /*******************************/
 /* Functions in strings.c */

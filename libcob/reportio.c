@@ -589,31 +589,31 @@ limitCheckOneLine(cob_report *r, cob_report_line *fl)
 	cob_report_field	*rf;
 
 	if((fl->line > 0 && r->def_lines > 0 && fl->line > r->def_lines)) {
-		cob_runtime_error (_("INITIATE %s LINE %d exceeds PAGE LIMIT %d"),r->report_name,fl->line,r->def_lines);
+		cob_runtime_error (COB_CTX_TODO, _("INITIATE %s LINE %d exceeds PAGE LIMIT %d"),r->report_name,fl->line,r->def_lines);
 		DEBUG_LOG("rw",("PAGE LIMITs is incorrect; LINE %d > LIMIT %d\n",fl->line,r->def_lines));
-		cob_set_exception (COB_EC_REPORT_PAGE_LIMIT);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 		r->initiate_done = FALSE;
 		return;
 	}
 	if((fl->next_group_line > 0 && r->def_lines > 0 && fl->next_group_line > r->def_lines)) {
-		cob_runtime_error (_("INITIATE %s NEXT GROUP %d exceeds PAGE LIMIT"),r->report_name,fl->next_group_line);
+		cob_runtime_error (COB_CTX_TODO, _("INITIATE %s NEXT GROUP %d exceeds PAGE LIMIT"),r->report_name,fl->next_group_line);
 		DEBUG_LOG("rw",("PAGE LIMITs is incorrect; NEXT GROUP %d > LIMIT %d\n",fl->next_group_line,r->def_lines));
-		cob_set_exception (COB_EC_REPORT_PAGE_LIMIT);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 		r->initiate_done = FALSE;
 		return;
 	}
 	for(rf = fl->fields; rf; rf = rf->next) {
 		if((rf->line && rf->line > r->def_lines)) {
-			cob_runtime_error (_("INITIATE %s LINE %d exceeds PAGE LIMIT"),r->report_name,rf->line);
+			cob_runtime_error (COB_CTX_TODO, _("INITIATE %s LINE %d exceeds PAGE LIMIT"),r->report_name,rf->line);
 			DEBUG_LOG("rw",("PAGE LIMITs is incorrect; LINE %d > LIMIT %d\n",rf->line,r->def_lines));
-			cob_set_exception (COB_EC_REPORT_PAGE_LIMIT);
+			cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 			r->initiate_done = FALSE;
 			return;
 		}
 		if((rf->next_group_line && rf->next_group_line > r->def_lines)) {
-			cob_runtime_error (_("INITIATE %s NEXT GROUP %d exceeds PAGE LIMIT"),r->report_name,rf->next_group_line);
+			cob_runtime_error (COB_CTX_TODO, _("INITIATE %s NEXT GROUP %d exceeds PAGE LIMIT"),r->report_name,rf->next_group_line);
 			DEBUG_LOG("rw",("PAGE LIMITs is incorrect; NEXT GROUP %d > LIMIT %d\n",rf->next_group_line,r->def_lines));
-			cob_set_exception (COB_EC_REPORT_PAGE_LIMIT);
+			cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 			r->initiate_done = FALSE;
 			return;
 		}
@@ -1429,15 +1429,15 @@ static	int		k;
 	cob_file	*f = r->report_file;
 
 	if (r->report_ver != COB_REPORT_VERSION) {
-		cob_runtime_error (_("INITIATE has invalid version; recompile"));
+		cob_runtime_error (COB_CTX_TODO, _("INITIATE has invalid version; recompile"));
 		DEBUG_LOG("rw",("REPORT version %X instead of %X\n",r->report_ver,COB_REPORT_VERSION));
-		cob_set_exception (COB_EC_REPORT_INACTIVE);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 		return 0;
 	}
 	if(r->initiate_done) {
-		cob_runtime_error (_("INITIATE %s was already done"),r->report_name);
+		cob_runtime_error (COB_CTX_TODO, _("INITIATE %s was already done"),r->report_name);
 		DEBUG_LOG("rw",("REPORT was already INITIATEd\n"));
-		cob_set_exception (COB_EC_REPORT_ACTIVE);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_ACTIVE);
 		return 0;
 	}
 	if (f)
@@ -1454,12 +1454,12 @@ static	int		k;
 	|| (r->def_footing > 0 && !(r->def_footing >= r->def_last_detail))
 	|| (r->def_lines > 0 && !(r->def_lines >= r->def_heading))
 	|| (r->def_lines > 0 && !(r->def_lines >= r->def_footing))) {
-		cob_runtime_error (_("INITIATE %s PAGE LIMIT problem"),r->report_name);
+		cob_runtime_error (COB_CTX_TODO, _("INITIATE %s PAGE LIMIT problem"),r->report_name);
 #if defined(COB_DEBUG_LOG) 
 		DEBUG_LOG("rw",("PAGE LIMITs is incorrect\n"));
 		reportDump(r,"INITIATE");
 #endif
-		cob_set_exception (COB_EC_REPORT_PAGE_LIMIT);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 		return 0;
 	}
 	r->curr_page = 1;
@@ -1531,15 +1531,15 @@ static	cob_report_control_ref	*rr;
 static	cob_report_line		*pl;
 
 	if (r->report_ver != COB_REPORT_VERSION) {
-		cob_runtime_error (_("TERMINATE has invalid version; recompile"));
+		cob_runtime_error (COB_CTX_TODO, _("TERMINATE has invalid version; recompile"));
 		DEBUG_LOG("rw",("REPORT version %X instead of %X\n",r->report_ver,COB_REPORT_VERSION));
-		cob_set_exception (COB_EC_REPORT_INACTIVE);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 		return 0;
 	}
 	if (!r->initiate_done) {
 		DEBUG_LOG("rw",("INITIATE was never done!\n"));
-		cob_runtime_error (_("TERMINATE %s but no INITIATE was done"),r->report_name);
-		cob_set_exception (COB_EC_REPORT_INACTIVE);
+		cob_runtime_error (COB_CTX_TODO, _("TERMINATE %s but no INITIATE was done"),r->report_name);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 #if 0	/* TODO: if not enabled: ignore, if enabled and PROPAGATE ON (or TRY) active: handle */
 		return 0;
 #else
@@ -1665,14 +1665,14 @@ static	int		maxctl,ln,num,gengrp,last_use,ctlidx;
 #endif
 
 	if (r->report_ver != COB_REPORT_VERSION) {
-		cob_runtime_error (_("GENERATE has invalid version; recompile"));
+		cob_runtime_error (COB_CTX_TODO, _("GENERATE has invalid version; recompile"));
 		DEBUG_LOG("rw",("REPORT version %X instead of %X\n",r->report_ver,COB_REPORT_VERSION));
-		cob_set_exception (COB_EC_REPORT_INACTIVE);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 		return 0;
 	}
 	if (!r->initiate_done) {
-		cob_runtime_error (_("GENERATE %s but no INITIATE was done"),r->report_name);
-		cob_set_exception (COB_EC_REPORT_INACTIVE);
+		cob_runtime_error (COB_CTX_TODO, _("GENERATE %s but no INITIATE was done"),r->report_name);
+		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 #if 0	/* TODO: if not enabled: ignore, if enabled and PROPAGATE ON (or TRY) active: handle */
 		return 0;
 #else
@@ -1800,7 +1800,7 @@ PrintFirstHeading:
 		 */
 		maxctl = 0;
 		for(rc = r->controls; rc; rc = rc->next) {
-			rc->data_change = (cob_cmp(rc->f,rc->val) != 0);
+			rc->data_change = (cob_cmp(COB_CTX_TODO, rc->f,rc->val) != 0);
 			if(rc->data_change) {	/* Data change, implies control break at lower levels */
 #if defined(COB_DEBUG_LOG)
 				DEBUG_LOG("rw",(" Control Break %s order %d changed from ",
@@ -2056,5 +2056,5 @@ cob_report_suppress(cob_report *r, cob_report_line *l)
 			}
 		}
 	}
-	cob_runtime_error (_("could not find line to SUPPRESS in report %s"),r->report_name);
+	cob_runtime_error (COB_CTX_TODO, _("could not find line to SUPPRESS in report %s"),r->report_name);
 }

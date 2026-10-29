@@ -50,7 +50,7 @@ static COB_INLINE int
 get_io_ptr (cob_file *f)
 {
 	if (fileio_funcs[f->io_routine] == NULL) {
-		cob_runtime_error (_("ERROR I/O routine %s is not present"),
+		cob_runtime_error (COB_CTX_TODO, _("ERROR I/O routine %s is not present"),
 							io_rtn_name[f->io_routine]);
 	}
 	return f->io_routine;

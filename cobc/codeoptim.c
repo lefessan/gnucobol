@@ -109,9 +109,9 @@ cob_gen_optim (const enum cb_optim val)
 		   if we know the pointer to be non-null;
 		   may be changed if we do a more expensive check to validate the pointer */
 		output_storage ("static void COB_INLINE COB_A_INLINE");
-		output_storage ("cob_check_based_inline (const unsigned char *ptr, const char *name)");
+		output_storage ("cob_check_based_inline (cob_context *ctx, const unsigned char *ptr, const char *name)");
 		output_storage ("{");
-		output_storage ("	if (!ptr) cob_check_based (NULL, name);");
+		output_storage ("	if (!ptr) cob_check_based (ctx, NULL, name);");
 		output_storage ("}");
 		output_storage ("#define cob_check_based" "\t" "cob_check_based_inline");
 		return;
@@ -121,9 +121,9 @@ cob_gen_optim (const enum cb_optim val)
 		   if we know the pointer to be non-null;
 		   may be changed if we do a more expensive check to validate the pointer */
 		output_storage ("static void COB_INLINE COB_A_INLINE");
-		output_storage ("cob_check_linkage_inline (const unsigned char *ptr, const char *name)");
+		output_storage ("cob_check_linkage_inline (cob_context *ctx, const unsigned char *ptr, const char *name)");
 		output_storage ("{");
-		output_storage ("	if (!ptr) cob_check_linkage (NULL, name);");
+		output_storage ("	if (!ptr) cob_check_linkage (ctx, NULL, name);");
 		output_storage ("}");
 		output_storage ("#define cob_check_linkage" "\t" "cob_check_linkage_inline");
 		return;
@@ -133,11 +133,11 @@ cob_gen_optim (const enum cb_optim val)
 		   if we know the subscript to be valid inline function used in any case to prevent
 		   "i" being resolved more than once as it may need unpacking */
 		output_storage ("static void COB_INLINE COB_A_INLINE");
-		output_storage ("cob_check_subscript_inline (const int i, const int max,");
+		output_storage ("cob_check_subscript_inline (cob_context *ctx, const int i, const int max,");
 		output_storage ("			const char* name, const int odo_item)");
 		output_storage ("{");
 		output_storage ("	if (i < 1 || i > max) {");
-		output_storage ("		cob_check_subscript (i, max, name, odo_item);");
+		output_storage ("		cob_check_subscript (ctx, i, max, name, odo_item);");
 		output_storage ("	}");
 		output_storage ("}");
 		output_storage ("#define cob_check_subscript" "\t" "cob_check_subscript_inline");
@@ -148,11 +148,11 @@ cob_gen_optim (const enum cb_optim val)
 		   if we know the subscript to be valid, inline function used in any case to prevent
 		   "i" being resolved more than once as it may need unpacking */
 		output_storage ("static void COB_INLINE COB_A_INLINE");
-		output_storage ("cob_check_odo_inline (const int i, const int min, const int max,");
+		output_storage ("cob_check_odo_inline (cob_context *ctx, const int i, const int min, const int max,");
 		output_storage ("			const char* name, const char* dep_name)");
 		output_storage ("{");
 		output_storage ("	if (i < min || i > max) {");
-		output_storage ("		cob_check_odo (i, min, max, name, dep_name);");
+		output_storage ("		cob_check_odo (ctx, i, min, max, name, dep_name);");
 		output_storage ("	}");
 		output_storage ("}");
 		output_storage ("#define cob_check_odo" "\t" "cob_check_odo_inline");
@@ -163,13 +163,13 @@ cob_gen_optim (const enum cb_optim val)
 		   if we know the refmod to be valid, inline function used in any case to prevent
 		   "offset" and "length" being resolved more than once as it may need unpacking */
 		output_storage ("static void COB_INLINE COB_A_INLINE");
-		output_storage ("cob_check_ref_mod_inline (const char* name, const int abend, const int zero_allowed,");
+		output_storage ("cob_check_ref_mod_inline (cob_context *ctx, const char* name, const int abend, const int zero_allowed,");
 		output_storage ("	const int size, const int offset, const int length)");
 		output_storage ("{");
 		output_storage ("	const int minimal_length = zero_allowed ? 0 : 1;");
 		output_storage ("	if (offset < 1 || length < minimal_length");
 		output_storage ("	 || offset + length - 1 > size) {");
-		output_storage ("		cob_check_ref_mod_detailed (name, abend, zero_allowed, size, offset, length);");
+		output_storage ("		cob_check_ref_mod_detailed (ctx, name, abend, zero_allowed, size, offset, length);");
 		output_storage ("	}");
 		output_storage ("}");
 		output_storage ("#define cob_check_ref_mod_detailed" "\t" "cob_check_ref_mod_inline");
@@ -179,9 +179,9 @@ cob_gen_optim (const enum cb_optim val)
 		/* no need for an expensive function call (at least prevented if inline is honored)
 		   if we know the refmod to be valid */
 		output_storage ("static void COB_INLINE COB_A_INLINE");
-		output_storage ("cob_check_ref_mod_minimal_inline (const char* name, const int offset, const int length)");
+		output_storage ("cob_check_ref_mod_minimal_inline (cob_context *ctx, const char* name, const int offset, const int length)");
 		output_storage ("{");
-		output_storage ("	if (offset < 1 || length < 1) cob_check_ref_mod_minimal (name, offset, length);");
+		output_storage ("	if (offset < 1 || length < 1) cob_check_ref_mod_minimal (ctx, name, offset, length);");
 		output_storage ("}");
 		output_storage ("#define cob_check_ref_mod_minimal" "\t" "cob_check_ref_mod_minimal_inline");
 		return;
@@ -190,12 +190,12 @@ cob_gen_optim (const enum cb_optim val)
 		/* no need for an expensive function call (at least prevented if inline is honored)
 		   if we know the memory fence to be valid */
 		output_storage ("static void COB_INLINE COB_A_INLINE");
-		output_storage ("cob_check_fence_inline (const char *fence_pre, const char *fence_post,");
+		output_storage ("cob_check_fence_inline (cob_context *ctx, const char *fence_pre, const char *fence_post,");
 		output_storage ("	const enum cob_statement stmt, const char *name)");
 		output_storage ("{");
 		output_storage ("	if (memcmp (fence_pre, \"\\xFF\\xFE\\xFD\\xFC\\xFB\\xFA\\xFF\", 8)");
 		output_storage ("	 || memcmp (fence_post, \"\\xFA\\xFB\\xFC\\xFD\\xFE\\xFF\\xFA\", 8)) {");
-		output_storage ("		cob_check_fence (fence_pre, fence_post, stmt, name);");
+		output_storage ("		cob_check_fence (ctx, fence_pre, fence_post, stmt, name);");
 		output_storage ("	}");
 		output_storage ("}");
 		output_storage ("#define cob_check_fence" "\t" "cob_check_fence_inline");

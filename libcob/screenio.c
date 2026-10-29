@@ -323,7 +323,7 @@ static COB_INLINE COB_A_INLINE void
 init_cob_screen_if_needed (void)
 {
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (COB_CTX_TODO, COB_FERROR_INITIALIZED);
 	}
 	if (!cobglobptr->cob_screen_initialized) {
 		int ret = cob_screen_init ();
@@ -391,7 +391,7 @@ static void
 handle_status (const int fret, const enum screen_statement stmt)
 {
 	if (fret) {
-		cob_set_exception (stmt == ACCEPT_STATEMENT ?
+		cob_set_exception (COB_CTX_TODO, stmt == ACCEPT_STATEMENT ?
 			COB_EC_IMP_ACCEPT : COB_EC_IMP_DISPLAY);
 	}
 	COB_ACCEPT_STATUS = fret;
@@ -454,10 +454,10 @@ raise_ec_on_invalid_line_or_col (const int line, const int column)
 
 	getmaxyx (mywin, max_y, max_x);
 	if (line < 0 || line >= max_y) {
-		cob_set_exception (COB_EC_SCREEN_LINE_NUMBER);
+		cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
 	}
 	if (column < 0 || column >= max_x) {
-		cob_set_exception (COB_EC_SCREEN_STARTING_COLUMN);
+		cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
 	}
 }
 
@@ -1179,7 +1179,7 @@ cob_screen_init (void)
 #endif
 
 	if (!initscr ()) {
-		cob_runtime_error (_("failed to initialize curses"));
+		cob_runtime_error (COB_CTX_TODO, _("failed to initialize curses"));
 		return 1;
 	}
 
@@ -1480,7 +1480,7 @@ pass_cursor_to_program (void)
 				break;
 			/* LCOV_EXCL_START */
 			default:
-				cob_fatal_error (COB_FERROR_CODEGEN);
+				cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 			/* LCOV_EXCL_STOP */
 			}
 		}
@@ -1509,13 +1509,13 @@ get_line_and_col_from_field (cob_field* pos, int* line, int* column)
 							 have more digits than we "assume" */
 		/* LCOV_EXCL_START */
 		if (max_line_column == 1) {
-			cob_fatal_error (COB_FERROR_CODEGEN);
+			cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 		}
 		/* LCOV_EXCL_STOP */
 		memcpy (buff, pos->data, maxsize);
 		buff[maxsize + 1] = 0;
 		if (!sscanf (buff, "%d", &pos_val)) {
-			cob_fatal_error (COB_FERROR_CODEGEN);
+			cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 		}
 	}
 
@@ -1535,7 +1535,7 @@ get_cursor_from_program (int *line, int *column)
 			(COB_MODULE_PTR->cursor_pos, line, column);
 		/* LCOV_EXCL_START */
 		if (ret == 1) {
-			cob_fatal_error (COB_FERROR_CODEGEN);
+			cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 		}
 		/* LCOV_EXCL_STOP */
 		*line = *line - 1;
@@ -1557,7 +1557,7 @@ raise_ec_on_truncation (const int item_size)
 	getmaxyx (mywin, max_y, max_x);
 
 	if (x + item_size - 1 > max_x) {
-		cob_set_exception (COB_EC_SCREEN_ITEM_TRUNCATED);
+		cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_ITEM_TRUNCATED);
 	}
 
 	COB_UNUSED (y);
@@ -3086,7 +3086,7 @@ cob_screen_moveyx (cob_screen *s)
 		getyx (mywin, y, x);
 		if (x < 0 || y < 0) {
 			/* not translated as "testing only" (should not happen) */
-			cob_runtime_warning ("negative values from getyx");
+			cob_runtime_warning (COB_CTX_TODO, "negative values from getyx");
 			x = y = 0;
 		}
 		/* Column adjust */
@@ -3265,9 +3265,9 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 			/* LCOV_EXCL_START */
 			if (ret == 1) {
 #if 0			/* Throw an exception? EC-SCREEN-IMP-LINE-VAR-LENGTH? */
-				cob_set_exception (COB_EC_SCREEN_IMP);
+				cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_IMP);
 #else
-				cob_fatal_error (COB_FERROR_CODEGEN);
+				cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 #endif
 			}
 			/* LCOV_EXCL_STOP */
@@ -3282,8 +3282,8 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 				*sline = line_where_last_stmt_ended (stmt);
 				*scolumn = col_where_last_stmt_ended (stmt);
 			} else {
-				cob_set_exception (COB_EC_SCREEN_LINE_NUMBER);
-				cob_set_exception (COB_EC_SCREEN_STARTING_COLUMN);
+				cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
+				cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
 				*sline = 0;
 				*scolumn = 0;
 			}
@@ -3291,7 +3291,7 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 			if (zero_line_col_allowed) {
 				*sline = line_where_last_stmt_ended (stmt) + 1;
 			} else {
-				cob_set_exception (COB_EC_SCREEN_LINE_NUMBER);
+				cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
 				*sline = 0;
 			}
 			*scolumn = cobol_col - 1;
@@ -3301,7 +3301,7 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 		if (zero_line_col_allowed) {
 			*scolumn = col_where_last_stmt_ended (stmt);
 		} else {
-			cob_set_exception (COB_EC_SCREEN_STARTING_COLUMN);
+			cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
 			*scolumn = 0;
 		}
 	} else {
@@ -4795,7 +4795,7 @@ cob_screen_accept (cob_screen *s, cob_field *line,
 	COB_UNUSED (zero_line_col_allowed);
 	if (first_accept) {
 		first_accept = 0;
-		cob_runtime_warning (_("runtime is not configured to support %s"),
+		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"screenio ACCEPT");
 	}
 	handle_status (9000, ACCEPT_STATEMENT);
@@ -4821,7 +4821,7 @@ cob_accept_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
 	COB_UNUSED (parms);
 	if (first_accept) {
 		first_accept = 0;
-		cob_runtime_warning (_("runtime is not configured to support %s"),
+		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"screenio ACCEPT");
 	}
 	handle_status (9000, ACCEPT_STATEMENT);
@@ -5075,7 +5075,7 @@ cob_sys_get_scr_size (unsigned char *line, unsigned char *col)
 #else
 	*line = 24U;
 	*col = 80U;
-	cob_set_exception (COB_EC_IMP_FEATURE_DISABLED);
+	cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_DISABLED);
 	return -1;
 #endif
 }
@@ -5090,7 +5090,7 @@ cob_sys_set_scr_size (unsigned char *line, unsigned char *col)
 #if !defined (WITH_EXTENDED_SCREENIO) || !defined (HAVE_RESIZE_TERM)
 	COB_UNUSED (line);
 	COB_UNUSED (col);
-	cob_set_exception (COB_EC_IMP_FEATURE_DISABLED);
+	cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_DISABLED);
 	return -1;
 #else
 	{

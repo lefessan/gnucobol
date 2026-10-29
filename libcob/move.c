@@ -159,7 +159,7 @@ store_common_region (cob_field *f, const unsigned char *data,
 	while (p < end) {
 		if ((COB_FIELD_IS_NUMERIC (f) && (*p != '0'))
 		 || (COB_FIELD_IS_ANY_ALNUM (f) && (*p != ' '))) {
-			cob_set_exception (COB_EC_DATA_TRUNCATION);
+			cob_set_exception (COB_CTX_TODO, COB_EC_DATA_TRUNCATION);
 			break;
 		}
 		++p;
@@ -1042,7 +1042,7 @@ optimized_move_display_to_edited (cob_field *f1, cob_field *f2)
 	if (!(COB_FIELD_TYPE (f2) == COB_TYPE_NUMERIC_EDITED
 	 && COB_FIELD_DIGITS (f1) == COB_FIELD_DIGITS (f2)
 	 && COB_FIELD_SCALE (f1) == COB_FIELD_SCALE (f2))) {
-		cob_runtime_error ("optimized_move_display_to_edited: invalid argument");
+		cob_runtime_error (COB_CTX_TODO, "optimized_move_display_to_edited: invalid argument");
 	}
 #endif
 
@@ -1122,7 +1122,7 @@ optimized_move_display_to_edited (cob_field *f1, cob_field *f2)
 			unsigned int src_num;
 #ifndef NDEBUG
 			if (dst >= dst_end) {
-				cob_runtime_error ("optimized_move_display_to_edited: overflow in destination field");
+				cob_runtime_error (COB_CTX_TODO, "optimized_move_display_to_edited: overflow in destination field");
 				break;
 			}
 #endif
@@ -1285,7 +1285,7 @@ optimized_move_display_to_edited (cob_field *f1, cob_field *f2)
 				/* LCOV_EXCL_START */
 				if (c != currency) {
 					/* should never happen, consider remove [also the reason for not translating that] */
-					cob_runtime_error ("optimized_move_display_to_edited: invalid PIC character %c", c);
+					cob_runtime_error (COB_CTX_TODO, "optimized_move_display_to_edited: invalid PIC character %c", c);
 					*dst = '?';    /* Invalid PIC */
 					break;
 				} else
@@ -2104,12 +2104,12 @@ cob_alloc_move (cob_context *ctx, cob_field *src, cob_field *dst, const int nsiz
 		if (mod->param_buf == NULL) {
 			mod->param_buf_used = 0;
 			mod->param_buf_size = size + 8;
-			mod->param_buf = cob_cache_malloc (mod->param_buf_size);
+			mod->param_buf = cob_cache_malloc (ctx, mod->param_buf_size);
 		}
 		if (mod->param_field == NULL) {
 			mod->param_num = 0;
 			mod->param_max = 2;
-			mod->param_field = cob_cache_malloc (mod->param_max * sizeof(void*));
+			mod->param_field = cob_cache_malloc (ctx, mod->param_max * sizeof(void*));
 		}
 		buf = NULL;
 		use = mod->param_buf_used;
@@ -2134,10 +2134,10 @@ cob_alloc_move (cob_context *ctx, cob_field *src, cob_field *dst, const int nsiz
 		if (mod->param_buf_used + size > mod->param_buf_size) {	/* Grow the buffer */
 			buf = mod->param_buf;
 			mod->param_buf_size += (size + 8);
-			mod->param_buf = cob_cache_malloc (mod->param_buf_size);
+			mod->param_buf = cob_cache_malloc (ctx, mod->param_buf_size);
 		} else if (i > 0 && j > 0) {	/* Some unassigned fields so shuffle them up */
 			buf = mod->param_buf;
-			mod->param_buf = cob_cache_malloc (mod->param_buf_size);
+			mod->param_buf = cob_cache_malloc (ctx, mod->param_buf_size);
 		}
 
 		if (buf != NULL) {
@@ -2153,7 +2153,7 @@ cob_alloc_move (cob_context *ctx, cob_field *src, cob_field *dst, const int nsiz
 					}
 				}
 			}
-			cob_cache_free (buf);
+			cob_cache_free (ctx, buf);
 		}
 		for (i=0; i < mod->param_num; i++) {
 			if (mod->param_field[i] == dst) 
@@ -2162,7 +2162,7 @@ cob_alloc_move (cob_context *ctx, cob_field *src, cob_field *dst, const int nsiz
 		if (i >= mod->param_num) {	/* Not in table, so add it */
 			if (mod->param_num >= mod->param_max) {
 				mod->param_max += 2;
-				mod->param_field = cob_cache_realloc (mod->param_field, 
+				mod->param_field = cob_cache_realloc (ctx, mod->param_field, 
 									mod->param_max * sizeof(void*));
 			}
 			i = mod->param_num++;
@@ -2471,7 +2471,7 @@ cob_set_llint (cob_context *ctx, cob_field *f, cob_s64_t max, const cob_s64_t n)
 	COB_FIELD_INIT (sizeof (cob_s64_t), (unsigned char *)&n, &const_binll_attr);
 	if (n >= max
 	 || n <= -max) {
-		cob_set_exception (COB_EC_SIZE_OVERFLOW);
+		cob_set_exception (ctx, COB_EC_SIZE_OVERFLOW);
 		if (COB_MODULE_PTR->flag_binary_truncate
 		 && f->attr->type == COB_TYPE_NUMERIC_BINARY
 		 && !COB_FIELD_REAL_BINARY (f)) {
