@@ -2142,16 +2142,16 @@ valid_field_data (cob_field *field)
 	int num_check;
 
 	if (COB_FIELD_IS_NUMERIC (field)) {
-		return cob_check_numval (field, NULL, 0, 0) == 0;
+		return cob_check_numval (COB_CTX_TODO, field, NULL, 0, 0) == 0;
 	} else if (field->attr->type == COB_TYPE_NUMERIC_EDITED) {
-		num_check = cob_check_numval (field, NULL, 1, 0);
+		num_check = cob_check_numval (COB_CTX_TODO, field, NULL, 1, 0);
 		/* test for all spaces which is valid in this case
 		   and change to a one zero instead */
 		if (num_check == (int)field->size + 1) {
 			field->data[0] = '0';
 			return 1;
 		}
-		return cob_check_numval (field, NULL, 1, 0) == 0;
+		return cob_check_numval (COB_CTX_TODO, field, NULL, 1, 0) == 0;
 	} else {
 		return 1;
 	}
@@ -2185,9 +2185,9 @@ format_field (cob_screen *s)
 	COB_FIELD_INIT (size, data, s->field->attr);
 
 	if (COB_FIELD_IS_NUMERIC (s->field)) {
-		cob_move (COB_CTX_TODO, cob_intr_numval (&field), s->field);
+		cob_move (COB_CTX_TODO, cob_intr_numval (COB_CTX_TODO, &field), s->field);
 	} else if (field.attr->type == COB_TYPE_NUMERIC_EDITED) {
-		cob_move (COB_CTX_TODO, cob_intr_numval_c (&field, NULL), s->field);
+		cob_move (COB_CTX_TODO, cob_intr_numval_c (COB_CTX_TODO, &field, NULL), s->field);
 	}
 
 	cob_free (data);

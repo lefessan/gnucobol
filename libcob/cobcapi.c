@@ -587,10 +587,10 @@ cob_put_field_str (const cob_field *dst, const char *str)
 		if (COB_FIELD_TYPE (dst) & COB_TYPE_NUMERIC_FLOAT
 		 || COB_FIELD_TYPE (dst) & COB_TYPE_NUMERIC_DOUBLE) {
 			if (cob_check_numval_f (&wrk)) return 1;
-			wrk = *cob_intr_numval_f (&wrk);
+			wrk = *cob_intr_numval_f (COB_CTX_TODO, &wrk);
 		} else {
-			if (cob_check_numval (&wrk, NULL, 0, 1)) return 1;
-			wrk = *cob_intr_numval (&wrk);
+			if (cob_check_numval (COB_CTX_TODO, &wrk, NULL, 0, 1)) return 1;
+			wrk = *cob_intr_numval (COB_CTX_TODO, &wrk);
 		}
 	}
 	cob_move (COB_CTX_TODO, &wrk, (cob_field *)dst);
