@@ -45,3 +45,20 @@ source / signalé par une analyse, non vérifié).
 ### `libcob/common.c` — `cob_module_err` mort
 - Statut : signalé par une analyse, **non vérifié**.
 - Variable lue seulement dans du code `#if 0` : à supprimer.
+
+## 2026-10-29 — trouvés pendant le test de compatibilité binaire
+
+### `libcob/common.c:2405-2406, 2631, 2688-2690` — débordement de `exec_root` / `build_root`
+- Statut : **vérifié** (plantage reproduit : « buffer overflow detected »
+  dans `cob_setup_env` avec un build `-O2 -D_FORTIFY_SOURCE`).
+- `static char exec_root [128]` est rempli par
+  `sprintf (exec_root, "%s", p)` où `p` vient de `COB_DIR` ou du
+  répertoire où `libcob` est trouvée via `LD_LIBRARY_PATH`, puis
+  complété par `strcat (exec_root, SLASH_STR)`, sans contrôle de taille
+  (de même `build_root`, initialisé avec le `--prefix`).
+- Déclencheur : un répertoire de libcob (ou `COB_DIR`) de plus de
+  127 caractères, par exemple un build dans un répertoire profond ;
+  `cobc` lui-même plante au démarrage.
+- Correction : `snprintf` avec `sizeof (exec_root)` et contrôle de la
+  place restante avant d'ajouter le séparateur, ou allocation dynamique
+  (`COB_FILE_MAX` au lieu de 128).
