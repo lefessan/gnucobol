@@ -1362,10 +1362,10 @@ cob_load_module (int iortn)
 	}
 
 	module_errmsg[0] = 0;
-	ioinit = (void (*)(cob_file_api *))cob_load_lib (io_rtns[iortn].module, io_rtns[iortn].entry, module_errmsg);
+	ioinit = (void (*)(cob_file_api *))cob_load_lib (COB_CTX_TODO, io_rtns[iortn].module, io_rtns[iortn].entry, module_errmsg);
 	if (ioinit == NULL) {
 		/* recheck with libcob */
-		ioinit = (void (*)(cob_file_api *))cob_load_lib ("libcob-5", io_rtns[iortn].entry, NULL);
+		ioinit = (void (*)(cob_file_api *))cob_load_lib (COB_CTX_TODO, "libcob-5", io_rtns[iortn].entry, NULL);
 	}
 	if (ioinit == NULL) {
 		return 1;

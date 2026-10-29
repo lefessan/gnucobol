@@ -1,6 +1,15 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (cob_call_error, cob_resolve_cobol, cob_call_field,
+	  cob_cancel_field, cob_call, cob_func, ...), cobcapi.c
+	  (cob_get_param_field, cob_get_num_params, cob_get_field_str,
+	  cob_put_field_str, cob_put_s64_param, cob_put_u64_param, ...),
+	  cobcapi.h, common.c (cob_sys_exit_proc, cob_sys_error_proc,
+	  cob_sys_x91, cob_call_with_exception_check), common.h (cob_s64_pow,
+	  cob_get_name_hash, cob_encode_program_id, cob_resolve_cobol,
+	  cob_call_field, cob_cancel_field, ...), fileio.c (cob_load_module):
+	  CALL / CANCEL / resolve functions take the context
 	* cobcapi.c (cob_put_field_str), common.h (cob_xml_parse,
 	  cob_intr_binop, cob_valid_time_format, cob_intr_when_compiled,
 	  cob_intr_upper_case, cob_intr_lower_case, ...), intrinsic.c (numval,

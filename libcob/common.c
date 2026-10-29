@@ -6539,7 +6539,7 @@ cob_sys_exit_proc (const void *dispo, const void *pptr)
 	   furthermore the second parameter is a mixed priority + install_flag */
 	if (something) {
 		const char *name = (char *)pptr;
-		pptr = cob_resolve_cobol (name, 0, 0);
+		pptr = cob_resolve_cobol (COB_CTX_TODO, name, 0, 0);
 
 		if (!p) {
 			return -1;
@@ -6658,7 +6658,7 @@ cob_sys_error_proc (const void *dispo, const void *pptr)
 	   maybe resolve here and return -1 if not possible */
 	if (something) {
 		const char *name = (char *)pptr;
-		pptr = cob_resolve_cobol (name, 0, 0);
+		pptr = cob_resolve_cobol (COB_CTX_TODO, name, 0, 0);
 		if (!p) {
 			return -1;
 		}
@@ -7222,7 +7222,7 @@ cob_sys_x91 (void *p1, const void *p2, void *p3)
 		{
 			char name[256];
 			strncpy (name, p, *parm);
-			void * func = cob_resolve (name);
+			void * func = cob_resolve (COB_CTX_TODO, name);
 			/* TODO: the full name should be copied back into p */
 			return (func != NULL);
 		}
@@ -9222,7 +9222,7 @@ cob_load_config (void)
 
 /* output runtime warning for issues produced by external API functions */
 void
-cob_runtime_warning_external (const char *caller_name, const int cob_reference, const char *fmt, ...)
+cob_runtime_warning_external (cob_context *ctx, const char *caller_name, const int cob_reference, const char *fmt, ...)
 {
 	va_list args;
 
@@ -10609,7 +10609,7 @@ cob_common_init (void *setptr)
 /* normal call, but longjmp back on exit (1),
    errors (-1), hard errors (-2) or signals (-3) */
 int
-cob_call_with_exception_check (const char *name, const int argc, void **argv)
+cob_call_with_exception_check (cob_context *ctx, const char *name, const int argc, void **argv)
 {
 #ifndef COB_WITHOUT_JMP
 	int ret;
@@ -10629,7 +10629,7 @@ cob_call_with_exception_check (const char *name, const int argc, void **argv)
 	/* Set module unloading to be postponed (until longjmp is performed) */
 	module_unload = COB_POSTPONE;
 #endif
-	exit_code = cob_call (name, argc, argv);
+	exit_code = cob_call (ctx, name, argc, argv);
 	module_unload = COB_IMMEDIATE;
 	return 0;
 }

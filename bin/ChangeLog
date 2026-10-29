@@ -1,4 +1,8 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* cobcrun.c (main): CALL / CANCEL / resolve functions take the context
+
 2025-05-20  David Declerck <david.declerck@ocamlpro.com>
 
 	* gcdiff.c: removed as no longer needed

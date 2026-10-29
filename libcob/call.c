@@ -1029,7 +1029,7 @@ cob_chk_call_path (const char *name, char **dirent)
 /* Global functions */
 
 const char *
-cob_resolve_error (void)
+cob_resolve_error (cob_context *ctx)
 {
 	const char	*p;
 
@@ -1043,14 +1043,14 @@ cob_resolve_error (void)
 }
 
 void
-cob_call_error (void)
+cob_call_error (cob_context *ctx)
 {
-	cob_runtime_error ("%s", cob_resolve_error ());
+	cob_runtime_error ("%s", cob_resolve_error (ctx));
 	cob_hard_failure ();
 }
 
 void
-cob_set_cancel (cob_module *m)
+cob_set_cancel (cob_context *ctx, cob_module *m)
 {
 	struct call_hash	*p;
 
@@ -1069,7 +1069,7 @@ cob_set_cancel (cob_module *m)
 }
 
 void *
-cob_resolve (const char *name)
+cob_resolve (cob_context *ctx, const char *name)
 {
 	void	*p;
 	char	*entry;
@@ -1090,7 +1090,7 @@ cob_resolve (const char *name)
 }
 
 void *
-cob_resolve_cobol (const char *name, const int fold_case, const int errind)
+cob_resolve_cobol (cob_context *ctx, const char *name, const int fold_case, const int errind)
 {
 	void	*p;
 	char	*entry;
@@ -1111,7 +1111,7 @@ cob_resolve_cobol (const char *name, const int fold_case, const int errind)
 	}
 	if (!p) {
 		if (errind) {
-			cob_call_error ();
+			cob_call_error (ctx);
 		}
 		cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
 	}
@@ -1120,7 +1120,7 @@ cob_resolve_cobol (const char *name, const int fold_case, const int errind)
 }
 
 void *
-cob_resolve_func (const char *name)
+cob_resolve_func (cob_context *ctx, const char *name)
 {
 	void	*p;
 
@@ -1143,7 +1143,7 @@ cob_resolve_func (const char *name)
  * Load library and return address of entry point
  */
 void *
-cob_load_lib (const char *library, const char *entry, char *reason)
+cob_load_lib (cob_context *ctx, const char *library, const char *entry, char *reason)
 {
 	void	*p;
 #ifdef RTLD_MEMBER		/* Used on AIX due to shared code inside archive */
@@ -1184,7 +1184,7 @@ cob_load_lib (const char *library, const char *entry, char *reason)
 }
 
 void *
-cob_call_field (const cob_field *f, const struct cob_call_struct *cs,
+cob_call_field (cob_context *ctx, const cob_field *f, const struct cob_call_struct *cs,
 		const unsigned int errind, const int fold_case)
 {
 	char		*name, *entry, *dirent;
@@ -1258,7 +1258,7 @@ cob_call_field (const cob_field *f, const struct cob_call_struct *cs,
 	}
 	if (!p) {
 		if (errind) {
-			cob_call_error ();
+			cob_call_error (ctx);
 		} else {
 			cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
 			return NULL;
@@ -1291,7 +1291,7 @@ cob_module_clean (cob_module *m)
 }
 
 void
-cob_cancel (const char *name)
+cob_cancel (cob_context *ctx, const char *name)
 {
 	const char		*entry;
 	struct call_hash	*p;
@@ -1333,7 +1333,7 @@ cob_cancel (const char *name)
 }
 
 void
-cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
+cob_cancel_field (cob_context *ctx, const cob_field *f, const struct cob_call_struct *cs)
 {
 	char				*name;
 	const char			*entry;
@@ -1363,11 +1363,11 @@ cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
 			return;
 		}
 	}
-	cob_cancel (entry);
+	cob_cancel (ctx, entry);
 }
 
 int
-cob_call (const char *name, const int argc, void **argv)
+cob_call (cob_context *ctx, const char *name, const int argc, void **argv)
 {
 	void			*pargv[MAX_CALL_FIELD_PARAMS] = { 0 };
 	cob_call_union		unifunc;
@@ -1473,7 +1473,7 @@ cob_call (const char *name, const int argc, void **argv)
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
-	unifunc.funcvoid = cob_resolve_cobol (name, 0, 1);
+	unifunc.funcvoid = cob_resolve_cobol (ctx, name, 0, 1);
 	/* Set number of parameters */
 	cobglobptr->cob_call_params = argc;
 	cobglobptr->cob_call_from_c = 1;
@@ -1635,17 +1635,17 @@ cob_call (const char *name, const int argc, void **argv)
 }
 
 int
-cob_func (const char *name, const int argc, void **argv)
+cob_func (cob_context *ctx, const char *name, const int argc, void **argv)
 {
 	int	ret;
 
-	ret = cob_call (name, argc, argv);
-	cob_cancel (name);
+	ret = cob_call (ctx, name, argc, argv);
+	cob_cancel (ctx, name);
 	return ret;
 }
 
 int
-cob_call_cobol (const char *name, const int argc, ...)
+cob_call_cobol (cob_context *ctx, const char *name, const int argc, ...)
 {
 	void			**pargv;
 	cob_call_union		unifunc;
@@ -1665,7 +1665,7 @@ cob_call_cobol (const char *name, const int argc, ...)
 		cob_stop_run (1);
 	}
 	/* LCOV_EXCL_STOP */
-	unifunc.funcvoid = cob_resolve_cobol (name, 0, 1);
+	unifunc.funcvoid = cob_resolve_cobol (ctx, name, 0, 1);
 	pargv = cob_malloc (MAX_CALL_FIELD_PARAMS * sizeof(void *));
 	/* Set number of parameters */
 	cobglobptr->cob_call_params = argc;
@@ -1754,7 +1754,7 @@ cob_call_cobol (const char *name, const int argc, ...)
 }
 
 int
-cob_call_entry (void *entry, const int argc, ...)
+cob_call_entry (cob_context *ctx, void *entry, const int argc, ...)
 {
 	void			**pargv;
 	cob_call_union		unifunc;
@@ -1866,7 +1866,7 @@ cob_call_entry (void *entry, const int argc, ...)
 #ifndef COB_WITHOUT_JMP
 /* save jump structure, normally called by cobsetjmp which wraps it into setjmp */
 void *
-cob_savenv (struct cobjmp_buf *jbuf)
+cob_savenv (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
@@ -1886,14 +1886,14 @@ cob_savenv (struct cobjmp_buf *jbuf)
 }
 
 void *
-cob_savenv2 (struct cobjmp_buf *jbuf, const int jsize)
+cob_savenv2 (cob_context *ctx, struct cobjmp_buf *jbuf, const int jsize)
 {
 	COB_UNUSED (jsize);
-	return cob_savenv (jbuf);
+	return cob_savenv (ctx, jbuf);
 }
 
 void
-cob_longjmp (struct cobjmp_buf *jbuf)
+cob_longjmp (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {

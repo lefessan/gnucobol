@@ -86,13 +86,13 @@ typedef	char *		cobchar_t;
 #define	cobs64_t	cob_s64_t
 #define	cobuns64_t	cob_u64_t
 
-#define	cobsetjmp(x)	setjmp (cob_savenv (x))
-#define	coblongjmp(x)	cob_longjmp (x)
-#define	cobsavenv(x)	cob_savenv (x)
-#define	cobsavenv2(x,z)	cob_savenv2 (x, z)
-#define	cobfunc(x,y,z)	cob_func (x, y, z)
-#define	cobcall(x,y,z)	cob_call (x, y, z)
-#define	cobcancel(x)	cob_cancel (x)
+#define	cobsetjmp(x)	setjmp (cob_savenv (cob_get_current_context (), x))
+#define	coblongjmp(x)	cob_longjmp (cob_get_current_context (), x)
+#define	cobsavenv(x)	cob_savenv (cob_get_current_context (), x)
+#define	cobsavenv2(x,z)	cob_savenv2 (cob_get_current_context (), x, z)
+#define	cobfunc(x,y,z)	cob_func (cob_get_current_context (), x, y, z)
+#define	cobcall(x,y,z)	cob_call (cob_get_current_context (), x, y, z)
+#define	cobcancel(x)	cob_cancel (cob_get_current_context (), x)
 
 #define	cobgetenv(x)	cob_getenv (x)
 #define	cobputenv(x)	cob_putenv (x)
