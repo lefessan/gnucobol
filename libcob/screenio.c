@@ -399,7 +399,7 @@ handle_status (const int fret, const enum screen_statement stmt)
 	if (COB_MODULE_PTR && COB_MODULE_PTR->crt_status) {
 		cob_field	*status_field = COB_MODULE_PTR->crt_status;
 		if (COB_FIELD_IS_NUMERIC (status_field)) {
-			cob_set_int (status_field, fret);
+			cob_set_int (COB_CTX_TODO, status_field, fret);
 		} else if (status_field->size == 3) {
 			cob_set_crt3_status (status_field, fret);
 		} else {
@@ -615,7 +615,7 @@ static void
 adjust_attr_from_color_field (cob_flags_t *attr, cob_field *color,
 	short *fg_color, short *bg_color)
 {
-	int col_attr = cob_get_int (color);	/* added numeric value */
+	int col_attr = cob_get_int (COB_CTX_TODO, color);	/* added numeric value */
 
 	if (col_attr >= 131072) {
 		col_attr -= 131072;
@@ -1024,8 +1024,8 @@ cob_screen_attr (cob_field *fgc, cob_field *bgc, cob_flags_t attr,
 {
 	int		line;
 	int		column;
-	const int	cob_fg_color = fgc ? cob_get_int (fgc) : -1;
-	const int	cob_bg_color = bgc ? cob_get_int (bgc) : -1;
+	const int	cob_fg_color = fgc ? cob_get_int (COB_CTX_TODO, fgc) : -1;
+	const int	cob_bg_color = bgc ? cob_get_int (COB_CTX_TODO, bgc) : -1;
 	short		fg_color = -1;
 	short		bg_color = -1;
 	chtype		styles = A_NORMAL;
@@ -1461,7 +1461,7 @@ pass_cursor_to_program (void)
 			COB_FIELD_TYPE (cursor_field) != COB_TYPE_NUMERIC_DISPLAY) {
 			sline *= 1000;
 			sline += scolumn;
-			cob_set_int (cursor_field, sline);
+			cob_set_int (COB_CTX_TODO, cursor_field, sline);
 		} else {
 			char	buff[23]; /* 10: make the compiler happy as "int" *could*
 								 have more digits than we "assume" */
@@ -1503,7 +1503,7 @@ get_line_and_col_from_field (cob_field* pos, int* line, int* column)
 	}
 
 	if (COB_FIELD_IS_NUMERIC (pos)) {
-		pos_val = cob_get_int (pos);
+		pos_val = cob_get_int (COB_CTX_TODO, pos);
 	} else {
 		char	buff[23]; /* 7: make the compiler happy as "int" *could*
 							 have more digits than we "assume" */
@@ -1839,11 +1839,11 @@ get_prev_screen_item (cob_screen * const s)
 				    int * const found_clause)		\
 	{								\
 		if (s->attr & COB_SCREEN_##clause_name_upper##_PLUS) {	\
-			*count += cob_get_int (s->clause_name_lower);	\
+			*count += cob_get_int (COB_CTX_TODO, s->clause_name_lower);	\
 		} else if (s->attr & COB_SCREEN_##clause_name_upper##_MINUS) { \
-			*count -= cob_get_int (s->clause_name_lower);	\
+			*count -= cob_get_int (COB_CTX_TODO, s->clause_name_lower);	\
 		} else {						\
-			*count += cob_get_int (s->clause_name_lower) - 1; \
+			*count += cob_get_int (COB_CTX_TODO, s->clause_name_lower) - 1; \
 			*found_clause = 1;				\
 		}							\
 	}
@@ -2185,9 +2185,9 @@ format_field (cob_screen *s)
 	COB_FIELD_INIT (size, data, s->field->attr);
 
 	if (COB_FIELD_IS_NUMERIC (s->field)) {
-		cob_move (cob_intr_numval (&field), s->field);
+		cob_move (COB_CTX_TODO, cob_intr_numval (&field), s->field);
 	} else if (field.attr->type == COB_TYPE_NUMERIC_EDITED) {
-		cob_move (cob_intr_numval_c (&field, NULL), s->field);
+		cob_move (COB_CTX_TODO, cob_intr_numval_c (&field, NULL), s->field);
 	}
 
 	cob_free (data);
@@ -3096,7 +3096,7 @@ cob_screen_moveyx (cob_screen *s)
 		if (!s->line) {
 			line = y;
 		} else {
-			line = origin_y + cob_get_int (s->line);
+			line = origin_y + cob_get_int (COB_CTX_TODO, s->line);
 			if (line < 0) {
 				line = y;
 			}
@@ -3104,7 +3104,7 @@ cob_screen_moveyx (cob_screen *s)
 		if (!s->column) {
 			column = x;
 		} else {
-			column = origin_x + cob_get_int (s->column);
+			column = origin_x + cob_get_int (COB_CTX_TODO, s->column);
 			if (column < 0) {
 				column = x;
 			}
@@ -3213,13 +3213,13 @@ get_line_column (cob_field *fline, cob_field *fcol, int *line, int *col)
 	if (fline == NULL) {
 		*line = 1;
 	} else {
-		*line = cob_get_int (fline);
+		*line = cob_get_int (COB_CTX_TODO, fline);
 	}
 
 	if (fcol == NULL) {
 		*col = 1;
 	} else {
-		*col = cob_get_int (fcol);
+		*col = cob_get_int (COB_CTX_TODO, fcol);
 	}
 }
 
@@ -3255,7 +3255,7 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 		if (line->size < 4) {
 			/* this is used when only a LINE clause is specified,
 			   not an AT clause */
-			cobol_line = cob_get_int (line);
+			cobol_line = cob_get_int (COB_CTX_TODO, line);
 			cobol_col = 1;
 		} else {
 			/* common case: line actually contains both the
@@ -3334,7 +3334,7 @@ get_accept_timeout (cob_field *ftimeout)
 	if (ftimeout) {
 		/* FIXME: the scale should come primarily from the module,
 		   TODO:  add scale field to module_ptr */
-		return cob_get_int (ftimeout) * COB_TIMEOUT_SCALE;
+		return cob_get_int (COB_CTX_TODO, ftimeout) * COB_TIMEOUT_SCALE;
 	} else {
 		return -1;
 	}
@@ -3464,7 +3464,7 @@ field_display (cob_field *f, cob_flags_t fattr, const int line, const int column
 	origin_x = 0;
 
 	if (size_is) {
-		size_display = (unsigned int)cob_get_int (size_is);
+		size_display = (unsigned int)cob_get_int (COB_CTX_TODO, size_is);
 		/* SIZE ZERO is ignored */
 		if (size_display == 0) {
 			size_display = fsize;
@@ -3476,7 +3476,7 @@ field_display (cob_field *f, cob_flags_t fattr, const int line, const int column
 	}
 
 	if (fscroll) {
-		sline = cob_get_int (fscroll);
+		sline = cob_get_int (COB_CTX_TODO, fscroll);
 		if (fattr & COB_SCREEN_SCROLL_DOWN) {
 			sline = -sline;
 		}
@@ -3588,7 +3588,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 
 
 	if (fscroll) {
-		keyp = cob_get_int (fscroll);
+		keyp = cob_get_int (COB_CTX_TODO, fscroll);
 		if (fattr & COB_SCREEN_SCROLL_DOWN) {
 			keyp = -keyp;
 		}
@@ -3608,7 +3608,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 
 	if (f) {
 		if (size_is) {
-			size_accept = cob_get_int (size_is);
+			size_accept = cob_get_int (COB_CTX_TODO, size_is);
 			/* SIZE ZERO is ignored */
 			if (size_accept < 1) {
 				size_accept = (int)f->size;
@@ -3622,7 +3622,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 		temp_field.attr = &const_alpha_attr;
 		temp_field.size = size_accept;
 		if (fattr & COB_SCREEN_UPDATE) {
-			cob_move (f, &temp_field);	/* updates COB_TERM_BUFF */
+			cob_move (COB_CTX_TODO, f, &temp_field);	/* updates COB_TERM_BUFF */
 		} else {
 			memset (COB_TERM_BUFF, ' ', size_accept);
 		}
@@ -3658,7 +3658,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 				int cursor_off = 1;
 				if (cursor) {
 					/* position according to CURSOR clause */
-					cursor_off = cob_get_int (cursor);
+					cursor_off = cob_get_int (COB_CTX_TODO, cursor);
 					if (cursor_off >= 1) {
 						/* max: last_position with data */
 						int last_data = p_set - COB_TERM_BUFF + 1;
@@ -3686,9 +3686,9 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 #if	0	/* RXWRXW - Screen update */
 		if (!(fattr & COB_SCREEN_UPDATE)) {
 			if (cob_field_is_numeric_or_numeric_edited (f)) {
-				cob_set_int (f, 0);
+				cob_set_int (COB_CTX_TODO, f, 0);
 			} else {
-				cob_move (&char_temp, f);
+				cob_move (COB_CTX_TODO, &char_temp, f);
 			}
 		}
 #endif
@@ -4246,7 +4246,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 		if (!COB_FIELD_CONSTANT (cursor)) {
 			getyx (mywin, cline, ccolumn);
 			if (cline == sline) {
-				cob_set_int (cursor, ccolumn + 1 - scolumn);
+				cob_set_int (COB_CTX_TODO, cursor, ccolumn + 1 - scolumn);
 			}
 		}
 	} else {
@@ -4255,7 +4255,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 	}
 	handle_status (fret, ACCEPT_STATEMENT);
 	if (f) {
-		cob_move (&temp_field, f);
+		cob_move (COB_CTX_TODO, &temp_field, f);
 		cob_move_cursor (sline, right_pos + 1);
 #if 0	/* possible cleanup to not "leak" input data */
 		memset (COB_TERM_BUFF, ' ', size_accept);
@@ -4886,15 +4886,15 @@ cob_screen_line_col (cob_field *f, const int get_columns)
 	init_cob_screen_if_needed ();
 #ifdef	WITH_EXTENDED_SCREENIO
 	if (get_columns) {
-		cob_set_int (f, (int)COLS);
+		cob_set_int (COB_CTX_TODO, f, (int)COLS);
 	} else {
-		cob_set_int (f, (int)LINES);
+		cob_set_int (COB_CTX_TODO, f, (int)LINES);
 	}
 #else
 	if (get_columns) {
-		cob_set_int (f, 80);
+		cob_set_int (COB_CTX_TODO, f, 80);
 	} else {
-		cob_set_int (f, 24);
+		cob_set_int (COB_CTX_TODO, f, 24);
 	}
 	/* TODO: _possibly_ raise exception */
 #endif
@@ -4935,7 +4935,7 @@ cob_accept_escape_key (cob_field *f)
 		f->data[0] = crtstat[0];
 		f->data[1] = crtstat[1];
 	} else {
-		cob_set_int (f, status);
+		cob_set_int (COB_CTX_TODO, f, status);
 	}
 }
 

@@ -2283,7 +2283,7 @@ cob_move_intermediate (cob_field *dst, const void *src, const size_t size)
 	/* note: if the target is numeric then cob_move will convert
 	         on the fly to numeric as necessary */
 	intermediate.attr = &const_alpha_attr;
-	cob_move (&intermediate, dst);
+	cob_move (COB_CTX_TODO, &intermediate, dst);
 }
 
 /* intermediate move from 'src' to 'dst'
@@ -2300,7 +2300,7 @@ cob_move_to_group_as_alnum (cob_field *src, cob_field *dst)
 	intermediate.attr = &attr;
 	attr = *dst->attr;
 	attr.type = COB_TYPE_ALPHANUMERIC;
-	cob_move (src, &intermediate);
+	cob_move (COB_CTX_TODO, src, &intermediate);
 }
 
 /* open file using mode according to cob_unix_lf and
@@ -3091,7 +3091,7 @@ cob_accept_exception_status (cob_field *f)
 			exception = 128;
 		}
 	}
-	cob_set_int (f, exception);
+	cob_set_int (COB_CTX_TODO, f, exception);
 }
 
 void
@@ -4416,14 +4416,14 @@ cob_cmp (cob_field *f1, cob_field *f2)
 	if (f2_type == COB_TYPE_ALPHANUMERIC_ALL) {
 		if (f2->size == 1 && f2->data[0] == '0'
 		 && f1_is_numeric) {
-			return cob_cmp_int (f1, 0);
+			return cob_cmp_int (COB_CTX_TODO, f1, 0);
 		}
 		return cob_cmp_all (f1, f2);
 	}
 	if (f1_type == COB_TYPE_ALPHANUMERIC_ALL) {
 		if (f1->size == 1 && f1->data[0] == '0'
 		 && f2_is_numeric) {
-			return -cob_cmp_int (f2, 0);
+			return -cob_cmp_int (COB_CTX_TODO, f2, 0);
 		}
 		return -cob_cmp_all (f2, f1);
 	}
@@ -4459,7 +4459,7 @@ cob_cmp (cob_field *f1, cob_field *f2)
 			attr = *f1->attr;
 			attr.type = COB_TYPE_NUMERIC_DISPLAY;
 			attr.flags &= ~COB_FLAG_HAVE_SIGN;
-			cob_move (f1, &field);
+			cob_move (COB_CTX_TODO, f1, &field);
 			f1 = &field;
 		}
 		if (f2_is_numeric
@@ -4468,7 +4468,7 @@ cob_cmp (cob_field *f1, cob_field *f2)
 			attr = *f2->attr;
 			attr.type = COB_TYPE_NUMERIC_DISPLAY;
 			attr.flags &= ~COB_FLAG_HAVE_SIGN;
-			cob_move (f2, &field);
+			cob_move (COB_CTX_TODO, f2, &field);
 			f2 = &field;
 		}
 
@@ -5724,7 +5724,7 @@ cob_accept_date (cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move (&field, f);
+		cob_move (COB_CTX_TODO, &field, f);
 	} else {
 		cob_move_to_group_as_alnum (&field, f);
 	}
@@ -5746,7 +5746,7 @@ cob_accept_date_yyyymmdd (cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move (&field, f);
+		cob_move (COB_CTX_TODO, &field, f);
 	} else {
 		cob_move_to_group_as_alnum (&field, f);
 	}
@@ -5766,7 +5766,7 @@ cob_accept_day (cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move (&field, f);
+		cob_move (COB_CTX_TODO, &field, f);
 	} else {
 		cob_move_to_group_as_alnum (&field, f);
 	}
@@ -5786,7 +5786,7 @@ cob_accept_day_yyyyddd (cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move (&field, f);
+		cob_move (COB_CTX_TODO, &field, f);
 	} else {
 		cob_move_to_group_as_alnum (&field, f);
 	}
@@ -5821,7 +5821,7 @@ cob_accept_time (cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move (&field, f);
+		cob_move (COB_CTX_TODO, &field, f);
 	} else {
 		cob_move_to_group_as_alnum (&field, f);
 	}
@@ -5844,7 +5844,7 @@ cob_accept_microsecond_time (cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move (&field, f);
+		cob_move (COB_CTX_TODO, &field, f);
 	} else {
 		cob_move_to_group_as_alnum (&field, f);
 	}
@@ -5918,7 +5918,7 @@ cob_display_arg_number (cob_field *f)
 
 	COB_FIELD_INIT (4, (unsigned char *)&n, &attr);
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
-	cob_move (f, &field);
+	cob_move (COB_CTX_TODO, f, &field);
 	if (n < 0 || n >= cob_argc) {
 		cob_set_exception (COB_EC_IMP_DISPLAY);
 		return;
@@ -5936,7 +5936,7 @@ cob_accept_arg_number (cob_field *f)
 
 	COB_FIELD_INIT (sizeof (cob_u32_t), (unsigned char *)&n, &attr);
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
-	cob_move (&field, f);
+	cob_move (COB_CTX_TODO, &field, f);
 }
 
 void
@@ -6191,7 +6191,7 @@ void
 cob_allocate (unsigned char **dataptr, cob_field *retptr,
 	      cob_field *sizefld, cob_field *initialize)
 {
-	const cob_s64_t		fsize = cob_get_llint (sizefld);
+	const cob_s64_t		fsize = cob_get_llint (COB_CTX_TODO, sizefld);
 	void			*mptr = NULL;
 
 	cobglobptr->cob_exception_code = 0;
@@ -6215,7 +6215,7 @@ cob_allocate (unsigned char **dataptr, cob_field *retptr,
 				temp.size = memsize;
 				temp.data = mptr;
 				temp.attr = &const_alpha_attr;
-				cob_move (initialize, &temp);
+				cob_move (COB_CTX_TODO, initialize, &temp);
 			}
 #if 0
 			else {
@@ -7351,7 +7351,7 @@ cob_sys_tolower (void *p1, const int length)
 static cob_s64_t
 get_sleep_nanoseconds (cob_field *nano_seconds) {
 
-	cob_s64_t	nanoseconds = cob_get_llint (nano_seconds);
+	cob_s64_t	nanoseconds = cob_get_llint (COB_CTX_TODO, nano_seconds);
 
 	if (nanoseconds < 0) {
 		return -1;
@@ -7367,7 +7367,7 @@ static cob_s64_t
 get_sleep_nanoseconds_from_seconds (cob_field *decimal_seconds) {
 
 #define MAX_SLEEP_TIME 3600*24*7
-	cob_s64_t	seconds = cob_get_llint (decimal_seconds);
+	cob_s64_t	seconds = cob_get_llint (COB_CTX_TODO, decimal_seconds);
 
 	if (seconds < 0) {
 		return -1;
@@ -7380,7 +7380,7 @@ get_sleep_nanoseconds_from_seconds (cob_field *decimal_seconds) {
 		temp.size = 8;
 		temp.data = (unsigned char *)&nanoseconds;
 		temp.attr = &const_bin_nano_attr;
-		cob_move (decimal_seconds, &temp);
+		cob_move (COB_CTX_TODO, decimal_seconds, &temp);
 		return nanoseconds;
 	}
 }
@@ -7500,7 +7500,7 @@ cob_sys_waitpid (const void *p_id)
 	COB_UNUSED (p_id);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
-		pid = cob_get_int (COB_MODULE_PTR->cob_procedure_params[0]);
+		pid = cob_get_int (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[0]);
 		if (pid == cob_sys_getpid ()) {
 			status = 0 - EINVAL;
 			return status;
@@ -7526,7 +7526,7 @@ cob_sys_waitpid (const void *p_id)
 
 	status = 0;
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
-		pid = cob_get_int (COB_MODULE_PTR->cob_procedure_params[0]);
+		pid = cob_get_int (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[0]);
 		if (pid == cob_sys_getpid ()) {
 			status = 0 - ERROR_INVALID_DATA;
 			return status;
@@ -7596,7 +7596,7 @@ cob_sys_return_args (void *data)
 	COB_CHK_PARMS (C$NARG, 1);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
-		cob_set_int (COB_MODULE_PTR->cob_procedure_params[0],
+		cob_set_int (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[0],
 			COB_MODULE_PTR->module_num_params);
 	}
 	return 0;
@@ -7638,7 +7638,7 @@ cob_sys_parameter_size (void *data)
 	COB_CHK_PARMS (C$PARAMSIZE, 1);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
-		n = cob_get_int (COB_MODULE_PTR->cob_procedure_params[0]);
+		n = cob_get_int (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[0]);
 		if (n > 0 && n <= COB_MODULE_PTR->module_num_params) {
 			n--;
 			if (COB_MODULE_PTR->next
@@ -7707,7 +7707,7 @@ cob_sys_getopt_long_long (void *so, void *lo, void *idx, const int long_only, vo
 		cob_runtime_error (_("call to CBL_GC_GETOPT with missing longind"));
 		cob_hard_failure ();
 	}
-	longind = cob_get_int (COB_MODULE_PTR->cob_procedure_params[2]);
+	longind = cob_get_int (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[2]);
 
 	/* add 0-termination to strings */
 	shortoptions = cob_malloc (so_size + 1U);
@@ -7786,7 +7786,7 @@ cob_sys_getopt_long_long (void *so, void *lo, void *idx, const int long_only, vo
 	}
 #endif
 
-	cob_set_int (COB_MODULE_PTR->cob_procedure_params[2], longind);
+	cob_set_int (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[2], longind);
 	memcpy (return_char, &return_value, 4);
 
 	if (cob_optarg != NULL) {
@@ -11385,7 +11385,7 @@ cob_sym_get_occurs (cob_symbol *sym, int k)
 	int			occmax;
 	if (sym[k].has_depend) {
 		cob_sym_get_field (&d0, sym, sym[k].depending);
-		occmax = cob_get_int (&d0);
+		occmax = cob_get_int (COB_CTX_TODO, &d0);
 		if (occmax > sym[k].occurs)
 			occmax = sym[k].occurs;
 	} else {

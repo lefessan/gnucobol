@@ -1,6 +1,36 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* cobcapi.c (cob_get_dbl_param, cob_put_dbl_param, cob_get_s64_param,
+	  cob_get_u64_param, cob_get_picx_param, cob_put_field_str, ...),
+	  common.c (cob_move_intermediate, cob_move_to_group_as_alnum,
+	  cob_accept_exception_status, cob_cmp, cob_accept_date,
+	  cob_accept_date_yyyymmdd, ...), common.h (cob_alloc_move,
+	  cob_put_pointer, cob_logical_right_c, cob_div_quotient,
+	  cob_div_remainder, cob_cmp_numdisp, ...), fextfh.c (cob_extfh_start,
+	  cob_extfh_read, cob_extfh_read_next, cob_extfh_write,
+	  cob_extfh_rewrite, cob_extfh_delete, ...), fileio.c (cob_put_qbl,
+	  cob_set_file_format, file_linage_check, cob_linage_write_opt,
+	  cob_fd_file_open, cob_file_open, ...), fisam.c (get_isreclen),
+	  fsqlxfd.c (eval_expr, cob_index_to_xfd, cob_file_to_xfd,
+	  cob_xfd_to_file), intrinsic.c (cob_mod_or_rem, calc_mean_of_args,
+	  calc_variance_of_args, get_interval_and_current_year_from_args,
+	  valid_decimal_time, seconds_from_formatted_time, ...), mlio.c
+	  (set_xml_code, get_xml_code, set_json_code, get_num, xml_generate,
+	  xml_parse, ...), move.c (indirect_move, cob_move_all, cob_move,
+	  cob_alloc_move, cob_set_int, cob_get_int, ...), numeric.c
+	  (cob_decimal_print, cob_decimal_set_packed, cob_decimal_get_packed,
+	  cob_set_packed_int, cob_decimal_get_display, cob_decimal_get_field,
+	  ...), reportio.c (cob_field_init, cob_field_dup, cob_add_fields,
+	  saveLineCounter, copy_line_fields), screenio.c (handle_status,
+	  adjust_attr_from_color_field, cob_screen_attr,
+	  pass_cursor_to_program, get_line_and_col_from_field,
+	  get_prev_screen_item, ...), strings.c (cob_str_memcpy,
+	  inspect_common_no_replace, cob_inspect_characters_intern,
+	  cob_string_init_intern, cob_string_finish_intern,
+	  cob_unstring_init_intern, ...), termio.c (display_numeric,
+	  pretty_display_numeric, cob_accept): MOVE, arithmetic and C-API data
+	  functions take the context
 	* common.h (cob_bcd_cmp_zero), strings.c: INSPECT / STRING / UNSTRING
 	  functions take the context
 	* coblocal.h, common.c (cob_exit_common, cob_get_global_ptr,

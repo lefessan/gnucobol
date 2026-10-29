@@ -169,7 +169,7 @@ static int		cob_not_finite = 0;
 static void cob_set_packed_u64 (cob_field * f, const cob_u64_t val, const int sign);
 
 void
-cob_gmp_free (void * ptr) {
+cob_gmp_free (cob_context *ctx, void * ptr) {
 /* mpir/gmp free functions */
 #ifdef HAVE_MP_GET_MEMORY_FUNCTIONS
 	void (*freefunc)(void *, size_t);
@@ -267,13 +267,13 @@ cob_decimal_init2 (cob_decimal *d, const cob_uli_t initial_num_bits)
 }
 
 void
-cob_decimal_init (cob_decimal *d)
+cob_decimal_init (cob_context *ctx, cob_decimal *d)
 {
 	cob_decimal_init2 (d, COB_MPZ_DEF);
 }
 
 void
-cob_decimal_clear (cob_decimal *d)
+cob_decimal_clear (cob_context *ctx, cob_decimal *d)
 {
 	if (d) {
 		mpz_clear (d->value);
@@ -283,7 +283,7 @@ cob_decimal_clear (cob_decimal *d)
 
 /** setting a decimal field from an unsigned binary long int */
 void
-cob_decimal_set_ullint (cob_decimal *d, const cob_u64_t n)
+cob_decimal_set_ullint (cob_context *ctx, cob_decimal *d, const cob_u64_t n)
 {
 #ifndef COB_32_BIT_LONG
 	mpz_set_ui (d->value, (cob_uli_t)n);
@@ -297,7 +297,7 @@ cob_decimal_set_ullint (cob_decimal *d, const cob_u64_t n)
 
 /** setting a decimal field from a signed binary long int */
 void
-cob_decimal_set_llint (cob_decimal *d, const cob_s64_t n)
+cob_decimal_set_llint (cob_context *ctx, cob_decimal *d, const cob_s64_t n)
 {
 #ifndef COB_32_BIT_LONG
 	mpz_set_si (d->value, (cob_sli_t)n);
@@ -364,7 +364,7 @@ cob_decimal_print (cob_decimal *d, FILE *fp)
 	} else {
 		fprintf (fp, "%sE%d", mza, -scale);
 	}
-	cob_gmp_free (mza);
+	cob_gmp_free (COB_CTX_TODO, mza);
 }
 
 #define MAX_LLI_DIGITS_PLUS_1 20
@@ -1038,7 +1038,7 @@ cob_add_packed (cob_field *f, int val, const int opt)
 #endif
 
 void
-cob_set_packed_zero (cob_field *f)
+cob_set_packed_zero (cob_context *ctx, cob_field *f)
 {
 	memset (f->data, 0, f->size);
 	if (COB_FIELD_NO_SIGN_NIBBLE (f)) {
@@ -1105,7 +1105,7 @@ cob_decimal_set_packed (cob_decimal *d, cob_field *f)
 #ifndef COB_32_BIT_LONG
 		mpz_set_ui (d->value, (cob_uli_t)val);
 #else
-		cob_decimal_set_ullint (d, val);
+		cob_decimal_set_ullint (COB_CTX_TODO, d, val);
 #endif
 
 	} else {
@@ -1175,7 +1175,7 @@ cob_decimal_get_packed (cob_decimal *d, cob_field *f, const int opt)
 		/* negative, switch */
 		mpz_abs (d->value, d->value);
 	} else /* sign == 0 */ {
-		cob_set_packed_zero (f);
+		cob_set_packed_zero (COB_CTX_TODO, f);
 		return 0;
 	}
 
@@ -1337,7 +1337,7 @@ cob_set_packed_u64 (cob_field *f, const cob_u64_t val, const int sign)
 /* set the specified BCD field 'f' to the given integer 'val';
    note: the scale is ignored so has to be aligned up-front */
 void
-cob_set_packed_int (cob_field *f, const int val)
+cob_set_packed_int (cob_context *ctx, cob_field *f, const int val)
 {
 	if (val > 0) {
 		/* positive (most likely) */
@@ -1346,7 +1346,7 @@ cob_set_packed_int (cob_field *f, const int val)
 		/* negative */
 		cob_set_packed_u64 (f, (cob_u64_t)-val, -1);
 	} else /* val == 0 */ {
-		cob_set_packed_zero (f);
+		cob_set_packed_zero (ctx, f);
 	}
 	return;
 }
@@ -1494,7 +1494,7 @@ cob_decimal_get_display (cob_decimal *d, cob_field *f, const int opt)
 				/* If the statement has ON SIZE ERROR, then throw
 				   an exception, leaving the target unchanged */
 				if (opt & COB_STORE_KEEP_ON_OVERFLOW) {
-					cob_gmp_free (p);
+					cob_gmp_free (COB_CTX_TODO, p);
 					return cobglobptr->cob_exception_code;
 				}
 			}
@@ -1507,7 +1507,7 @@ cob_decimal_get_display (cob_decimal *d, cob_field *f, const int opt)
 			memcpy (data + diff, p, size);
 		}
 
-		cob_gmp_free (p);
+		cob_gmp_free (COB_CTX_TODO, p);
 		COB_PUT_SIGN (f, sign);
 		return 0;
 	}
@@ -1789,7 +1789,7 @@ overflow:
 /* General field -> decimal */
 
 void
-cob_decimal_set_field (cob_decimal *dec, cob_field *field)
+cob_decimal_set_field (cob_context *ctx, cob_decimal *dec, cob_field *field)
 {
 	switch (COB_FIELD_TYPE (field)) {
 	case COB_TYPE_NUMERIC_BINARY:
@@ -2018,7 +2018,7 @@ cob_decimal_do_round (cob_decimal *d, cob_field *f, const int opt)
 }
 
 int
-cob_decimal_get_field (cob_decimal *d, cob_field *f, const int opt)
+cob_decimal_get_field (cob_context *ctx, cob_decimal *d, cob_field *f, const int opt)
 {
 	if (d->scale == COB_DECIMAL_NAN) {
 		if (!cobglobptr->cob_exception_code
@@ -2135,7 +2135,7 @@ cob_decimal_get_field (cob_decimal *d, cob_field *f, const int opt)
 			if (cob_decimal_get_display (d, &temp, opt) != 0) {
 				return cobglobptr->cob_exception_code;
 			}
-			cob_move (&temp, f);
+			cob_move (ctx, &temp, f);
 			return 0;
 		}
 	}
@@ -2144,7 +2144,7 @@ cob_decimal_get_field (cob_decimal *d, cob_field *f, const int opt)
 /* Decimal arithmetic */
 
 void
-cob_decimal_add (cob_decimal *d1, cob_decimal *d2)
+cob_decimal_add (cob_context *ctx, cob_decimal *d1, cob_decimal *d2)
 {
 	DECIMAL_CHECK (d1, d2);
 	if (d1->scale != d2->scale) {
@@ -2166,7 +2166,7 @@ cob_decimal_add (cob_decimal *d1, cob_decimal *d2)
 }
 
 void
-cob_decimal_sub (cob_decimal *d1, cob_decimal *d2)
+cob_decimal_sub (cob_context *ctx, cob_decimal *d1, cob_decimal *d2)
 {
 	DECIMAL_CHECK (d1, d2);
 	if (d1->scale != d2->scale) {
@@ -2188,14 +2188,14 @@ cob_decimal_sub (cob_decimal *d1, cob_decimal *d2)
    post 3.x decimal patch, not used with 3.2 any more
    but possibly from old generated modules */
 void
-cob_decimal_set (cob_decimal *dst, cob_decimal *src)
+cob_decimal_set (cob_context *ctx, cob_decimal *dst, cob_decimal *src)
 {
 	mpz_set (dst->value, src->value);
 	dst->scale = src->scale;
 }
 
 void
-cob_decimal_mul (cob_decimal *d1, cob_decimal *d2)
+cob_decimal_mul (cob_context *ctx, cob_decimal *d1, cob_decimal *d2)
 {
 	DECIMAL_CHECK (d1, d2);
 	d1->scale += d2->scale;
@@ -2203,7 +2203,7 @@ cob_decimal_mul (cob_decimal *d1, cob_decimal *d2)
 }
 
 void
-cob_decimal_div (cob_decimal *d1, cob_decimal *d2)
+cob_decimal_div (cob_context *ctx, cob_decimal *d1, cob_decimal *d2)
 {
 	DECIMAL_CHECK (d1, d2);
 
@@ -2235,7 +2235,7 @@ cob_decimal_div (cob_decimal *d1, cob_decimal *d2)
 }
 
 int
-cob_decimal_cmp (cob_decimal *d1, cob_decimal *d2)
+cob_decimal_cmp (cob_context *ctx, cob_decimal *d1, cob_decimal *d2)
 {
 	if (d1->scale != d2->scale) {
 		mpz_set (cob_t1.value, d1->value);
@@ -2252,7 +2252,7 @@ cob_decimal_cmp (cob_decimal *d1, cob_decimal *d2)
  * Shift 'd1' to have same scale as 'd2'
  */
 void
-cob_decimal_align (cob_decimal *d1, const int scale)
+cob_decimal_align (cob_context *ctx, cob_decimal *d1, const int scale)
 {
 	if (d1->scale > scale) {
 		shift_decimal (d1, scale - d1->scale);
@@ -2294,7 +2294,7 @@ cob_addsub_optimized (cob_field *f1, cob_field *f2,
 					cob_move_display_to_packed (f2, &field);
 				} else {
 					/* wrapper handling P and other things */
-					cob_move (f2, &field);
+					cob_move (COB_CTX_TODO, f2, &field);
 				}
 				cob_add_bcd (f1, &field, f1, opt, stmt);
 				return 1;
@@ -2334,9 +2334,9 @@ cob_addsub_optimized (cob_field *f1, cob_field *f2,
 						cob_move_display_to_packed (f2, &field2);
 					} else {
 						/* wrapper handling P and other things */
-						cob_move (f2, &field2);
+						cob_move (COB_CTX_TODO, f2, &field2);
 					}
-					cob_move (f2, &field2);
+					cob_move (COB_CTX_TODO, f2, &field2);
 					cob_add_bcd (&field1, &field2, &field1, opt, stmt);
 					cob_move_packed_to_display (&field1, f1);
 					return 1;
@@ -2351,49 +2351,49 @@ cob_addsub_optimized (cob_field *f1, cob_field *f2,
 }
 
 void
-cob_add (cob_field *f1, cob_field *f2, const int opt)
+cob_add (cob_context *ctx, cob_field *f1, cob_field *f2, const int opt)
 {
 	if (cob_addsub_optimized (f1, f2, opt, STMT_ADD)) {
 		return;	/* optimized ADD done, get out */
 	}
-	cob_decimal_set_field (&cob_d1, f1);
-	cob_decimal_set_field (&cob_d2, f2);
-	cob_decimal_add (&cob_d1, &cob_d2);
-	(void)cob_decimal_get_field (&cob_d1, f1, opt);
+	cob_decimal_set_field (ctx, &cob_d1, f1);
+	cob_decimal_set_field (ctx, &cob_d2, f2);
+	cob_decimal_add (ctx, &cob_d1, &cob_d2);
+	(void)cob_decimal_get_field (ctx, &cob_d1, f1, opt);
 }
 
 void
-cob_sub (cob_field *f1, cob_field *f2, const int opt)
+cob_sub (cob_context *ctx, cob_field *f1, cob_field *f2, const int opt)
 {
 	if (cob_addsub_optimized (f1, f2, opt, STMT_SUBTRACT)) {
 		return;	/* optimized SUBTRACT done, get out */
 	}
-	cob_decimal_set_field (&cob_d1, f1);
-	cob_decimal_set_field (&cob_d2, f2);
-	cob_decimal_sub (&cob_d1, &cob_d2);
-	(void)cob_decimal_get_field (&cob_d1, f1, opt);
+	cob_decimal_set_field (ctx, &cob_d1, f1);
+	cob_decimal_set_field (ctx, &cob_d2, f2);
+	cob_decimal_sub (ctx, &cob_d1, &cob_d2);
+	(void)cob_decimal_get_field (ctx, &cob_d1, f1, opt);
 }
 
 void
-cob_mul (cob_field *f1, cob_field *f2, const int opt)
+cob_mul (cob_context *ctx, cob_field *f1, cob_field *f2, const int opt)
 {
-	cob_decimal_set_field (&cob_d1, f1);
-	cob_decimal_set_field (&cob_d2, f2);
-	cob_decimal_mul (&cob_d1, &cob_d2);
-	(void)cob_decimal_get_field (&cob_d1, f1, opt);
+	cob_decimal_set_field (ctx, &cob_d1, f1);
+	cob_decimal_set_field (ctx, &cob_d2, f2);
+	cob_decimal_mul (ctx, &cob_d1, &cob_d2);
+	(void)cob_decimal_get_field (ctx, &cob_d1, f1, opt);
 }
 
 void
-cob_div (cob_field *f1, cob_field *f2, const int opt)
+cob_div (cob_context *ctx, cob_field *f1, cob_field *f2, const int opt)
 {
-	cob_decimal_set_field (&cob_d1, f1);
-	cob_decimal_set_field (&cob_d2, f2);
-	cob_decimal_div (&cob_d1, &cob_d2);
-	(void)cob_decimal_get_field (&cob_d1, f1, opt);
+	cob_decimal_set_field (ctx, &cob_d1, f1);
+	cob_decimal_set_field (ctx, &cob_d2, f2);
+	cob_decimal_div (ctx, &cob_d1, &cob_d2);
+	(void)cob_decimal_get_field (ctx, &cob_d1, f1, opt);
 }
 
 void
-cob_div_quotient (cob_field *dividend, cob_field *divisor,
+cob_div_quotient (cob_context *ctx, cob_field *dividend, cob_field *divisor,
 		  cob_field *quotient, const int opt)
 {
 	/* Note that cob_div_quotient and cob_div_remainder must remain */
@@ -2401,13 +2401,13 @@ cob_div_quotient (cob_field *dividend, cob_field *divisor,
 	/* evaluated before the remainder item is evaluated */
 	/* e.g. DIVIDE A BY B GIVING Z REMAINDER FLD (Z). */
 
-	cob_decimal_set_field (&cob_d1, dividend);
-	cob_decimal_set_field (&cob_d2, divisor);
+	cob_decimal_set_field (ctx, &cob_d1, dividend);
+	cob_decimal_set_field (ctx, &cob_d2, divisor);
 	mpz_set (cob_d_remainder.value, cob_d1.value);
 	cob_d_remainder.scale = cob_d1.scale;
 
 	/* Compute quotient */
-	cob_decimal_div (&cob_d1, &cob_d2);
+	cob_decimal_div (ctx, &cob_d1, &cob_d2);
 	/* Check divide by zero - Exception is set in cob_decimal_div */
 	if (cob_d1.scale == COB_DECIMAL_NAN) {
 		/* Forces an early return from cob_div_remainder */
@@ -2418,7 +2418,7 @@ cob_div_quotient (cob_field *dividend, cob_field *divisor,
 	/* Set quotient */
 	mpz_set (cob_d3.value, cob_d1.value);
 	cob_d3.scale = cob_d1.scale;
-	(void)cob_decimal_get_field (&cob_d1, quotient, opt);
+	(void)cob_decimal_get_field (ctx, &cob_d1, quotient, opt);
 
 	/* Truncate digits from the quotient */
 	{
@@ -2433,14 +2433,14 @@ cob_div_quotient (cob_field *dividend, cob_field *divisor,
 	}
 
 	/* Compute remainder */
-	cob_decimal_mul (&cob_d3, &cob_d2);
-	cob_decimal_sub (&cob_d_remainder, &cob_d3);
+	cob_decimal_mul (ctx, &cob_d3, &cob_d2);
+	cob_decimal_sub (ctx, &cob_d_remainder, &cob_d3);
 }
 
 void
-cob_div_remainder (cob_field *fld_remainder, const int opt)
+cob_div_remainder (cob_context *ctx, cob_field *fld_remainder, const int opt)
 {
-	(void)cob_decimal_get_field (&cob_d_remainder, fld_remainder, opt);
+	(void)cob_decimal_get_field (ctx, &cob_d_remainder, fld_remainder, opt);
 }
 
 /* internal MOVE handling by converting 'src' to cob_decimal,
@@ -2451,8 +2451,8 @@ cob_div_remainder (cob_field *fld_remainder, const int opt)
 void
 cob_decimal_setget_fld (cob_field *src, cob_field *dst, const int opt)
 {
-	cob_decimal_set_field (&cob_d1, src);
-	(void)cob_decimal_get_field (&cob_d1, dst, opt | COB_STORE_NO_SIZE_ERROR);
+	cob_decimal_set_field (COB_CTX_TODO, &cob_d1, src);
+	(void)cob_decimal_get_field (COB_CTX_TODO, &cob_d1, dst, opt | COB_STORE_NO_SIZE_ERROR);
 }
 
 /* shift the complete filled buffer one nibble left
@@ -2577,7 +2577,7 @@ cob_shift_right_nibble (unsigned char *ptr_buff, unsigned char *ptr_start_data_b
 /* optimized MOVE between any BCD fields, no matter their attributes;
    TODO: add handling of negative scales to cob_move_bcd */
 void
-cob_move_bcd (cob_field *f1, cob_field *f2)
+cob_move_bcd (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	/************************************************************/
 	/*                                                          */
@@ -3270,7 +3270,7 @@ cob_add_bcd (cob_field *fdst,
 		/* special case (as we have that information already) - both data are
 		   identical, only sign is the reverse -> the result has to be zero */
 		/* if (compare_result == 0) */ {
-			cob_set_packed_zero (fdst);
+			cob_set_packed_zero (COB_CTX_TODO, fdst);
 			return 0;
 		}
 
@@ -3546,7 +3546,7 @@ cob_display_add_int (cob_field *f, int n, const int opt)
 #endif	/* Buggy */
 
 int
-cob_add_int (cob_field *f, const int n, const int opt)
+cob_add_int (cob_context *ctx, cob_field *f, const int n, const int opt)
 {
 	const int type = COB_FIELD_TYPE (f);
 	if (n == 0) {
@@ -3659,10 +3659,10 @@ cob_add_int (cob_field *f, const int n, const int opt)
 	if (type >= COB_TYPE_NUMERIC_FLOAT
 	 && type <= COB_TYPE_NUMERIC_FP_BIN128) {
 		mpz_set_si (cob_d2.value, (cob_sli_t) n);
-		cob_decimal_set_field (&cob_d1, f);
+		cob_decimal_set_field (ctx, &cob_d1, f);
 		cob_d2.scale = 0;
-		cob_decimal_add (&cob_d1, &cob_d2);
-		return cob_decimal_get_field (&cob_d1, f, opt);
+		cob_decimal_add (ctx, &cob_d1, &cob_d2);
+		return cob_decimal_get_field (ctx, &cob_d1, f, opt);
 	}
 	{
 		int	scale = COB_FIELD_SCALE (f);
@@ -3683,7 +3683,7 @@ cob_add_int (cob_field *f, const int n, const int opt)
 			}
 			/* not used anymore, but logically: scale = 0 here */
 		}
-		cob_decimal_set_field (&cob_d1, f);
+		cob_decimal_set_field (ctx, &cob_d1, f);
 		mpz_set_si (cob_d2.value, (cob_sli_t)val);
 		if (cob_d1.scale > 0) {
 			cob_mul_by_pow_10 (cob_d2.value, cob_d1.scale);
@@ -3694,21 +3694,21 @@ cob_add_int (cob_field *f, const int n, const int opt)
 #endif
 		}
 		mpz_add (cob_d1.value, cob_d1.value, cob_d2.value);
-		return cob_decimal_get_field (&cob_d1, f, opt);
+		return cob_decimal_get_field (ctx, &cob_d1, f, opt);
 	}
 }
 
 int
-cob_sub_int (cob_field *f, const int n, const int opt)
+cob_sub_int (cob_context *ctx, cob_field *f, const int n, const int opt)
 {
-	return cob_add_int (f, -n, opt);
+	return cob_add_int (ctx, f, -n, opt);
 }
 
 int
-cob_cmp_int (cob_field *f1, const int n)
+cob_cmp_int (cob_context *ctx, cob_field *f1, const int n)
 {
 	int sign;
-	cob_decimal_set_field (&cob_d1, f1);
+	cob_decimal_set_field (ctx, &cob_d1, f1);
 	sign = mpz_sgn (cob_d1.value);
 	if (sign == 0) {
 		return -n;
@@ -3733,11 +3733,11 @@ cob_cmp_int (cob_field *f1, const int n)
 }
 
 int
-cob_cmp_uint (cob_field *f1, const unsigned int n)
+cob_cmp_uint (cob_context *ctx, cob_field *f1, const unsigned int n)
 {
 	int sign;	/* no const as we need the decimal set before */
 
-	cob_decimal_set_field (&cob_d1, f1);
+	cob_decimal_set_field (ctx, &cob_d1, f1);
 	sign = mpz_sgn (cob_d1.value);
 	if (sign == 0) {
 		if (n > INT_MAX) return INT_MIN;
@@ -3757,11 +3757,11 @@ cob_cmp_uint (cob_field *f1, const unsigned int n)
 }
 
 int
-cob_cmp_llint (cob_field *f1, const cob_s64_t n)
+cob_cmp_llint (cob_context *ctx, cob_field *f1, const cob_s64_t n)
 {
 	int sign;	/* no const as we need the decimal set before */
 
-	cob_decimal_set_field (&cob_d1, f1);
+	cob_decimal_set_field (ctx, &cob_d1, f1);
 	sign = mpz_sgn (cob_d1.value);
 	if (sign == 0) {
 		if (n > INT_MAX) return INT_MIN;
@@ -3813,7 +3813,7 @@ cob_cmp_llint (cob_field *f1, const cob_s64_t n)
 #define FLOAT_EQ(x,y,t) (fabs(((x-y)/x)) < t)
 
 int
-cob_cmp_float (cob_field *f1, cob_field *f2)
+cob_cmp_float (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	double	d1,d2;
 	const int f1_type = COB_FIELD_TYPE (f1);
@@ -3829,7 +3829,7 @@ cob_cmp_float (cob_field *f1, cob_field *f2)
 		memcpy (&ld ,f1->data, sizeof (long double));
 		d1 = (double) ld; /* TODO: real compare, likely with mpfr */
 	} else {
-		cob_decimal_set_field (&cob_d1, f1);
+		cob_decimal_set_field (ctx, &cob_d1, f1);
 		d1 = cob_decimal_get_double (&cob_d1);
 	}
 	if (f2_type == COB_TYPE_NUMERIC_FLOAT) {
@@ -3843,7 +3843,7 @@ cob_cmp_float (cob_field *f1, cob_field *f2)
 		memcpy (&ld, f2->data, sizeof (long double));
 		d2 = (double) ld; /* TODO: real compare, likely with mpfr */
 	} else {
-		cob_decimal_set_field (&cob_d1, f2);
+		cob_decimal_set_field (ctx, &cob_d1, f2);
 		d2 = cob_decimal_get_double (&cob_d1);
 	}
 	if (d1 == d2) {
@@ -4086,9 +4086,9 @@ int
 cob_bcd_cmp (cob_field *f1, cob_field *f2)
 {
 	/* Fallback: internal decimal compare (most expensive) */
-	cob_decimal_set_field (&cob_d1, f1);
-	cob_decimal_set_field (&cob_d2, f2);
-	return cob_decimal_cmp (&cob_d1, &cob_d2);
+	cob_decimal_set_field (COB_CTX_TODO, &cob_d1, f1);
+	cob_decimal_set_field (COB_CTX_TODO, &cob_d2, f2);
+	return cob_decimal_cmp (COB_CTX_TODO, &cob_d1, &cob_d2);
 }
 #endif
 
@@ -4286,9 +4286,9 @@ int
 cob_numeric_display_cmp (cob_field *f1, cob_field *f2)
 {
 	/* Fallback: internal decimal compare (most expensive) */
-	cob_decimal_set_field (&cob_d1, f1);
-	cob_decimal_set_field (&cob_d2, f2);
-	return cob_decimal_cmp (&cob_d1, &cob_d2);
+	cob_decimal_set_field (COB_CTX_TODO, &cob_d1, f1);
+	cob_decimal_set_field (COB_CTX_TODO, &cob_d2, f2);
+	return cob_decimal_cmp (COB_CTX_TODO, &cob_d1, &cob_d2);
 }
 #endif
 
@@ -4369,7 +4369,7 @@ cob_numeric_cmp (cob_field *f1, cob_field *f2)
 	   && f1_type <= COB_TYPE_NUMERIC_L_DOUBLE)
 	 ||  (f2_type >= COB_TYPE_NUMERIC_FLOAT
 	   && f2_type <= COB_TYPE_NUMERIC_L_DOUBLE)) {
-		return cob_cmp_float (f1, f2);
+		return cob_cmp_float (COB_CTX_TODO, f1, f2);
 	}
 
 	/* otherwise - preferably compare as integers */
@@ -4378,8 +4378,8 @@ cob_numeric_cmp (cob_field *f1, cob_field *f2)
 	 && COB_FIELD_DIGITS (f2) < 19) {
 		if (COB_FIELD_SCALE (f1) == 0) {
 			/* no scale, so get the data out directly */
-			const cob_s64_t	f1_num = cob_get_llint (f1);
-			const cob_s64_t	f2_num = cob_get_llint (f2);
+			const cob_s64_t	f1_num = cob_get_llint (COB_CTX_TODO, f1);
+			const cob_s64_t	f2_num = cob_get_llint (COB_CTX_TODO, f2);
 			return (f1_num < f2_num) ? -1 : (f1_num > f2_num);
 		} else {
 			/* handle those fields as if they would have no scale */
@@ -4391,17 +4391,17 @@ cob_numeric_cmp (cob_field *f1, cob_field *f2)
 			COB_FIELD_INIT_F (c1, f1->size, f1->data, &ca1);
 			COB_FIELD_INIT_F (c2, f2->size, f2->data, &ca2);
 			{
-				const cob_s64_t	f1_num = cob_get_llint (&c1);
-				const cob_s64_t	f2_num = cob_get_llint (&c2);
+				const cob_s64_t	f1_num = cob_get_llint (COB_CTX_TODO, &c1);
+				const cob_s64_t	f2_num = cob_get_llint (COB_CTX_TODO, &c2);
 				return (f1_num < f2_num) ? -1 : (f1_num > f2_num);
 			}
 		}
 	}
 
 	/* Fallback: internal decimal compare (most expensive) */
-	cob_decimal_set_field (&cob_d1, f1);
-	cob_decimal_set_field (&cob_d2, f2);
-	return cob_decimal_cmp (&cob_d1, &cob_d2);
+	cob_decimal_set_field (COB_CTX_TODO, &cob_d1, f1);
+	cob_decimal_set_field (COB_CTX_TODO, &cob_d2, f2);
+	return cob_decimal_cmp (COB_CTX_TODO, &cob_d1, &cob_d2);
 }
 
 static int
@@ -4472,7 +4472,7 @@ cmp_packed_intern (cob_field *f, cob_u64_t n, const int both_are_negative)
 }
 
 int
-cob_cmp_packed (cob_field *f, const cob_s64_t val)
+cob_cmp_packed (cob_context *ctx, cob_field *f, const cob_s64_t val)
 {
 	if (COB_FIELD_DIGITS (f) >= 19) {
 		const int	is_negative = packed_is_negative (f);
@@ -4493,7 +4493,7 @@ cob_cmp_packed (cob_field *f, const cob_s64_t val)
 			return cmp_packed_intern (f, (cob_u64_t)val, 0);
 		}
 	} else {
-		const cob_s64_t	n = cob_get_llint (f);
+		const cob_s64_t	n = cob_get_llint (ctx, f);
 		return (n < val) ? -1 : (n > val);
 	}
 }
@@ -4606,7 +4606,7 @@ cob_get_long_ebcdic_sign (const unsigned char *p, int *val)
 }
 
 int
-cob_cmp_numdisp (const unsigned char *data, const size_t size,
+cob_cmp_numdisp (cob_context *ctx, const unsigned char *data, const size_t size,
 		 const cob_s64_t n, const cob_u32_t has_sign)
 {
 	register const unsigned char	*p = data;
@@ -4662,7 +4662,7 @@ cob_cmp_numdisp (const unsigned char *data, const size_t size,
    to initialized GMP storage) - just getting the pointer to
    one of the pre-allocated ones */
 void
-cob_decimal_alloc (const cob_u32_t params, ...)
+cob_decimal_alloc (cob_context *ctx, const cob_u32_t params, ...)
 {
 	cob_decimal	**dec;
 	cob_u32_t	i;
@@ -4680,7 +4680,7 @@ cob_decimal_alloc (const cob_u32_t params, ...)
    because of necessary GMP initialization storage;
    caller must release the decimals with a later call to cob_decial_pop */
 void
-cob_decimal_push (const cob_u32_t params, ...)
+cob_decimal_push (cob_context *ctx, const cob_u32_t params, ...)
 {
 	cob_decimal	**dec;
 	cob_u32_t	i;
@@ -4690,14 +4690,14 @@ cob_decimal_push (const cob_u32_t params, ...)
 	for (i = 0; i < params; ++i) {
 		dec = va_arg (args, cob_decimal **);
 		*dec = cob_malloc (sizeof(cob_decimal));
-		cob_decimal_init (*dec);
+		cob_decimal_init (ctx, *dec);
 	}
 	va_end (args);
 }
 
 /* release temporary decimals, allocated with cob_decimal_push */
 void
-cob_decimal_pop (const cob_u32_t params, ...)
+cob_decimal_pop (cob_context *ctx, const cob_u32_t params, ...)
 {
 	cob_decimal	*dec;
 	cob_u32_t	i;
@@ -4821,88 +4821,88 @@ cob_init_numeric (cob_global *lptr)
 	mpz_init2 (cob_mpzt2, COB_MPZ_DEF);
 	mpz_init2 (cob_mexp, COB_MPZ_DEF);
 
-	cob_decimal_init (&cob_d1);
-	cob_decimal_init (&cob_d2);
-	cob_decimal_init (&cob_d3);
-	cob_decimal_init (&cob_d_remainder);
-	cob_decimal_init (&cob_t1);
-	cob_decimal_init (&cob_t2);
+	cob_decimal_init (COB_CTX_TODO, &cob_d1);
+	cob_decimal_init (COB_CTX_TODO, &cob_d2);
+	cob_decimal_init (COB_CTX_TODO, &cob_d3);
+	cob_decimal_init (COB_CTX_TODO, &cob_d_remainder);
+	cob_decimal_init (COB_CTX_TODO, &cob_t1);
+	cob_decimal_init (COB_CTX_TODO, &cob_t2);
 
 	cob_decimal_base = cob_malloc (COB_MAX_DEC_STRUCT * sizeof(cob_decimal));
 	d1 = cob_decimal_base;
 	for (i = 0; i < COB_MAX_DEC_STRUCT; d1++, i++) {
-		cob_decimal_init (d1);
+		cob_decimal_init (COB_CTX_TODO, d1);
 	}
 }
 
 /* BIT-WISE functions */
 void
-cob_logical_not (cob_decimal *d0, cob_decimal *d1)
+cob_logical_not (cob_context *ctx, cob_decimal *d0, cob_decimal *d1)
 {
 	const cob_u64_t	u1 = mpz_get_ui (d1->value);
 	const cob_u64_t	ur = ~ u1;
-	cob_decimal_set_ullint (d0, ur);
+	cob_decimal_set_ullint (ctx, d0, ur);
 }
 
 void
-cob_logical_or (cob_decimal *d0, cob_decimal *d1)
+cob_logical_or (cob_context *ctx, cob_decimal *d0, cob_decimal *d1)
 {
 	const cob_u64_t	u0 = mpz_get_ui (d0->value);
 	const cob_u64_t	u1 = mpz_get_ui (d1->value);
 	const cob_u64_t	ur = u0 | u1;
-	cob_decimal_set_ullint (d0, ur);
+	cob_decimal_set_ullint (ctx, d0, ur);
 }
 
 void
-cob_logical_and (cob_decimal *d0, cob_decimal *d1)
+cob_logical_and (cob_context *ctx, cob_decimal *d0, cob_decimal *d1)
 {
 	const cob_u64_t	u0 = mpz_get_ui (d0->value);
 	const cob_u64_t	u1 = mpz_get_ui (d1->value);
 	const cob_u64_t	ur = u0 & u1;
-	cob_decimal_set_ullint (d0, ur);
+	cob_decimal_set_ullint (ctx, d0, ur);
 }
 
 void
-cob_logical_xor (cob_decimal *d0, cob_decimal *d1)
+cob_logical_xor (cob_context *ctx, cob_decimal *d0, cob_decimal *d1)
 {
 	const cob_u64_t	u0 = mpz_get_ui (d0->value);
 	const cob_u64_t	u1 = mpz_get_ui (d1->value);
 	const cob_u64_t	ur = u0 ^ u1;
-	cob_decimal_set_ullint (d0, ur);
+	cob_decimal_set_ullint (ctx, d0, ur);
 }
 
 void
-cob_logical_left (cob_decimal *d0, cob_decimal *d1)
+cob_logical_left (cob_context *ctx, cob_decimal *d0, cob_decimal *d1)
 {
 	const cob_u64_t	u0 = mpz_get_ui (d0->value);
 	const cob_u64_t	u1 = mpz_get_ui (d1->value);
 	const cob_u64_t	ur = u0 << u1;
-	cob_decimal_set_ullint (d0, ur);
+	cob_decimal_set_ullint (ctx, d0, ur);
 }
 
 void
-cob_logical_right (cob_decimal *d0, cob_decimal *d1)
+cob_logical_right (cob_context *ctx, cob_decimal *d0, cob_decimal *d1)
 {
 	const cob_u64_t	u0 = mpz_get_ui (d0->value);
 	const cob_u64_t	u1 = mpz_get_ui (d1->value);
 	const cob_u64_t	ur = u0 >> u1;
-	cob_decimal_set_ullint (d0, ur);
+	cob_decimal_set_ullint (ctx, d0, ur);
 }
 
 void			/* Circulare LEFT shift */
-cob_logical_left_c (cob_decimal *d0, cob_decimal *d1, int bytes)
+cob_logical_left_c (cob_context *ctx, cob_decimal *d0, cob_decimal *d1, int bytes)
 {
 	const cob_u64_t	u0 = mpz_get_ui (d0->value);
 	const cob_u64_t	u1 = mpz_get_ui (d1->value);
 	const cob_u64_t	ur = (u0 << u1) | (u0 >> ((cob_u64_t)bytes * 8 - u1));
-	cob_decimal_set_ullint (d0, ur);
+	cob_decimal_set_ullint (ctx, d0, ur);
 }
 
 void			/* Circulare RIGHT shift */
-cob_logical_right_c (cob_decimal *d0, cob_decimal *d1, int bytes)
+cob_logical_right_c (cob_context *ctx, cob_decimal *d0, cob_decimal *d1, int bytes)
 {
 	const cob_u64_t	u0 = mpz_get_ui (d0->value);
 	const cob_u64_t	u1 = mpz_get_ui (d1->value);
 	const cob_u64_t	ur = (u0 >> u1) | (u0 << ((cob_u64_t)bytes * 8 - u1));
-	cob_decimal_set_ullint (d0, ur);
+	cob_decimal_set_ullint (ctx, d0, ur);
 }

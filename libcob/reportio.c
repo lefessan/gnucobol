@@ -75,7 +75,7 @@ cob_field_init (cob_field *f)
 		temp.data = (unsigned char*)" ";	/* MOVE SPACES to field */
 		temp.attr = &const_alpha_attr;
 	}
-	cob_move (&temp, f);
+	cob_move (COB_CTX_TODO, &temp, f);
 	return f;
 }
 
@@ -102,7 +102,7 @@ cob_field_dup (cob_field *f, int incr)
 		temp.data = (unsigned char*)" ";	/* MOVE SPACES to new field */
 		temp.attr = &const_alpha_attr;
 	}
-	cob_move (&temp, fld);
+	cob_move (COB_CTX_TODO, &temp, fld);
 	return fld;
 }
 
@@ -284,7 +284,7 @@ cob_add_fields (cob_field *op1, cob_field *op2, cob_field *rslt)
 	fld1.data	= (unsigned char*)data1;
 	memset(data1,'0',fld1.size);
 	cobrpglobptr->cob_exception_code = 0;
-	cob_move(op1, &fld1);
+	cob_move(COB_CTX_TODO, op1, &fld1);
 
 #ifdef COB_DEBUG_LOG
 	if (DEBUG_ISON("rw")) {
@@ -299,7 +299,7 @@ cob_add_fields (cob_field *op1, cob_field *op2, cob_field *rslt)
 	attr2.type	= COB_TYPE_NUMERIC_DISPLAY;
 	fld2.data	= (unsigned char*)data2;
 	memset(data2,'0',fld2.size);
-	cob_move(op2, &fld2);
+	cob_move(COB_CTX_TODO, op2, &fld2);
 
 #ifdef COB_DEBUG_LOG
 	if (DEBUG_ISON ("rw")) {
@@ -308,9 +308,9 @@ cob_add_fields (cob_field *op1, cob_field *op2, cob_field *rslt)
 	}
 #endif
 
-	cob_add(&fld1,&fld2,0);
+	cob_add(COB_CTX_TODO, &fld1,&fld2,0);
 
-	cob_move(&fld1, rslt);			/* Copy SUM back to result field */
+	cob_move(COB_CTX_TODO, &fld1, rslt);			/* Copy SUM back to result field */
 
 #ifdef COB_DEBUG_LOG
 	if (DEBUG_ISON("rw")) {
@@ -653,8 +653,8 @@ saveLineCounter(cob_report *r)
 	if(ln < 0)
 		ln = 0;
 
-	cob_set_int(r->page_counter,r->curr_page);
-	cob_set_int(r->line_counter,ln);
+	cob_set_int(COB_CTX_TODO, r->page_counter,r->curr_page);
+	cob_set_int(COB_CTX_TODO, r->line_counter,ln);
 }
 
 /*
@@ -973,10 +973,10 @@ copy_line_fields (cob_report *r, cob_report_line *l, int doset)
 			continue;
 		}
 		if (rf->from.data) {		/* Copy source field in */
-			cob_move (&rf->from, rf->f);
+			cob_move (COB_CTX_TODO, &rf->from, rf->f);
 			print_field (rf, rec);
 		} else if (rf->sum) {		/* Copy SUM field in */
-			cob_move (rf->sum, rf->f);
+			cob_move (COB_CTX_TODO, rf->sum, rf->f);
 			print_field (rf, rec);
 		} else if (rf->litval) {		/* Refresh literal value */
 			if (rf->f
@@ -986,7 +986,7 @@ copy_line_fields (cob_report *r, cob_report_line *l, int doset)
 				temp.size = (size_t)rf->litlen;
 				temp.data = (unsigned char *)rf->litval;
 				temp.attr = &const_alpha_attr;
-				cob_move (&temp, rf->f);
+				cob_move (COB_CTX_TODO, &temp, rf->f);
 				print_field(rf, rec);
 			} else {
 				memcpy(&rec[rf->column-1], rf->litval, rf->litlen);
@@ -1769,7 +1769,7 @@ PrintFirstHeading:
 						report_line_and(r,rr->ref_line,COB_REPORT_CONTROL_HEADING);
 					}
 				}
-				cob_move (rc->f,rc->val);	/* Save current field data */
+				cob_move (COB_CTX_TODO, rc->f,rc->val);	/* Save current field data */
 				rc->data_change = FALSE;
 			}
 		}
@@ -1810,8 +1810,8 @@ PrintFirstHeading:
 				(void)cob_field_to_string (rc->f, wrk, sizeof(wrk)-1, CCM_NONE);
 				DEBUG_LOG("rw",("'%s'\n",wrk));
 #endif
-				cob_move(rc->f, rc->sf);	/* Save new CONTROL value */
-				cob_move(rc->val,rc->f);	/* Prev value for FOOTING */
+				cob_move(COB_CTX_TODO, rc->f, rc->sf);	/* Save new CONTROL value */
+				cob_move(COB_CTX_TODO, rc->val,rc->f);	/* Prev value for FOOTING */
 				if(rc->sequence > maxctl)
 					maxctl = rc->sequence;
 			}
@@ -1829,8 +1829,8 @@ PrintFirstHeading:
 					cob_field_to_string(rc->f, wrk, sizeof(wrk)-1, CCM_NONE);
 					DEBUG_LOG("rw",("'%s'\n",wrk));
 #endif
-					cob_move(rc->f, rc->sf); /* Save CONTROL value */
-					cob_move(rc->val,rc->f); /* Prev value for FOOTING */
+					cob_move(COB_CTX_TODO, rc->f, rc->sf); /* Save CONTROL value */
+					cob_move(COB_CTX_TODO, rc->val,rc->f); /* Prev value for FOOTING */
 				}
 			}
 		}
@@ -1882,7 +1882,7 @@ PrintFooting:
 						}
 					}
 				}
-				cob_move(rc->sf,rc->f);	/* Put new CONTROL value back */
+				cob_move(COB_CTX_TODO, rc->sf,rc->f);	/* Put new CONTROL value back */
 			}
 		}
 		if(r->foot_next_page) {
@@ -1929,7 +1929,7 @@ PrintHeading:
 						rr->ref_line->suppress = FALSE;
 					}
 				}
-				cob_move (rc->f,rc->val);	/* Save current field data */
+				cob_move (COB_CTX_TODO, rc->f,rc->val);	/* Save current field data */
 				rc->data_change = FALSE;
 			}
 		}

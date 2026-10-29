@@ -1063,13 +1063,13 @@ cob_extfh_start (EXTFH_FUNC callfh, cob_file *f,
 		keyn = cob_findkey (f,key,&keylen,&partlen);
 		STCOMPX2(keyn, fcd->refKey);
 		if (keysize) {
-			partlen = cob_get_int (keysize);
+			partlen = cob_get_int (COB_CTX_TODO, keysize);
 		}
 		STCOMPX2(partlen, fcd->effKeyLen);
 		STCOMPX2(keyn, fcd->refKey);
 	} else if (f->organization == COB_ORG_RELATIVE) {
 		memset(fcd->relKey,0,sizeof (fcd->relKey));
-		recn = cob_get_int(f->keys[0].field);
+		recn = cob_get_int(COB_CTX_TODO, f->keys[0].field);
 		STCOMPX4(recn, LSUCHAR(fcd->relKey+4));
 	}
 
@@ -1113,7 +1113,7 @@ cob_extfh_read (EXTFH_FUNC callfh, cob_file *f,
 		}
 		if (f->organization == COB_ORG_RELATIVE) {
 			memset (fcd->relKey, 0, sizeof (fcd->relKey));
-			recn = cob_get_int (f->keys[0].field);
+			recn = cob_get_int (COB_CTX_TODO, f->keys[0].field);
 			STCOMPX4(recn, LSUCHAR(fcd->relKey+4));
 			if (f->access_mode != COB_ACCESS_SEQUENTIAL)
 				STCOMPX2(OP_READ_RAN, opcode);
@@ -1125,7 +1125,7 @@ cob_extfh_read (EXTFH_FUNC callfh, cob_file *f,
 		STCOMPX2(OP_READ_RAN, opcode);
 	} else if (f->organization == COB_ORG_RELATIVE) {
 		memset (fcd->relKey, 0, sizeof (fcd->relKey));
-		recn = cob_get_int (key);
+		recn = cob_get_int (COB_CTX_TODO, key);
 		STCOMPX4(recn, LSUCHAR(fcd->relKey+4));
 		STCOMPX2(OP_READ_RAN, opcode);
 	} else {
@@ -1157,7 +1157,7 @@ cob_extfh_read_next (EXTFH_FUNC callfh, cob_file *f,
 	}
 	if (f->organization == COB_ORG_RELATIVE) {
 		memset (fcd->relKey, 0, sizeof (fcd->relKey));
-		recn = cob_get_int (f->keys[0].field);
+		recn = cob_get_int (COB_CTX_TODO, f->keys[0].field);
 		STCOMPX4(recn, LSUCHAR(fcd->relKey+4));
 	}
 
@@ -1182,7 +1182,7 @@ cob_extfh_write (EXTFH_FUNC callfh, cob_file *f,
 	STCOMPX2(check_eop, fcd->eop);
 	STCOMPX4(opt, fcd->opt);
 	if (f->variable_record) {
-		f->record->size = (size_t)cob_get_int (f->variable_record);
+		f->record->size = (size_t)cob_get_int (COB_CTX_TODO, f->variable_record);
 		if (f->record->size > rec->size) {
 			f->record->size = rec->size;
 		}
@@ -1193,7 +1193,7 @@ cob_extfh_write (EXTFH_FUNC callfh, cob_file *f,
 	fcd->recPtr = rec->data;
 	if (f->organization == COB_ORG_RELATIVE) {
 		memset (fcd->relKey, 0, sizeof (fcd->relKey));
-		recn = cob_get_int (f->keys[0].field);
+		recn = cob_get_int (COB_CTX_TODO, f->keys[0].field);
 		STCOMPX4(recn, LSUCHAR(fcd->relKey+4));
 	}
 
@@ -1219,14 +1219,14 @@ cob_extfh_rewrite (EXTFH_FUNC callfh, cob_file *f,
 	fcd->recPtr = rec->data;
 	if (f->organization == COB_ORG_RELATIVE) {
 		memset (fcd->relKey ,0, sizeof (fcd->relKey));
-		recn = cob_get_int (f->keys[0].field);
+		recn = cob_get_int (COB_CTX_TODO, f->keys[0].field);
 		STCOMPX4 (recn, LSUCHAR (fcd->relKey + 4));
 	}
 	STCOMPX4(rec->size,fcd->curRecLen);
 	fcd->recPtr = rec->data;
 	if (f->organization == COB_ORG_RELATIVE) {
 		memset (fcd->relKey, 0, sizeof (fcd->relKey));
-		recn = cob_get_int (f->keys[0].field);
+		recn = cob_get_int (COB_CTX_TODO, f->keys[0].field);
 		STCOMPX4(recn, LSUCHAR(fcd->relKey+4));
 	}
 
@@ -1250,12 +1250,12 @@ cob_extfh_delete (EXTFH_FUNC callfh, cob_file *f,
 	STCOMPX2 (OP_DELETE, opcode);
 	if (f->organization == COB_ORG_RELATIVE) {
 		memset (fcd->relKey, 0, sizeof (fcd->relKey));
-		recn = cob_get_int (f->keys[0].field);
+		recn = cob_get_int (COB_CTX_TODO, f->keys[0].field);
 		STCOMPX4 (recn, LSUCHAR(fcd->relKey + 4));
 	}
 	if (f->organization == COB_ORG_RELATIVE) {
 		memset (fcd->relKey, 0, sizeof (fcd->relKey));
-		recn = cob_get_int (f->keys[0].field);
+		recn = cob_get_int (COB_CTX_TODO, f->keys[0].field);
 		STCOMPX4(recn, LSUCHAR(fcd->relKey+4));
 	}
 
@@ -1476,7 +1476,7 @@ update_key_from_fcd (cob_file *f, FCD3 *fcd, cob_field *kf)
 	if (fcd->fileOrg == ORG_RELATIVE) {
 		cob_field *rel_key = f->keys[0].field;
 		/* set value in the key field (several functions don't pass this outside of "f") */
-		cob_set_int (rel_key, LDCOMPX4 (LSUCHAR (fcd->relKey + 4)));
+		cob_set_int (COB_CTX_TODO, rel_key, LDCOMPX4 (LSUCHAR (fcd->relKey + 4)));
 		/* copy over key field's attributes and data pointer */
 		memcpy (kf, rel_key, sizeof (cob_field));
 	}

@@ -665,14 +665,14 @@ get_isreclen (cob_file *f)
 		if (f->variable_record) {
 			for (k = f->record_max; k > f->record_min && f->record->data[k-1] == 0; k--);
 			f->record->size = k;
-			cob_set_int (f->variable_record, (int) k);
+			cob_set_int (COB_CTX_TODO, f->variable_record, (int) k);
 		}
 #else
 		f->record->size = ISRECLEN;
 		if (f->record->size < f->record_max)
 			memset(&f->record->data[f->record->size], 0, f->record_max - f->record->size);
 		if (f->variable_record)
-			cob_set_int (f->variable_record, (int) f->record->size);
+			cob_set_int (COB_CTX_TODO, f->variable_record, (int) f->record->size);
 #endif
 	}
 }
@@ -1148,7 +1148,7 @@ dobuild:
 					f->record_min = f->record_max = di.di_recsize;
 					f->record->size = di.di_recsize;
 					if (f->variable_record)
-						cob_set_int (f->variable_record, (int) f->record->size);
+						cob_set_int (COB_CTX_TODO, f->variable_record, (int) f->record->size);
 				} else
 				if (f->flag_keycheck
 				|| f->record_max < di.di_recsize) {
