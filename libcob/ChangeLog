@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h (cob_is_xml_namechar, cob_xml_generate, cob_json_generate),
+	  mlio.c (xml_process_next_event): XML / JSON functions take the
+	  context
 	* common.h (cob_path_to_absolute), reportio.c: REPORT WRITER functions
 	  take the context
 	* common.h (cob_runtime_warning_external, cob_screen_display,

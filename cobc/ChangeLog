@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_xml_parse): XML / JSON functions take the context
 	* codegen.c (output_funcall_typed_report, output_funcall_typed): REPORT
 	  WRITER functions take the context
 	* codegen.c: screen ACCEPT / DISPLAY functions take the context

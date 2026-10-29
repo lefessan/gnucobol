@@ -2975,12 +2975,12 @@ COB_EXPIMP void cob_report_suppress	(cob_context *, cob_report *, cob_report_lin
 COB_EXPIMP int	cob_is_valid_uri	(const char *);
 COB_EXPIMP int	cob_is_xml_namestartchar	(const int);
 COB_EXPIMP int	cob_is_xml_namechar	(const int);
-COB_EXPIMP void	cob_xml_generate	(cob_field *, cob_ml_tree *,
+COB_EXPIMP void	cob_xml_generate	(cob_context *, cob_field *, cob_ml_tree *,
 					 cob_field *, const int, cob_field *,
 					 cob_field *, const char);
-COB_EXPIMP void cob_json_generate	(cob_field *, cob_ml_tree *,
+COB_EXPIMP void cob_json_generate	(cob_context *, cob_field *, cob_ml_tree *,
 					 cob_field *, const char);
-COB_EXPIMP int	cob_xml_parse	(cob_field *, cob_field *,
+COB_EXPIMP int	cob_xml_parse	(cob_context *, cob_field *, cob_field *,
 					 cob_field *, const int, void **);
 
 
