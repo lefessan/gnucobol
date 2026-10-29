@@ -1238,7 +1238,7 @@ static void xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 
 /* entry function for XML GENERATE */
 void
-cob_xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 	const int with_xml_dec, cob_field *ns, cob_field *ns_prefix,
 	const char decimal_point)
 {
@@ -1304,7 +1304,7 @@ static void xml_process_next_event (struct xml_state *state);
 #endif
 
 /* entry function for XML PARSE */
-int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
+int cob_xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field *validation,
 		const int flags, void **saved_state)
 {
 	struct xml_state *state;
@@ -2084,7 +2084,7 @@ void xml_free_parse_memory (struct xml_state* state)
 #if defined (WITH_CJSON) || defined (WITH_JSON_C)
 /* entry function for JSON GENERATE */
 void
-cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_json_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 		   const char decimal_point)
 {
 	const char	*printed_json = NULL;
@@ -2176,7 +2176,7 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 
 /* entry function for JSON GENERATE (not handled) */
 void
-cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_json_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 		   const char decimal_point)
 {
 	static int first_json = 1;

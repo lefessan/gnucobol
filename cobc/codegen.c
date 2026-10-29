@@ -5285,6 +5285,7 @@ static const char *const ctx_functions[] = {
 	"cob_is_numeric",
 	"cob_is_omitted",
 	"cob_is_upper",
+	"cob_json_generate",
 	"cob_last_exception_is",
 	"cob_last_exit_code",
 	"cob_last_runtime_error",
@@ -5394,6 +5395,8 @@ static const char *const ctx_functions[] = {
 	"cob_unstring_into",
 	"cob_unstring_tallying",
 	"cob_write",
+	"cob_xml_generate",
+	"cob_xml_parse",
 	NULL
 };
 
@@ -8576,7 +8579,7 @@ output_xml_parse (struct cb_xml_parse *p)
 	/* actual XML parsing function and possible end */
 	output_source_reference (CB_TREE (p), STMT_XML_PARSE);
 	output_prefix ();
-	output ("if (cob_xml_parse ("),
+	output ("if (cob_xml_parse (ctx, "),
 	output_param (p->data, 0);
 	output (", ");
 	output_param (p->encoding, 1);
