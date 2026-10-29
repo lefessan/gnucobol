@@ -116,19 +116,19 @@ cob_get_param_field (int n, const char *caller_name)
 	if (cobglobptr == NULL
 	 || COB_MODULE_PTR == NULL) {
 		/* note: same message in call.c */
-		cob_runtime_warning_external (COB_CTX_TODO, caller_name, 1,
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, caller_name, 1,
 			_("cob_init() has not been called"));
 		return NULL;
 	}
 	if (n < 1
 	 || n > cobglobptr->cob_call_params) {
-		cob_runtime_warning_external (COB_CTX_TODO, caller_name, 1,
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, caller_name, 1,
 			_("parameter %d is not within range of %d"),
 			n, cobglobptr->cob_call_params);
 		return NULL;
 	}
 	if (COB_MODULE_PTR->cob_procedure_params[n - 1] == NULL) {
-		cob_runtime_warning_external (COB_CTX_TODO, caller_name, 1,
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, caller_name, 1,
 			_("parameter %d is NULL"), n);
 		return NULL;
 	}
@@ -136,7 +136,7 @@ cob_get_param_field (int n, const char *caller_name)
 }
 
 int
-cob_get_name_line (cob_context *ctx, char *prog, int *line)
+cob_get_name_line_ctx (cob_context *ctx, char *prog, int *line)
 {
 	int	k;
 	if (line != NULL)
@@ -149,6 +149,13 @@ cob_get_name_line (cob_context *ctx, char *prog, int *line)
 	return COB_GET_LINE_NUM(COB_MODULE_PTR->module_stmt);
 }
 
+/* compatibility: cob_get_name_line without context */
+int
+cob_get_name_line (char *prog, int *line)
+{
+	return cob_get_name_line_ctx (COB_CTX_COMPAT, prog, line);
+}
+
 int
 cob_get_num_params (void)
 {
@@ -157,7 +164,7 @@ cob_get_num_params (void)
 	}
 
 	/* note: same message in call.c */
-	cob_runtime_warning_external (COB_CTX_TODO, "cob_get_num_params", 1,
+	cob_runtime_warning_external_ctx (COB_CTX_TODO, "cob_get_num_params", 1,
 		_("cob_init() has not been called"));
 	return -1;
 }
@@ -258,16 +265,16 @@ cob_get_dbl_param (int n)
 
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_FLOAT:
-		return (double)cob_get_comp1 (COB_CTX_TODO, cbl_data);
+		return (double)cob_get_comp1_ctx (COB_CTX_TODO, cbl_data);
 	case COB_TYPE_NUMERIC_DOUBLE:
-		return (double)cob_get_comp2 (COB_CTX_TODO, cbl_data);
+		return (double)cob_get_comp2_ctx (COB_CTX_TODO, cbl_data);
 	default:
 		memcpy(&float_attr, &const_float_attr, sizeof(cob_field_attr));
 		float_attr.scale = f->attr->scale;
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &float_attr;
-		cob_move (COB_CTX_TODO, f, &temp);
+		cob_move_ctx (COB_CTX_TODO, f, &temp);
 		return (double)val;
 	}
 }
@@ -287,10 +294,10 @@ cob_put_dbl_param (int n, double val)
 
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_FLOAT:
-		cob_put_comp1 (COB_CTX_TODO, (float)val, cbl_data);
+		cob_put_comp1_ctx (COB_CTX_TODO, (float)val, cbl_data);
 		return;
 	case COB_TYPE_NUMERIC_DOUBLE:
-		cob_put_comp2 (COB_CTX_TODO, val, cbl_data);
+		cob_put_comp2_ctx (COB_CTX_TODO, val, cbl_data);
 		return;
 	default:
 		memcpy(&float_attr, &const_float_attr, sizeof(cob_field_attr));
@@ -298,7 +305,7 @@ cob_put_dbl_param (int n, double val)
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &float_attr;
-		cob_move (COB_CTX_TODO, &temp, f);
+		cob_move_ctx (COB_CTX_TODO, &temp, f);
 		return;
 	}
 }
@@ -321,32 +328,32 @@ cob_get_s64_param (int n)
 
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		return cob_get_s64_pic9 (COB_CTX_TODO, cbl_data, size);
+		return cob_get_s64_pic9_ctx (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_BINARY:
 #ifndef WORDS_BIGENDIAN
 		if (!COB_FIELD_BINARY_SWAP (f)) {
-			return cob_get_s64_comp5 (COB_CTX_TODO, cbl_data, size);
+			return cob_get_s64_comp5_ctx (COB_CTX_TODO, cbl_data, size);
 		}
 #endif
-		return cob_get_s64_compx (COB_CTX_TODO, cbl_data, size);
+		return cob_get_s64_compx_ctx (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_PACKED:
-		return cob_get_s64_comp3 (COB_CTX_TODO, cbl_data, size);
+		return cob_get_s64_comp3_ctx (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_FLOAT:
-		dbl = cob_get_comp1 (COB_CTX_TODO, cbl_data);
+		dbl = cob_get_comp1_ctx (COB_CTX_TODO, cbl_data);
 		val = (cob_s64_t)dbl; /* possible data loss is explicit requested */
 		return val;
 	case COB_TYPE_NUMERIC_DOUBLE:
-		dbl = cob_get_comp2 (COB_CTX_TODO, cbl_data);
+		dbl = cob_get_comp2_ctx (COB_CTX_TODO, cbl_data);
 		val = (cob_s64_t)dbl; /* possible data loss is explicit requested */
 		return val;
 	case COB_TYPE_NUMERIC_EDITED:
-		return cob_get_s64_pic9 (COB_CTX_TODO, cbl_data, size);
+		return cob_get_s64_pic9_ctx (COB_CTX_TODO, cbl_data, size);
 	default:
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &const_binll_attr;
 		const_binll_attr.scale = f->attr->scale;
-		cob_move (COB_CTX_TODO, f, &temp);
+		cob_move_ctx (COB_CTX_TODO, f, &temp);
 		return val;
 	}
 }
@@ -369,32 +376,32 @@ cob_get_u64_param (int n)
 	size     = (int)f->size;
 	switch (COB_MODULE_PTR->cob_procedure_params[n - 1]->attr->type) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		return cob_get_u64_pic9 (COB_CTX_TODO, cbl_data, size);
+		return cob_get_u64_pic9_ctx (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_BINARY:
 #ifndef WORDS_BIGENDIAN
 		if (!COB_FIELD_BINARY_SWAP (f)) {
-			return cob_get_u64_comp5 (COB_CTX_TODO, cbl_data, size);
+			return cob_get_u64_comp5_ctx (COB_CTX_TODO, cbl_data, size);
 		}
 #endif
-		return cob_get_u64_compx (COB_CTX_TODO, cbl_data, size);
+		return cob_get_u64_compx_ctx (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_PACKED:
-		return cob_get_u64_comp3 (COB_CTX_TODO, cbl_data, size);
+		return cob_get_u64_comp3_ctx (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_FLOAT:
-		dbl = cob_get_comp1 (COB_CTX_TODO, cbl_data);
+		dbl = cob_get_comp1_ctx (COB_CTX_TODO, cbl_data);
 		val = (cob_u64_t)dbl; /* possible data loss is explicit requested */
 		return val;
 	case COB_TYPE_NUMERIC_DOUBLE:
-		dbl = cob_get_comp2 (COB_CTX_TODO, cbl_data);
+		dbl = cob_get_comp2_ctx (COB_CTX_TODO, cbl_data);
 		val = (cob_u64_t)dbl; /* possible data loss is explicit requested */
 		return val;
 	case COB_TYPE_NUMERIC_EDITED:
-		return cob_get_u64_pic9 (COB_CTX_TODO, cbl_data, size);
+		return cob_get_u64_pic9_ctx (COB_CTX_TODO, cbl_data, size);
 	default:
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &const_binull_attr;
 		const_binull_attr.scale = f->attr->scale;
-		cob_move (COB_CTX_TODO, f, &temp);
+		cob_move_ctx (COB_CTX_TODO, f, &temp);
 		return val;
 	}
 }
@@ -406,7 +413,7 @@ cob_get_picx_param (int n, void *char_field, size_t char_len)
 	if (f == NULL) {
 		return NULL;
 	}
-	return cob_get_picx (COB_CTX_TODO, f->data, f->size, char_field, char_len);
+	return cob_get_picx_ctx (COB_CTX_TODO, f->data, f->size, char_field, char_len);
 }
 
 int
@@ -510,7 +517,7 @@ cob_get_field_str (const cob_field *f, char *buffer, size_t size)
 		return _("field not allocated");
 	}
 	if (!buffer || !size) {
-		cob_runtime_warning_external (COB_CTX_TODO, "cob_get_field_str", 0, "bad buffer/size");
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, "cob_get_field_str", 0, "bad buffer/size");
 		return "";
 	}
 	{
@@ -572,7 +579,7 @@ cob_put_field_str (const cob_field *dst, const char *str)
 	if (dst->size <= 0) return EINVAL;
 
 	if (COB_FIELD_CONSTANT (dst)) {
-		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_field_str", 1,
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, "cob_put_field_str", 1,
 			_ ("attempt to over-write constant field with '%s'"),
 			str);
 		return EINVAL;
@@ -587,13 +594,13 @@ cob_put_field_str (const cob_field *dst, const char *str)
 		if (COB_FIELD_TYPE (dst) & COB_TYPE_NUMERIC_FLOAT
 		 || COB_FIELD_TYPE (dst) & COB_TYPE_NUMERIC_DOUBLE) {
 			if (cob_check_numval_f (&wrk)) return 1;
-			wrk = *cob_intr_numval_f (COB_CTX_TODO, &wrk);
+			wrk = *cob_intr_numval_f_ctx (COB_CTX_TODO, &wrk);
 		} else {
-			if (cob_check_numval (COB_CTX_TODO, &wrk, NULL, 0, 1)) return 1;
-			wrk = *cob_intr_numval (COB_CTX_TODO, &wrk);
+			if (cob_check_numval_ctx (COB_CTX_TODO, &wrk, NULL, 0, 1)) return 1;
+			wrk = *cob_intr_numval_ctx (COB_CTX_TODO, &wrk);
 		}
 	}
-	cob_move (COB_CTX_TODO, &wrk, (cob_field *)dst);
+	cob_move_ctx (COB_CTX_TODO, &wrk, (cob_field *)dst);
 	return 0;
 }
 
@@ -614,7 +621,7 @@ cob_put_s64_param (int n, cob_s64_t val)
 	if (COB_FIELD_CONSTANT (f)) {
 		char buff[20];
 		sprintf (buff, CB_FMT_LLD, val);
-		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_s64_param", 1,
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, "cob_put_s64_param", 1,
 			_("attempt to over-write constant parameter %d with '%s'"),
 			n, buff);
 		return;
@@ -623,34 +630,34 @@ cob_put_s64_param (int n, cob_s64_t val)
 	size     = (int)f->size;
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		cob_put_s64_pic9 (COB_CTX_TODO, val, cbl_data, size);
+		cob_put_s64_pic9_ctx (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_BINARY:
 #ifndef WORDS_BIGENDIAN
 		if (!COB_FIELD_BINARY_SWAP (f)) {
-			cob_put_s64_comp5 (COB_CTX_TODO, val, cbl_data, size);
+			cob_put_s64_comp5_ctx (COB_CTX_TODO, val, cbl_data, size);
 			return;
 		}
 #endif
-		cob_put_s64_compx (COB_CTX_TODO, val, cbl_data, size);
+		cob_put_s64_compx_ctx (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_PACKED:
-		cob_put_s64_comp3 (COB_CTX_TODO, val, cbl_data, size);
+		cob_put_s64_comp3_ctx (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_FLOAT:
 		flt = (float)val;  /* possible data loss is explicit requested */
-		cob_put_comp1 (COB_CTX_TODO, flt, cbl_data);
+		cob_put_comp1_ctx (COB_CTX_TODO, flt, cbl_data);
 		return;
 	case COB_TYPE_NUMERIC_DOUBLE:
 		dbl = (double)val; /* possible data loss is explicit requested */
-		cob_put_comp2 (COB_CTX_TODO, dbl, cbl_data);
+		cob_put_comp2_ctx (COB_CTX_TODO, dbl, cbl_data);
 		return;
 	default:	/* COB_TYPE_NUMERIC_EDITED, ... */
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &const_binll_attr;
 		const_binll_attr.scale = f->attr->scale;
-		cob_move (COB_CTX_TODO, &temp, f);
+		cob_move_ctx (COB_CTX_TODO, &temp, f);
 		return;
 	}
 }
@@ -672,7 +679,7 @@ cob_put_u64_param (int n, cob_u64_t val)
 	if (COB_FIELD_CONSTANT (f)) {
 		char buff[20];
 		sprintf (buff, CB_FMT_LLD, val);
-		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_u64_param", 1,
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, "cob_put_u64_param", 1,
 			_("attempt to over-write constant parameter %d with '%s'"),
 			n, buff);
 		return;
@@ -681,34 +688,34 @@ cob_put_u64_param (int n, cob_u64_t val)
 	size     = (int)f->size;
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		cob_put_u64_pic9 (COB_CTX_TODO, val, cbl_data, size);
+		cob_put_u64_pic9_ctx (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_BINARY:
 #ifndef WORDS_BIGENDIAN
 		if (!COB_FIELD_BINARY_SWAP (f)) {
-			cob_put_u64_comp5 (COB_CTX_TODO, val, cbl_data, size);
+			cob_put_u64_comp5_ctx (COB_CTX_TODO, val, cbl_data, size);
 			return;
 		}
 #endif
-		cob_put_u64_compx (COB_CTX_TODO, val, cbl_data, size);
+		cob_put_u64_compx_ctx (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_PACKED:
-		cob_put_u64_comp3 (COB_CTX_TODO, val, cbl_data, size);
+		cob_put_u64_comp3_ctx (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_FLOAT:
 		flt = (float)val;  /* possible data loss is explicit requested */
-		cob_put_comp1 (COB_CTX_TODO, flt, cbl_data);
+		cob_put_comp1_ctx (COB_CTX_TODO, flt, cbl_data);
 		return;
 	case COB_TYPE_NUMERIC_DOUBLE:
 		dbl = (double)val;  /* possible data loss is explicit requested */
-		cob_put_comp2 (COB_CTX_TODO, dbl, cbl_data);
+		cob_put_comp2_ctx (COB_CTX_TODO, dbl, cbl_data);
 		return;
 	default:	/* COB_TYPE_NUMERIC_EDITED, ... */
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &const_binll_attr;
 		const_binll_attr.scale = f->attr->scale;
-		cob_move (COB_CTX_TODO, &temp, f);
+		cob_move_ctx (COB_CTX_TODO, &temp, f);
 		return;
 	}
 }
@@ -724,7 +731,7 @@ cob_put_picx_param (int n, void *char_field)
 	}
 
 	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_picx_param", 1,
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, "cob_put_picx_param", 1,
 			_("attempt to over-write constant parameter %d with '%s'"),
 			n, (char*)char_field);
 		return;
@@ -734,9 +741,9 @@ cob_put_picx_param (int n, void *char_field)
 		s->attr = &all_display_attr;
 		s->data = char_field;
 		s->size = strlen (char_field);
-		cob_move (COB_CTX_TODO, s, f);
+		cob_move_ctx (COB_CTX_TODO, s, f);
 	} else {
-		cob_put_picx (COB_CTX_TODO, f->data, f->size, char_field);
+		cob_put_picx_ctx (COB_CTX_TODO, f->data, f->size, char_field);
 	}
 }
 
@@ -772,7 +779,7 @@ cob_put_grp_param (int n, void *char_field, size_t len)
 	}
 
 	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_grp_param", 1,
+		cob_runtime_warning_external_ctx (COB_CTX_TODO, "cob_put_grp_param", 1,
 			"attempt to over-write constant parameter %d", n);
 		return;
 	}
@@ -866,7 +873,7 @@ get_value (int pos, cob_module  *mod, char *field_ref, char *fld)
 		if (i < 0) {
 			return pos;
 		}
-		cob_sym_get_field (COB_CTX_TODO, &s, sym, i);
+		cob_sym_get_field_ctx (COB_CTX_TODO, &s, sym, i);
 		cob_get_field_str (&s, numval, sizeof(numval));
 		strcpy(fld,numval);
 	} else {
@@ -911,7 +918,7 @@ cob_parse_field (cob_module  *mod, cob_field *f, char *field_ref)
 	 || strcasecmp (sym[k].name, fld1[0]) != 0) {
 		return 1;
 	}
-	cob_sym_get_field (COB_CTX_TODO, f, sym, k);
+	cob_sym_get_field_ctx (COB_CTX_TODO, f, sym, k);
 	if (f->data == NULL)
 		return 1;
 	refbgn = reflen = 0;

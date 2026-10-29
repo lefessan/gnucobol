@@ -119,7 +119,7 @@ db_cmpkey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, 
 		partlen = db_keylen(f, idx);
 		/* LCOV_EXCL_START */
 		if (partlen <= 0) {
-			cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "db_cmpkey");
+			cob_runtime_error_ctx (COB_CTX_TODO, _("invalid internal call of %s"), "db_cmpkey");
 			cob_hard_failure_internal ("libcob");
 		}
 		/* LCOV_EXCL_STOP */
@@ -557,11 +557,11 @@ eval_expr (struct file_xfd *fx, int  pos)
 			memset(buf,0,temp.size+1);
 			if (fx->map[pos].valnum) {
 				COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, 0, 0, 0, NULL);                 
-				cob_move (COB_CTX_TODO, &fx->map[col].recfld, &temp);
+				cob_move_ctx (COB_CTX_TODO, &fx->map[col].recfld, &temp);
 				rslt = atoi(fx->map[pos].value) - atoi(buf);
 			} else {
 				COB_ATTR_INIT (COB_TYPE_ALNUM, 0, 0, 0, NULL);                 
-				cob_move (COB_CTX_TODO, &fx->map[col].recfld, &temp);
+				cob_move_ctx (COB_CTX_TODO, &fx->map[col].recfld, &temp);
 				rslt = strcasecmp(fx->map[pos].value, buf);
 			}
 			if (rslt < 0) rslt = -1;
@@ -1085,7 +1085,7 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 		fi = fopen (xfdbuf,"r");
 	}
 	if (fi == NULL) {
-		cob_runtime_warning (COB_CTX_TODO, _("Error '%s' opening '%s'"),cob_get_strerror (),xfdbuf);
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("Error '%s' opening '%s'"),cob_get_strerror (),xfdbuf);
 		return NULL;
 	}
 	sprintf(rowcol,"rid_%s",tblname);
@@ -1231,9 +1231,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 		if (xfdbuf[0] == 'K') {		/* Key definition */
 			p = getNum (&xfdbuf[2], &keyn);
 			if (keyn >= MAXNUMKEYS) {
-				cob_runtime_error (COB_CTX_TODO, _("%s XFD has more than %d indexes!"),
+				cob_runtime_error_ctx (COB_CTX_TODO, _("%s XFD has more than %d indexes!"),
 								fl->select_name,MAXNUMKEYS-1);
-				cob_stop_run (COB_CTX_TODO, 1);
+				cob_stop_run_ctx (COB_CTX_TODO, 1);
 			}
 			p = getPrm (p, dups);
 			if (dups[0] == 'R') {		/* Used for unique record number */
@@ -1253,9 +1253,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 				supch = supchar[0];
 			}
 			if (fx->key[keyn] != NULL) {
-				cob_runtime_error (COB_CTX_TODO, _("%s XFD has duplicate index %d !"),
+				cob_runtime_error_ctx (COB_CTX_TODO, _("%s XFD has duplicate index %d !"),
 								fl->select_name,keyn);
-				cob_stop_run (COB_CTX_TODO, 1);
+				cob_stop_run_ctx (COB_CTX_TODO, 1);
 			}
 			fx->key[keyn] = cob_malloc (sizeof (struct key_xfd));
 			if (dups[0] == 'Y')
@@ -1277,9 +1277,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 				 && strcmp (colname,rowcol) == 0)
 					continue;
 				if ((k = cob_find_xfd_col (fx, colname)) < 0) {
-					cob_runtime_error (COB_CTX_TODO, _("%s XFD index %d has %s undefined!"),
+					cob_runtime_error_ctx (COB_CTX_TODO, _("%s XFD index %d has %s undefined!"),
 									fl->select_name,keyn,colname);
-					cob_stop_run (COB_CTX_TODO, 1);
+					cob_stop_run_ctx (COB_CTX_TODO, 1);
 				}
 				fx->key[keyn]->col[fx->key[keyn]->ncols] = k;
 				fx->key[keyn]->ncols++;
@@ -1287,9 +1287,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 				fx->map[k].notnull = TRUE;
 				fx->map[k].iskey = TRUE;
 				if (fx->key[keyn]->ncols >= MAXKEYCOLS) {
-					cob_runtime_error (COB_CTX_TODO, _("%s XFD index %d has too many columns!"),
+					cob_runtime_error_ctx (COB_CTX_TODO, _("%s XFD index %d has too many columns!"),
 									fl->select_name,keyn);
-					cob_stop_run (COB_CTX_TODO, 1);
+					cob_stop_run_ctx (COB_CTX_TODO, 1);
 				}
 			} while(*p > ' ');
 			continue;
@@ -1361,9 +1361,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 		} else if (fx->map[i].cmd == XC_WHEN) {
 			if (fx->map[i].colname) {
 				if ((lbl = cob_find_xfd_col (fx, fx->map[i].colname)) < 0) {
-					cob_runtime_error (COB_CTX_TODO, _("%s XFD index %d has %s undefined!"),
+					cob_runtime_error_ctx (COB_CTX_TODO, _("%s XFD index %d has %s undefined!"),
 									fl->select_name,keyn,colname);
-					cob_stop_run (COB_CTX_TODO, 1);
+					cob_stop_run_ctx (COB_CTX_TODO, 1);
 				}
 				fx->map[i].colpos = lbl;
 			}
@@ -1397,7 +1397,7 @@ cob_load_ddl (struct db_state  *db, struct file_xfd *fx)
 		fi = fopen (xfdbuf,"r");
 	}
 	if (fi == NULL) {
-		cob_runtime_warning (COB_CTX_TODO, _("Error '%s' opening '%s'"),cob_get_strerror (),xfdbuf);
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("Error '%s' opening '%s'"),cob_get_strerror (),xfdbuf);
 		return;
 	}
 	sprintf (xfdbuf, "%s%s%s.",sdir,SLASH_STR,fx->tablename);
@@ -1826,8 +1826,8 @@ getSchemaEnvName(
 	char	sch[48];
 
 	if (len_high_value == 0) {
-		if( (env = cob_get_env (COB_CTX_TODO, "SQL_HIGH_VALUE", NULL)) == NULL) 
-			env = cob_get_env (COB_CTX_TODO, "SQL_HIGH_VALUES", NULL);
+		if( (env = cob_get_env_ctx (COB_CTX_TODO, "SQL_HIGH_VALUE", NULL)) == NULL) 
+			env = cob_get_env_ctx (COB_CTX_TODO, "SQL_HIGH_VALUES", NULL);
 		if( env != NULL) {
 			for (k=0; *env != 0x00 && k < 6; env++) {
 				if (isxdigit (*env)) {
@@ -1989,7 +1989,7 @@ cob_sql_stmt (
 	int		waitsecs = 0;
 
 	if (idx >= fx->nkeys) {
-		cob_runtime_error (COB_CTX_TODO, _("SQL Index %d incorrect: %d max!"),idx,fx->nkeys);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("SQL Index %d incorrect: %d max!"),idx,fx->nkeys);
 		return NULL;
 	}
 	sbuf = NULL;
@@ -2301,7 +2301,7 @@ cob_sql_stmt (
 		}
 
 	} else {
-		cob_runtime_error (COB_CTX_TODO, _("Unknown SQL statement: %.20s!"),stmt);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("Unknown SQL statement: %.20s!"),stmt);
 		return NULL;
 	}
 	if (strncasecmp(stmt,"SELECT",6) == 0) {
@@ -2440,7 +2440,7 @@ cob_index_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl, int id
 				memcpy(&sqlwrk,&fx->map[k].sqlfld,sizeof(cob_field));
 				sqlwrk.data = (unsigned char *)sqlbuf;
 				sqlwrk.size = fx->map[k].dtfrm->digits;
-				cob_move (COB_CTX_TODO, &fx->map[k].recfld, &sqlwrk);
+				cob_move_ctx (COB_CTX_TODO, &fx->map[k].recfld, &sqlwrk);
 				sqlbuf[sqlwrk.size] = 0;
 				dl = convert_to_date (db, fx->map[k].dtfrm, (char*)sqlbuf, (int)sqlwrk.size, 
 								(char*)fx->map[k].sqlfld.data, (int)fx->map[k].sqlfld.size, &nx);
@@ -2528,7 +2528,7 @@ cob_index_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl, int id
 								k,idx,fx->map[k].colname,(int)fx->map[k].size));
 				DEBUG_DUMP("db",fx->map[k].sqlfld.data,fx->map[k].sqlfld.size);
 			} else {
-				cob_move (COB_CTX_TODO, &fx->map[k].recfld, &fx->map[k].sqlfld);
+				cob_move_ctx (COB_CTX_TODO, &fx->map[k].recfld, &fx->map[k].sqlfld);
 				fx->map[k].sqlfld.data[fx->map[k].sqlfld.size] = 0;
 				DEBUG_LOG("db",("%3d: Index %d %s type:%02d \n",k,idx,
 							fx->map[k].colname,fx->map[k].type));
@@ -2582,7 +2582,7 @@ cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 				memcpy(&sqlwrk,&fx->map[k].sqlfld,sizeof(cob_field));
 				sqlwrk.data = (unsigned char *)sqlbuf;
 				sqlwrk.size = fx->map[k].dtfrm->digits;
-				cob_move (COB_CTX_TODO, &fx->map[k].recfld, &sqlwrk);
+				cob_move_ctx (COB_CTX_TODO, &fx->map[k].recfld, &sqlwrk);
 				sqlbuf[sqlwrk.size] = 0;
 				nx = 0;
 				if (!fx->map[k].notnull
@@ -2664,7 +2664,7 @@ cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 						strcpy((char*)fx->map[k].sqlfld.data, "0");
 						DEBUG_LOG("db",("%3d: Copy '%s' SPACES; set ZERO\n",k,fx->map[k].colname));
 					} else {
-						cob_move (COB_CTX_TODO, &fx->map[k].recfld, &fx->map[k].sqlfld);
+						cob_move_ctx (COB_CTX_TODO, &fx->map[k].recfld, &fx->map[k].sqlfld);
 						fx->map[k].sqlfld.data[fx->map[k].sqlfld.size] = 0;
 						DEBUG_LOG("db",("%3d: Copy %s type:%02d %dv%d ht:%d st:%d d:%d z:%d\n",k,
 									fx->map[k].colname,fx->map[k].type,
@@ -2675,7 +2675,7 @@ cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 											fx->map[k].recfld.data));
 					}
 				} else {
-					cob_move (COB_CTX_TODO, &fx->map[k].recfld, &fx->map[k].sqlfld);
+					cob_move_ctx (COB_CTX_TODO, &fx->map[k].recfld, &fx->map[k].sqlfld);
 					fx->map[k].sqlfld.data[fx->map[k].sqlfld.size] = 0;
 					DEBUG_LOG("db",("%3d: Copy %s type:%02d %dv%d ht:%d st:%d d:%d z:%d\n",k,
 								fx->map[k].colname,fx->map[k].type,
@@ -2735,12 +2735,12 @@ cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 				memcpy(&sqlwrk,&fx->map[k].sqlfld,sizeof(cob_field));
 				sqlwrk.data = (unsigned char *)sqlbuf;
 				sqlwrk.size = fx->map[k].dtfrm->digits;
-				cob_move (COB_CTX_TODO, &fx->map[k].sqlfld, &sqlwrk);
+				cob_move_ctx (COB_CTX_TODO, &fx->map[k].sqlfld, &sqlwrk);
 				sqlbuf[sqlwrk.size] = 0;
 				convert_from_date (db, fx->map[k].dtfrm, 
 								(char*)fx->map[k].sqlfld.data, (int)fx->map[k].sqlfld.size, 
 								(char*)sqlbuf, (int)sqlwrk.size);
-				cob_move (COB_CTX_TODO, &sqlwrk, &fx->map[k].recfld);
+				cob_move_ctx (COB_CTX_TODO, &sqlwrk, &fx->map[k].recfld);
 #ifdef COB_DEBUG_LOG
 				DEBUG_LOG("db",("%3d: Read date '%s' %s type: %02d \n",k,
 							fx->map[k].dtfrm->format,fx->map[k].colname,fx->map[k].type));
@@ -2780,7 +2780,7 @@ cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 				continue;
 			} else if (fx->map[k].digits > 0) {
 				fx->map[k].sqlfld.size = fx->map[k].sqlinlen;
-				cob_move (COB_CTX_TODO, &fx->map[k].sqlfld, &fx->map[k].recfld);
+				cob_move_ctx (COB_CTX_TODO, &fx->map[k].sqlfld, &fx->map[k].recfld);
 #ifdef COB_DEBUG_LOG
 				if (fx->map[k].type == COB_XFDT_PIC9L
 				 || fx->map[k].type == COB_XFDT_PIC9LS
@@ -2802,7 +2802,7 @@ cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 #endif
 			} else {
 				fx->map[k].sqlfld.size = fx->map[k].sqlinlen;
-				cob_move (COB_CTX_TODO, &fx->map[k].sqlfld, &fx->map[k].recfld);
+				cob_move_ctx (COB_CTX_TODO, &fx->map[k].sqlfld, &fx->map[k].recfld);
 #ifdef COB_DEBUG_LOG
 				DEBUG_LOG("db",("%3d: Read %s type: %02d len:%d\n",k,
 							fx->map[k].colname,fx->map[k].type,

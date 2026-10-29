@@ -1652,8 +1652,8 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		break;
 	/* LCOV_EXCL_START */
 	default:
-		cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "indexed_open");
-		cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("invalid internal call of %s"), "indexed_open");
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 	/* LCOV_EXCL_STOP */
 	}
 
@@ -1889,7 +1889,7 @@ odbc_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 	struct file_xfd	*fx;
 	COB_UNUSED (a);
 
-	ky = cob_findkey (COB_CTX_TODO, f, key, &klen, &partlen);
+	ky = cob_findkey_ctx (COB_CTX_TODO, f, key, &klen, &partlen);
 	if (ky < 0) {
 		DEBUG_LOG("db",("Start key not found!\n"));
 		return COB_STATUS_30_PERMANENT_ERROR;
@@ -1977,7 +1977,7 @@ odbc_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 	if (fx->fileorg == COB_ORG_RELATIVE) {
 		ky = 0;
 	} else {
-		ky = cob_findkey (COB_CTX_TODO, f, key, &klen, &partlen);
+		ky = cob_findkey_ctx (COB_CTX_TODO, f, key, &klen, &partlen);
 		if (ky < 0) {
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}

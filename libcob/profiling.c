@@ -166,7 +166,7 @@ cob_init_prof (cob_global *lptr, cob_settings *sptr)
 }
 
 struct cob_prof_module *
-cob_prof_init_module (cob_context *ctx, cob_module *module,
+cob_prof_init_module_ctx (cob_context *ctx, cob_module *module,
 		      struct cob_prof_procedure *procedures,
 		      size_t procedure_count)
 {
@@ -193,6 +193,13 @@ cob_prof_init_module (cob_context *ctx, cob_module *module,
 	return NULL;
 }
 
+/* compatibility: cob_prof_init_module without context */
+struct cob_prof_module *
+cob_prof_init_module (cob_module *module, struct cob_prof_procedure *procedures, size_t procedure_count)
+{
+	return cob_prof_init_module_ctx (COB_CTX_COMPAT, module, procedures, procedure_count);
+}
+
 static void
 cob_prof_realloc_arrays (void)
 {
@@ -203,14 +210,14 @@ cob_prof_realloc_arrays (void)
 
 	if (max_prof_depth >= new_size){
 		int i;
-		cob_runtime_warning (COB_CTX_TODO, _("[cob_prof] Profiling overflow at %d calls, aborting profiling."),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("[cob_prof] Profiling overflow at %d calls, aborting profiling."),
 			current_idx);
-		cob_runtime_warning (COB_CTX_TODO, _("  Last 10 calls on stack:"));
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("  Last 10 calls on stack:"));
 		for (i = 0; i < cob_min_int(10, current_idx); i++){
 			struct cob_prof_module *info = called_runtimes[current_idx-1-i];
 			int proc_idx = called_procedures[current_idx-1-i];
 			struct cob_prof_procedure *proc = info->procedures + proc_idx;
-			cob_runtime_warning (COB_CTX_TODO, _("  * %s at %s:%d"), proc->text,
+			cob_runtime_warning_ctx (COB_CTX_TODO, _("  * %s at %s:%d"), proc->text,
 					     proc->file, proc->line);
 		}
 		is_active = 0;
@@ -243,7 +250,7 @@ cob_prof_realloc_arrays (void)
 }
 
 void
-cob_prof_enter_procedure (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
+cob_prof_enter_procedure_ctx (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	cob_ns_time t;
 
@@ -265,8 +272,15 @@ cob_prof_enter_procedure (cob_context *ctx, struct cob_prof_module *info, int pr
 	info->called_count[proc_idx] ++;
 }
 
+/* compatibility: cob_prof_enter_procedure without context */
 void
-cob_prof_exit_procedure (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
+cob_prof_enter_procedure (struct cob_prof_module *info, int proc_idx)
+{
+	cob_prof_enter_procedure_ctx (COB_CTX_COMPAT, info, proc_idx);
+}
+
+void
+cob_prof_exit_procedure_ctx (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	/* Exit all the sections/paragraphs */
 	cob_ns_time t;
@@ -290,8 +304,15 @@ cob_prof_exit_procedure (cob_context *ctx, struct cob_prof_module *info, int pro
 	}
 }
 
+/* compatibility: cob_prof_exit_procedure without context */
 void
-cob_prof_enter_section (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
+cob_prof_exit_procedure (struct cob_prof_module *info, int proc_idx)
+{
+	cob_prof_exit_procedure_ctx (COB_CTX_COMPAT, info, proc_idx);
+}
+
+void
+cob_prof_enter_section_ctx (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	if (!is_active) return;
 	/* We do not measure time on section enter/exit, we use the cumulative time
@@ -299,24 +320,45 @@ cob_prof_enter_section (cob_context *ctx, struct cob_prof_module *info, int proc
 	info->called_count[proc_idx] ++;
 }
 
+/* compatibility: cob_prof_enter_section without context */
 void
-cob_prof_use_paragraph_entry (cob_context *ctx, struct cob_prof_module *info,
-			      int paragraph_idx, int entry_idx){
-	if (!is_active) return;
-	info->called_count[entry_idx] ++;
-	cob_prof_enter_procedure (ctx, info, paragraph_idx);
+cob_prof_enter_section (struct cob_prof_module *info, int proc_idx)
+{
+	cob_prof_enter_section_ctx (COB_CTX_COMPAT, info, proc_idx);
 }
 
 void
-cob_prof_exit_section (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
+cob_prof_use_paragraph_entry_ctx (cob_context *ctx, struct cob_prof_module *info,
+			      int paragraph_idx, int entry_idx){
+	if (!is_active) return;
+	info->called_count[entry_idx] ++;
+	cob_prof_enter_procedure_ctx (ctx, info, paragraph_idx);
+}
+
+/* compatibility: cob_prof_use_paragraph_entry without context */
+void
+cob_prof_use_paragraph_entry (struct cob_prof_module *info, int paragraph_idx, int entry_idx)
+{
+	cob_prof_use_paragraph_entry_ctx (COB_CTX_COMPAT, info, paragraph_idx, entry_idx);
+}
+
+void
+cob_prof_exit_section_ctx (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	/* For now, nothing to do */
 	COB_UNUSED (info);
 	COB_UNUSED (proc_idx);
 }
 
+/* compatibility: cob_prof_exit_section without context */
 void
-cob_prof_goto (cob_context *ctx, struct cob_prof_module *info)
+cob_prof_exit_section (struct cob_prof_module *info, int proc_idx)
+{
+	cob_prof_exit_section_ctx (COB_CTX_COMPAT, info, proc_idx);
+}
+
+void
+cob_prof_goto_ctx (cob_context *ctx, struct cob_prof_module *info)
 {
 	int curr_proc;
 	struct cob_prof_module *curr_info;
@@ -329,8 +371,15 @@ cob_prof_goto (cob_context *ctx, struct cob_prof_module *info)
 	curr_info = called_runtimes[current_idx];
 
 	if (curr_info->procedures[curr_proc].kind == COB_PROF_PROCEDURE_PARAGRAPH){
-		cob_prof_exit_procedure (ctx, curr_info, curr_proc);
+		cob_prof_exit_procedure_ctx (ctx, curr_info, curr_proc);
 	}
+}
+
+/* compatibility: cob_prof_goto without context */
+void
+cob_prof_goto (struct cob_prof_module *info)
+{
+	cob_prof_goto_ctx (COB_CTX_COMPAT, info);
 }
 
 static void
@@ -531,7 +580,7 @@ cob_prof_end ()
 	if (!cobsetptr || !is_active || !prof_info_list) return;
 
 	while (current_idx >= 0) {
-		cob_prof_exit_procedure (COB_CTX_TODO, called_runtimes[current_idx],
+		cob_prof_exit_procedure_ctx (COB_CTX_TODO, called_runtimes[current_idx],
 					 called_procedures[current_idx]);
 	}
 
@@ -566,7 +615,7 @@ cob_prof_end ()
 		fclose (file);
 		fprintf(stderr, "File %s generated\n", cobsetptr->cob_prof_filename);
 	} else {
-		cob_runtime_warning (COB_CTX_TODO, _("error '%s' opening COB_PROF_FILE '%s'"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("error '%s' opening COB_PROF_FILE '%s'"),
 				     cob_get_strerror (), cobsetptr->cob_prof_filename);
 	}
 	current_idx = -1;

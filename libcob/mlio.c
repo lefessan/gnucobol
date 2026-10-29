@@ -194,14 +194,14 @@ set_xml_code (const enum xml_code_status code)
 		return;
 	}
 	/* LCOV_EXCL_STOP */
-	cob_set_int (COB_CTX_TODO, COB_MODULE_PTR->xml_code, (int)code);
+	cob_set_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->xml_code, (int)code);
 }
 
 /* set internal XML exception and special register XML-CODE */
 static void
 set_xml_exception (const enum xml_code_status code)
 {
-	cob_set_exception (COB_CTX_TODO, COB_EC_XML_IMP);
+	cob_set_exception_ctx (COB_CTX_TODO, COB_EC_XML_IMP);
 	set_xml_code (code);
 }
 
@@ -209,7 +209,7 @@ set_xml_exception (const enum xml_code_status code)
 static COB_INLINE COB_A_INLINE int
 get_xml_code (void)
 {
-	return cob_get_int (COB_CTX_TODO, COB_MODULE_PTR->xml_code);
+	return cob_get_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->xml_code);
 }
 
 /* set special register XML-EVENT */
@@ -478,14 +478,14 @@ set_json_code (const enum json_code_status code)
 		return;
 	}
 	/* LCOV_EXCL_STOP */
-	cob_set_int (COB_CTX_TODO, COB_MODULE_PTR->json_code, (int)code);
+	cob_set_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->json_code, (int)code);
 }
 
 /* set internal JSON exception and special register JSON-CODE */
 static void
 set_json_exception (const enum json_code_status code)
 {
-	cob_set_exception (COB_CTX_TODO, COB_EC_JSON_IMP);
+	cob_set_exception_ctx (COB_CTX_TODO, COB_EC_JSON_IMP);
 	set_json_code (code);
 }
 
@@ -661,7 +661,7 @@ get_num (cob_field * const f, void * (*strndup_func)(const char *, size_t),
 	edited_field.data = cob_malloc (edited_field.size);
 
 	/* Set field */
-	cob_move (COB_CTX_TODO, f, &edited_field);
+	cob_move_ctx (COB_CTX_TODO, f, &edited_field);
 
 	/* Replace decimal point in num with given decimal_point */
 	dp_pos = memchr (edited_field.data, COB_MODULE_PTR->decimal_point,
@@ -894,8 +894,8 @@ generate_content (xmlTextWriterPtr writer, cob_ml_tree *tree,
 	if (COB_FIELD_IS_FP (content)) {
 		/* TO-DO: Implement! */
 		/* TO-DO: Stop compilation if float in field */
-		cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
-		cob_fatal_error (COB_CTX_TODO, COB_FERROR_XML);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_XML);
 	} else if (COB_FIELD_IS_NUMERIC (content)) {
 		x_content = get_xml_num (content, decimal_point);
 	} else {
@@ -1056,14 +1056,14 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, cJSON *out
 	} else if (tree->content) {
 		if (name == NULL) {
 			/* TO-DO: Handle correctly, that's possibly an internal error! */
-			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_CTX_TODO, COB_FERROR_JSON);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_JSON);
 		}
 		if (COB_FIELD_IS_FP (tree->content)) {
 			/* TO-DO: Implement! */
 			/* TO-DO: Stop compilation if float in field */
-			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_CTX_TODO, COB_FERROR_JSON);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_JSON);
 		} else if (COB_FIELD_IS_NUMERIC (tree->content)) {
 			content = get_json_num (tree->content, decimal_point);
 			/*
@@ -1130,14 +1130,14 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, json_objec
 	} else if (tree->content) {
 		if (name == NULL) {
 			/* TO-DO: Handle correctly, that's possibly an internal error! */
-			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_CTX_TODO, COB_FERROR_JSON);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_JSON);
 		}
 		if (COB_FIELD_IS_FP (tree->content)) {
 			/* TO-DO: Implement! */
 			/* TO-DO: Stop compilation if float in field */
-			cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_CTX_TODO, COB_FERROR_JSON);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_JSON);
 		} else if (COB_FIELD_IS_NUMERIC (tree->content)) {
 			content = get_json_num (tree->content, decimal_point);
 			/*
@@ -1238,7 +1238,7 @@ static void xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 
 /* entry function for XML GENERATE */
 void
-cob_xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_xml_generate_ctx (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 	const int with_xml_dec, cob_field *ns, cob_field *ns_prefix,
 	const char decimal_point)
 {
@@ -1247,7 +1247,7 @@ cob_xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field
 	/* no field */
 	if (!out || !tree) {
 		set_xml_exception (XML_INTERNAL_ERROR);
-		cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 	}
 	/* LINKAGE or BASED item without data */
 	if (!out->data) {
@@ -1295,6 +1295,13 @@ cob_xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field
 	}
 }
 
+/* compatibility: cob_xml_generate without context */
+void
+cob_xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count, const int with_xml_dec, cob_field *ns, cob_field *ns_prefix, const char decimal_point)
+{
+	cob_xml_generate_ctx (COB_CTX_COMPAT, out, tree, count, with_xml_dec, ns, ns_prefix, decimal_point);
+}
+
 static void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 	const int flags, struct xml_state *state);
 static void xml_free_parse_memory (struct xml_state *state);
@@ -1304,7 +1311,7 @@ static void xml_process_next_event (struct xml_state *state);
 #endif
 
 /* entry function for XML PARSE */
-int cob_xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field *validation,
+int cob_xml_parse_ctx (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field *validation,
 		const int flags, void **saved_state)
 {
 	struct xml_state *state;
@@ -1324,7 +1331,7 @@ int cob_xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_fie
 			set_xml_event (EVENT_EXCEPTION);
 			return -1;
 #else
-			cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 #endif
 		}
 		*saved_state = cob_malloc (sizeof (struct xml_state));
@@ -1403,7 +1410,7 @@ int cob_xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_fie
 		} else {
 			/* fatal runtime error,
 			   TODO: at least a runtime warning, likely runtime exit */
-			cob_set_exception (COB_CTX_TODO, COB_EC_XML);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_XML);
 			xml_free_parse_memory (state);
 			*saved_state = NULL;
 			return 1;
@@ -1416,7 +1423,7 @@ int cob_xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_fie
 		if (COB_MODULE_PTR->xml_mode == COB_XML_XMLNSS) {
 			/* fatal runtime error,
 			   TODO: at least a runtime warning, likely runtime exit */
-			cob_set_exception (COB_CTX_TODO, COB_EC_XML);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_XML);
 		} else {
 			set_xml_code (-1);
 		}
@@ -1446,6 +1453,12 @@ int cob_xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_fie
 #endif
 
 	return 0;
+}
+
+/* compatibility: cob_xml_parse without context */
+int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation, const int flags, void **saved_state)
+{
+	return cob_xml_parse_ctx (COB_CTX_COMPAT, in, encoding, validation, flags, saved_state);
 }
 
 #if defined (WITH_XML2)
@@ -1553,7 +1566,7 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 		/* FIXME: COUNT IN may never be bigger than the field size! See above. */
 		/* TODO: for NATIONAL data (UTF-16): bytes / 2;
 		         otherwise - including UTF-8 amount of bytes */
-		cob_set_int (COB_CTX_TODO, count, chars_written);
+		cob_set_int_ctx (COB_CTX_TODO, count, chars_written);
 	}
 }
 
@@ -1606,10 +1619,10 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 	switch (state) {
 	case XML_PARSER_VALIDATION_SETUP:
 		if (err->file) {
-			cob_runtime_warning (COB_CTX_TODO, _("XML PARSE setup for VALIDATE FILE %s:%d (%d): %s"),
+			cob_runtime_warning_ctx (COB_CTX_TODO, _("XML PARSE setup for VALIDATE FILE %s:%d (%d): %s"),
 				err->file, err->line, err->code, err->message);
 		} else {
-			cob_runtime_warning (COB_CTX_TODO, _("XML PARSE setup for VALIDATE FILE (%d): %s"),
+			cob_runtime_warning_ctx (COB_CTX_TODO, _("XML PARSE setup for VALIDATE FILE (%d): %s"),
 				err->code, err->message);
 		}		
 		set_xml_event (EVENT_EXCEPTION);
@@ -1618,7 +1631,7 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 		set_xml_code_parsing_error (err->code);
 		break;
 	case XML_PARSER_VALIDATION_SETUP_MEM:
-		cob_runtime_warning (COB_CTX_TODO, _("XML PARSE setup for VALIDATE (%d): %s"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("XML PARSE setup for VALIDATE (%d): %s"),
 			err->code, err->message);
 		set_xml_event (EVENT_EXCEPTION);
 		parse_state->last_xml_code = XML_PARSE_ERROR_FATAL;
@@ -1633,7 +1646,7 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 		break;
 	default:
 		/* not translated as unplanned */
-		cob_runtime_warning (COB_CTX_TODO, "XML PARSE state %d on %s:%d (%d): %s",
+		cob_runtime_warning_ctx (COB_CTX_TODO, "XML PARSE state %d on %s:%d (%d): %s",
 			state, err->file, err->line, err->code, err->message);
 	}
 
@@ -1732,7 +1745,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		char	*enc = NULL;
 		if (encoding) {
 			/* CHECKME: is there a reasonable array size to use instead? */
-			enc = cob_get_picx (COB_CTX_TODO, encoding->data, encoding->size, NULL, 0);
+			enc = cob_get_picx_ctx (COB_CTX_TODO, encoding->data, encoding->size, NULL, 0);
 		}
 
 		/* setup sax-parser callbacks */
@@ -1858,7 +1871,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (COB_CTX_TODO, _("%s is unfinished"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("%s is unfinished"),
 			"XML PARSE");
 	}
 
@@ -2043,7 +2056,7 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 	COB_UNUSED (decimal_point);
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"XML");
 	}
 	set_xml_exception (XML_INTERNAL_ERROR);
@@ -2063,7 +2076,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"XML");
 	}
 
@@ -2084,7 +2097,7 @@ void xml_free_parse_memory (struct xml_state* state)
 #if defined (WITH_CJSON) || defined (WITH_JSON_C)
 /* entry function for JSON GENERATE */
 void
-cob_json_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_json_generate_ctx (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 		   const char decimal_point)
 {
 	const char	*printed_json = NULL;
@@ -2168,15 +2181,22 @@ cob_json_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_fiel
 
 		/* TODO: for NATIONAL data (UTF-16): bytes / 2;
 		         otherwise - including UTF-8 amount of bytes */
-		cob_set_int (COB_CTX_TODO, count, print_len);
+		cob_set_int_ctx (COB_CTX_TODO, count, print_len);
 	}
+}
+
+/* compatibility: cob_json_generate without context */
+void
+cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count, const char decimal_point)
+{
+	cob_json_generate_ctx (COB_CTX_COMPAT, out, tree, count, decimal_point);
 }
 
 #else /* no JSON */
 
 /* entry function for JSON GENERATE (not handled) */
 void
-cob_json_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_json_generate_ctx (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 		   const char decimal_point)
 {
 	static int first_json = 1;
@@ -2188,11 +2208,18 @@ cob_json_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_fiel
 
 	if (first_json) {
 		first_json = 0;
-		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"JSON");
 	}
 	set_json_exception (JSON_INTERNAL_ERROR);
 	cob_add_exception (COB_EC_IMP_FEATURE_DISABLED);
+}
+
+/* compatibility: cob_json_generate without context */
+void
+cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count, const char decimal_point)
+{
+	cob_json_generate_ctx (COB_CTX_COMPAT, out, tree, count, decimal_point);
 }
 
 #endif

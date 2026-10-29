@@ -474,7 +474,7 @@ static COB_INLINE enum cob_file_operation
 get_io_ptr (cob_file *f)
 {
 	if (fileio_funcs[f->io_routine] == NULL) {
-		cob_runtime_error (COB_CTX_TODO, _("ERROR I/O routine %s is not present"),
+		cob_runtime_error_ctx (COB_CTX_TODO, _("ERROR I/O routine %s is not present"),
 							io_rtns[f->io_routine].name);
 		f->io_routine = COB_IO_NOT_AVAIL;
 	}
@@ -586,7 +586,7 @@ isam_to_file (FILE *fdin, cob_file *f, unsigned char *hbuf)
 	errno = 0;
 	if (fseek (fdin, (idxblk-1)*idxblksz, SEEK_SET) == 0
 	 && fread (ibuf, 1, (size_t)idxblksz, fdin) == (size_t)idxblksz) {
-		f->keys = cob_cache_realloc (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * f->nkeys);
+		f->keys = cob_cache_realloc_ctx (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * f->nkeys);
 		if (!f->flag_vb_isam) {
 			bgn = 7;
 			supchr = 4;
@@ -622,13 +622,13 @@ isam_to_file (FILE *fdin, cob_file *f, unsigned char *hbuf)
 				ttlen += klen;
 				if (f->record->data) {
 					if (part == 0) {
-						f->keys[k].field = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_field));
+						f->keys[k].field = cob_cache_malloc_ctx(COB_CTX_TODO, sizeof(cob_field));
 						f->keys[k].field->data = f->record->data + kpos;
 						f->keys[k].field->attr = &alnum_attr;
 						f->keys[k].field->size = klen;
 						f->keys[k].offset = kpos;
 					}
-					f->keys[k].component[part] = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_field));
+					f->keys[k].component[part] = cob_cache_malloc_ctx(COB_CTX_TODO, sizeof(cob_field));
 					f->keys[k].component[part]->data = f->record->data + kpos;
 					f->keys[k].component[part]->attr = &alnum_attr;
 					f->keys[k].component[part]->size = klen;
@@ -1046,7 +1046,7 @@ cob_key_def (cob_file *f, const int keyn, char *p, int keycheck)
 	/* No match so add this index to table */
 	loc = cloc[0];
 	len = clen[0];
-	f->keys[k].field = cob_cache_malloc (COB_CTX_TODO, sizeof(cob_field));
+	f->keys[k].field = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof(cob_field));
 	f->keys[k].field->attr = &const_alpha_attr;
 	f->keys[k].offset = loc;
 	if (parts == 1) {
@@ -1064,12 +1064,12 @@ cob_key_def (cob_file *f, const int keyn, char *p, int keycheck)
 	} else {
 
 		f->keys[k].field->size = ttl;
-		f->keys[k].field->data = cob_cache_malloc (COB_CTX_TODO, (size_t)ttl+1);
+		f->keys[k].field->data = cob_cache_malloc_ctx (COB_CTX_TODO, (size_t)ttl+1);
 		f->keys[k].count_components = (short)parts;
 		for (part = 0; part < parts; part++) {
 			loc = cloc[part];
 			len = clen[part];
-			f->keys[k].component[part] = cob_cache_malloc (COB_CTX_TODO, sizeof(cob_field));
+			f->keys[k].component[part] = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof(cob_field));
 			f->keys[k].component[part]->attr = &const_alpha_attr;
 			f->keys[k].component[part]->size = len;
 			f->keys[k].component[part]->data = f->record->data + loc;
@@ -1091,12 +1091,12 @@ set_qbl_buf (int recsize)
 	recsize = (recsize + 512) / 512;
 	recsize = recsize * 512;
 	if (qbl_hdr == NULL) {
-		qbl_hdr = cob_cache_malloc (COB_CTX_TODO, recsize + SZ_QBLHDR);
-		qbl_tmp = cob_cache_malloc (COB_CTX_TODO, recsize + 1);
+		qbl_hdr = cob_cache_malloc_ctx (COB_CTX_TODO, recsize + SZ_QBLHDR);
+		qbl_tmp = cob_cache_malloc_ctx (COB_CTX_TODO, recsize + 1);
 		qblhdrsz = recsize;
 	} else if (qblhdrsz < recsize) {
-		qbl_hdr = cob_cache_realloc (COB_CTX_TODO, qbl_hdr, recsize + SZ_QBLHDR);
-		qbl_tmp = cob_cache_realloc (COB_CTX_TODO, qbl_tmp, recsize + 1);
+		qbl_hdr = cob_cache_realloc_ctx (COB_CTX_TODO, qbl_hdr, recsize + SZ_QBLHDR);
+		qbl_tmp = cob_cache_realloc_ctx (COB_CTX_TODO, qbl_tmp, recsize + 1);
 		qblhdrsz = recsize;
 	}
 }
@@ -1116,7 +1116,7 @@ cob_open_qbl (char *filename, int makeit, int append)
 		mode |= O_CREAT;
 	fd = open (filename, mode, COB_FILE_MODE);
 	if (errno) {
-		cob_runtime_warning (COB_CTX_TODO, _("Error opening %s; %s"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("Error opening %s; %s"),
 			filename, strerror(errno));
 	}
 	return fd;
@@ -1130,7 +1130,7 @@ cob_close_qbl (int fd, char *filename, int remove)
 	if (remove && errno == 0)
 		unlink (filename);
 	if (errno) {
-		cob_runtime_warning (COB_CTX_TODO, _("Error closing %s; %s"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("Error closing %s; %s"),
 			filename, strerror(errno));
 	}
 	return;
@@ -1239,12 +1239,12 @@ cob_read_qbl (int fd, int *reclen, off_t pos, int dir)
 		if (errno == EINVAL)
 			return -1;
 		if (errno != 0) {
-			cob_runtime_warning (COB_CTX_TODO, "QBL: Read error %s: at %ld\n",
+			cob_runtime_warning_ctx (COB_CTX_TODO, "QBL: Read error %s: at %ld\n",
 				strerror(errno), (long)pos);
 			return -1;
 		}
 		if (readBlock (fd, mark, 6) == -1) {
-			cob_runtime_warning (COB_CTX_TODO, "QBL: Bad read header at %ld of %s",
+			cob_runtime_warning_ctx (COB_CTX_TODO, "QBL: Bad read header at %ld of %s",
 				(long)newpos, qblfilename);
 			return -1;
 		}
@@ -1254,14 +1254,14 @@ cob_read_qbl (int fd, int *reclen, off_t pos, int dir)
 		chk = chk ^ mark[5];
 		if (mark[0] != CHKMARK
 		 || mark[1] != chk) {
-			cob_runtime_warning (COB_CTX_TODO, "QBL: Bad check sum %02X at %ld of %s",
+			cob_runtime_warning_ctx (COB_CTX_TODO, "QBL: Bad check sum %02X at %ld of %s",
 				chk, (long)pos, qblfilename);
 			return -1;
 		}
 		len = (mark[2] << 24) | (mark[3] << 16) | (mark[4] << 8) | mark[5];
 		*reclen = len - SZ_QBLHDR;
 		if (readBlock (fd, qbl_hdr, len) == -1) {
-			cob_runtime_warning (COB_CTX_TODO, "QBL: Bad read record at %ld of %s",
+			cob_runtime_warning_ctx (COB_CTX_TODO, "QBL: Bad read record at %ld of %s",
 				(long)newpos, qblfilename);
 			return -1;
 		}
@@ -1280,7 +1280,7 @@ cob_read_qbl (int fd, int *reclen, off_t pos, int dir)
 		if (errno == EINVAL)
 			return -1;
 		if (readBlock (fd, mark, 6) == -1) {
-			cob_runtime_warning (COB_CTX_TODO, "QBL: Bad read header at %ld of %s",
+			cob_runtime_warning_ctx (COB_CTX_TODO, "QBL: Bad read header at %ld of %s",
 				(long)newpos, qblfilename);
 			return -1;
 		}
@@ -1290,7 +1290,7 @@ cob_read_qbl (int fd, int *reclen, off_t pos, int dir)
 		chk = chk ^ mark[0];
 		if (mark[5] != CHKMARK
 		 || mark[4] != chk) {
-			cob_runtime_warning (COB_CTX_TODO, "QBL: Bad check sum %02X at %ld of %s",
+			cob_runtime_warning_ctx (COB_CTX_TODO, "QBL: Bad check sum %02X at %ld of %s",
 				chk, (long)pos, qblfilename);
 			return -1;
 		}
@@ -1298,7 +1298,7 @@ cob_read_qbl (int fd, int *reclen, off_t pos, int dir)
 		*reclen = len - SZ_QBLHDR;
 		lseek (fd, newpos - len - SZ_QBLHDR, SEEK_SET);
 		if (readBlock (fd, qbl_hdr, len) == -1) {
-			cob_runtime_warning (COB_CTX_TODO, "QBL: Bad read record at %ld of %s",
+			cob_runtime_warning_ctx (COB_CTX_TODO, "QBL: Bad read record at %ld of %s",
 				(long)newpos, qblfilename);
 			return -1;
 		}
@@ -1317,10 +1317,10 @@ cob_put_qbl (cob_file *f, const char *type)
 	memcpy(qbl_hdr->type, type, 2);
 	strncpy(qbl_hdr->name, f->select_name, sizeof(qbl_hdr->name)-1);
 	if (f->organization == COB_ORG_RELATIVE) {
-		recnum = (cob_u64_t)cob_get_int (COB_CTX_TODO, f->keys[0].field);
+		recnum = (cob_u64_t)cob_get_int_ctx (COB_CTX_TODO, f->keys[0].field);
 	}
-	cob_put_u64_compx (COB_CTX_TODO, recnum, qbl_hdr->recnum, 4);
-	cob_put_u64_compx (COB_CTX_TODO, f->record_off, qbl_hdr->filepos, 8);
+	cob_put_u64_compx_ctx (COB_CTX_TODO, recnum, qbl_hdr->recnum, 4);
+	cob_put_u64_compx_ctx (COB_CTX_TODO, f->record_off, qbl_hdr->filepos, 8);
 	if (f->organization == COB_ORG_SEQUENTIAL
 	 || f->organization == COB_ORG_LINE_SEQUENTIAL) {
 		if (memcmp (type, QBL_NEW, 2) == 0)
@@ -1332,8 +1332,8 @@ cob_put_qbl (cob_file *f, const char *type)
 	}
 
 	if (pos == -1) {	/* Unable to write; Must do a ROLLBACK */
-		cob_runtime_error (COB_CTX_TODO, _("I/O error writing QBL: %s"), qblfilename);
-		cob_rollback (COB_CTX_TODO);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("I/O error writing QBL: %s"), qblfilename);
+		cob_rollback_ctx (COB_CTX_TODO);
 	}
 }
 
@@ -1362,10 +1362,10 @@ cob_load_module (int iortn)
 	}
 
 	module_errmsg[0] = 0;
-	ioinit = (void (*)(cob_file_api *))cob_load_lib (COB_CTX_TODO, io_rtns[iortn].module, io_rtns[iortn].entry, module_errmsg);
+	ioinit = (void (*)(cob_file_api *))cob_load_lib_ctx (COB_CTX_TODO, io_rtns[iortn].module, io_rtns[iortn].entry, module_errmsg);
 	if (ioinit == NULL) {
 		/* recheck with libcob */
-		ioinit = (void (*)(cob_file_api *))cob_load_lib (COB_CTX_TODO, "libcob-5", io_rtns[iortn].entry, NULL);
+		ioinit = (void (*)(cob_file_api *))cob_load_lib_ctx (COB_CTX_TODO, "libcob-5", io_rtns[iortn].entry, NULL);
 	}
 	if (ioinit == NULL) {
 		return 1;
@@ -1382,7 +1382,7 @@ output_io_module_error (int iortn)
 	const char* desc = io_rtns[iortn].desc ? io_rtns[iortn].desc : io_rtns[iortn].name;
 
 	/* note: module_errmsg includes both the module name and error */
-	cob_runtime_error (COB_CTX_TODO, _("I/O routine %s cannot be loaded: %s"),
+	cob_runtime_error_ctx (COB_CTX_TODO, _("I/O routine %s cannot be loaded: %s"),
 		desc, module_errmsg);
 }
 
@@ -1551,7 +1551,7 @@ cob_chk_file_env (cob_file *f, const char *src)
 	}
 
 	if (f != NULL) {
-		if ((file_open_io_env = cob_get_env (COB_CTX_TODO, "IO_OPTIONS", NULL)) != NULL) {
+		if ((file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, "IO_OPTIONS", NULL)) != NULL) {
 			cob_set_file_format (f, file_open_io_env, 1);	/* Set initial defaults */
 		}
 		if (f->organization == COB_ORG_INDEXED) {
@@ -1569,11 +1569,11 @@ cob_chk_file_env (cob_file *f, const char *src)
 			t = "IO";
 		}
 		snprintf (file_open_env, (size_t)COB_FILE_MAX, "%s_OPTIONS", t);
-		if ((file_open_io_env = cob_get_env (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
+		if ((file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
 			snprintf (file_open_env, (size_t)COB_FILE_MAX, "%s_options", t);
 			file_open_env[0] = (char)tolower(file_open_env[0]);
 			file_open_env[1] = (char)tolower(file_open_env[1]);
-			file_open_io_env = cob_get_env (COB_CTX_TODO, file_open_env, NULL);
+			file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL);
 		}
 		if (file_open_io_env != NULL) {
 			cob_set_file_format (f, file_open_io_env, 1);	/* Defaults for file type */
@@ -1582,24 +1582,24 @@ cob_chk_file_env (cob_file *f, const char *src)
 		/* Check for IO_filename with file specific options */
 		file_open_io_env = NULL;
 		snprintf (file_open_env, (size_t)COB_FILE_MAX, "%s%s", "IO_", s);
-		if ((file_open_io_env = cob_get_env (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
+		if ((file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
 			snprintf (file_open_env, (size_t)COB_FILE_MAX, "%s%s", "io_", s);
-			if ((file_open_io_env = cob_get_env (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
+			if ((file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
 				for (i = 0; file_open_env[i] != 0; ++i) {	/* Try all Upper Case */
 					file_open_env[i] = (char)toupper((unsigned char)file_open_env[i]);
 				}
-				file_open_io_env = cob_get_env (COB_CTX_TODO, file_open_env, NULL);
+				file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL);
 			}
 		}
 		if (file_open_io_env == NULL) {	/* Re-check for IO_fdname */
 			snprintf (file_open_env, (size_t)COB_FILE_MAX, "%s%s", "IO_", f->select_name);
-			if ((file_open_io_env = cob_get_env (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
+			if ((file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
 				snprintf (file_open_env, (size_t)COB_FILE_MAX, "%s%s", "io_", f->select_name);
-				if ((file_open_io_env = cob_get_env (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
+				if ((file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL)) == NULL) {
 					for (i = 0; file_open_env[i] != 0; ++i) {	/* Try all Upper Case */
 						file_open_env[i] = (unsigned char)toupper((int)file_open_env[i]);
 					}
-					file_open_io_env = cob_get_env (COB_CTX_TODO, file_open_env, NULL);
+					file_open_io_env = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL);
 				}
 			}
 		}
@@ -1617,7 +1617,7 @@ cob_chk_file_env (cob_file *f, const char *src)
 	for (i = 0; i < NUM_PREFIX; ++i) {
 		snprintf (file_open_env, (size_t)COB_FILE_MAX, "%s%s", prefix[i], s);
 		file_open_env[COB_FILE_MAX] = 0;
-		p = cob_get_env (COB_CTX_TODO, file_open_env, NULL);
+		p = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL);
 		if (p && *p) {
 			break;
 		}
@@ -1630,7 +1630,7 @@ cob_chk_file_env (cob_file *f, const char *src)
 			for (i = 0; file_open_env[i] != 0; ++i) {
 				file_open_env[i] = (char)toupper((unsigned char)file_open_env[i]);
 			}
-			p = cob_get_env (COB_CTX_TODO, file_open_env, NULL);
+			p = cob_get_env_ctx (COB_CTX_TODO, file_open_env, NULL);
 			if (p && *p) {
 				break;
 			}
@@ -2422,13 +2422,13 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 				f->flag_redef = 1;
 				f->record_min = f->record_max = ivalue;
 				if (f->record == NULL) {
-					f->record = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_field));
-					f->record->data = cob_cache_malloc (COB_CTX_TODO, ivalue + 1);
+					f->record = cob_cache_malloc_ctx(COB_CTX_TODO, sizeof(cob_field));
+					f->record->data = cob_cache_malloc_ctx (COB_CTX_TODO, ivalue + 1);
 					f->record->attr = &alnum_attr;
 				}
 				f->record->size = ivalue;
 				if (f->variable_record) {
-					cob_set_int (COB_CTX_TODO, f->variable_record, (int) f->record->size);
+					cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) f->record->size);
 				}
 				if (f->file_format == COB_FILE_IS_MF) {
 					f->record_prefix = 0;
@@ -2544,7 +2544,7 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 					        || strcasecmp (value, "l64") == 0) {
 						f->file_format = COB_FILE_IS_L64;
 					} else {
-						cob_runtime_warning (COB_CTX_TODO, _("I/O routine %s is not known for %s"),
+						cob_runtime_warning_ctx (COB_CTX_TODO, _("I/O routine %s is not known for %s"),
 											value,file_open_env);
 					}
 				}
@@ -2558,7 +2558,7 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 				} else if (strcasecmp(value, "never") == 0) {
 					f->flag_read_no_02 = 1;
 				} else if (strcasecmp (value, "default") != 0) {
-					cob_runtime_warning (COB_CTX_TODO, _("dups_ahead option %s is not valid for %s"),
+					cob_runtime_warning_ctx (COB_CTX_TODO, _("dups_ahead option %s is not valid for %s"),
 											value,file_open_env);
 				}
 				continue;
@@ -2567,7 +2567,7 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 				if (isdirname (value)) {
 					f->xfdschema = cob_strdup (value);
 				} else {
-					f->xfdschema = cob_cache_malloc (COB_CTX_TODO, strlen(value) + strlen(COB_SCHEMA_DIR) + 8);
+					f->xfdschema = cob_cache_malloc_ctx (COB_CTX_TODO, strlen(value) + strlen(COB_SCHEMA_DIR) + 8);
 					sprintf((char*)f->xfdschema, "%s%c%s",COB_SCHEMA_DIR,SLASH_CHAR,value);
 				}
 				continue;
@@ -2777,7 +2777,7 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 					if (updt
 					 && f->nkeys != nkeys) {
 						if (nkeys > f->nkeys) {
-							f->keys = cob_cache_realloc (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
+							f->keys = cob_cache_realloc_ctx (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
 							f->flag_redo_keydef = 1;
 						}
 						f->nkeys = nkeys;
@@ -2798,7 +2798,7 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 						if (!f->flag_updt_file)
 							continue;
 						f->nkeys = nkeys = keyn;
-						f->keys = cob_cache_realloc (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
+						f->keys = cob_cache_realloc_ctx (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
 						f->flag_redo_keydef = 1;
 					}
 					ret = cob_key_def (f, keyn, value, updt?0:f->flag_keycheck);
@@ -2819,7 +2819,7 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 						if (!f->flag_updt_file)
 							continue;
 						f->nkeys = nkeys = keyn;
-						f->keys = cob_cache_realloc (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
+						f->keys = cob_cache_realloc_ctx (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
 						f->flag_redo_keydef = 1;
 					}
 
@@ -2839,7 +2839,7 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 						if (!f->flag_updt_file)
 							continue;
 						f->nkeys = nkeys = keyn;
-						f->keys = cob_cache_realloc (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
+						f->keys = cob_cache_realloc_ctx (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
 						f->flag_redo_keydef = 1;
 					}
 					idx = keyn - 1;
@@ -2862,7 +2862,7 @@ cob_set_file_format (cob_file *f, char *defstr, int updt)
 						if (!f->flag_updt_file)
 							continue;
 						f->nkeys = nkeys = keyn;
-						f->keys = cob_cache_realloc (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
+						f->keys = cob_cache_realloc_ctx (COB_CTX_TODO, f->keys, sizeof (cob_file_key) * nkeys);
 						f->flag_redo_keydef = 1;
 					}
 					idx = keyn - 1;
@@ -3192,7 +3192,7 @@ unlock_record(cob_file *f, unsigned int recnum)
 		if (!UnlockFile (osHandle, 0, 0, MAXDWORD, MAXDWORD)) {
 #if 0 /* CHECKME - What is the correct thing to do here? */
 			/* not translated as "testing only" */
-			cob_runtime_warning (COB_CTX_TODO, "issue during UnLockFile (%s), lastError: " CB_FMT_LLU,
+			cob_runtime_warning_ctx (COB_CTX_TODO, "issue during UnLockFile (%s), lastError: " CB_FMT_LLU,
 				"unlock_record", (cob_u64_t)GetLastError ());
 #endif
 			return 0;
@@ -3429,13 +3429,13 @@ cob_file_save_status (cob_file *f, cob_field *fnstatus, const int status)
 		skip_exn = 1;
 		if (delete_file_status) {
 			delete_file_status = 0;
-			cob_set_exception (COB_CTX_TODO, COB_EC_DELETE_FILE);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_DELETE_FILE);
 		}
 		memset (f->file_status, '9', (size_t)2);
 		switch (status) {
 		case COB_XSTATUS_IS_DIR:
 			memcpy (f->file_status, "37", 2);	/* Default to old GnuCOBOL status */
-			cob_set_exception (COB_CTX_TODO, status_exception[3]);
+			cob_set_exception_ctx (COB_CTX_TODO, status_exception[3]);
 			if (COB_MODULE_PTR) {
 				if (COB_MODULE_PTR->flag_dialect == COB_DIALECT_MF) {
 					f->file_status[0] = '9';
@@ -3445,7 +3445,7 @@ cob_file_save_status (cob_file *f, cob_field *fnstatus, const int status)
 			break;
 		case COB_XSTATUS_NOT_DIR:
 			memcpy (f->file_status, "30", 2);	/* Default to old GnuCOBOL status */
-			cob_set_exception (COB_CTX_TODO, status_exception[3]);
+			cob_set_exception_ctx (COB_CTX_TODO, status_exception[3]);
 			if (COB_MODULE_PTR) {
 				if (COB_MODULE_PTR->flag_dialect == COB_DIALECT_MF) {
 					f->file_status[0] = '9';
@@ -3455,7 +3455,7 @@ cob_file_save_status (cob_file *f, cob_field *fnstatus, const int status)
 			break;
 		case COB_XSTATUS_NOT_FILE:
 			memcpy (f->file_status, "35", 2);	/* Default to old GnuCOBOL status */
-			cob_set_exception (COB_CTX_TODO, status_exception[3]);
+			cob_set_exception_ctx (COB_CTX_TODO, status_exception[3]);
 			if (COB_MODULE_PTR) {
 				if (COB_MODULE_PTR->flag_dialect == COB_DIALECT_MF) {
 					f->file_status[0] = '9';
@@ -3479,9 +3479,9 @@ cob_file_save_status (cob_file *f, cob_field *fnstatus, const int status)
 		} else {
 #if 0 /* correct thing to do, but then also needs to have codegen adjusted
          --> module-incompatibility --> 4.x */
-			cob_set_exception (COB_CTX_TODO, eop_status);
+			cob_set_exception_ctx (COB_CTX_TODO, eop_status);
 #else
-			cob_set_exception (COB_CTX_TODO, COB_EC_I_O_EOP);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_I_O_EOP);
 #endif
 			eop_status = 0;
 		}
@@ -3493,9 +3493,9 @@ cob_file_save_status (cob_file *f, cob_field *fnstatus, const int status)
 	} else if (!skip_exn) {
 		if (delete_file_status) {
 			delete_file_status = 0;
-			cob_set_exception (COB_CTX_TODO, COB_EC_DELETE_FILE);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_DELETE_FILE);
 		} else {
-			cob_set_exception (COB_CTX_TODO, status_exception[status / 10]);
+			cob_set_exception_ctx (COB_CTX_TODO, status_exception[status / 10]);
 		}
 	}
 
@@ -3720,12 +3720,12 @@ file_linage_check (cob_file *f)
 	cob_linage	*lingptr;
 
 	lingptr = f->linage;
-	lingptr->lin_lines = cob_get_int (COB_CTX_TODO, lingptr->linage);
+	lingptr->lin_lines = cob_get_int_ctx (COB_CTX_TODO, lingptr->linage);
 	if (lingptr->lin_lines < 1) {
 		goto linerr;
 	}
 	if (lingptr->latfoot) {
-		lingptr->lin_foot = cob_get_int (COB_CTX_TODO, lingptr->latfoot);
+		lingptr->lin_foot = cob_get_int_ctx (COB_CTX_TODO, lingptr->latfoot);
 		if (lingptr->lin_foot < 1
 		 || lingptr->lin_foot > lingptr->lin_lines) {
 			goto linerr;
@@ -3734,7 +3734,7 @@ file_linage_check (cob_file *f)
 		lingptr->lin_foot = 0;
 	}
 	if (lingptr->lattop) {
-		lingptr->lin_top = cob_get_int (COB_CTX_TODO, lingptr->lattop);
+		lingptr->lin_top = cob_get_int_ctx (COB_CTX_TODO, lingptr->lattop);
 		if (lingptr->lin_top < 0) {
 			goto linerr;
 		}
@@ -3742,7 +3742,7 @@ file_linage_check (cob_file *f)
 		lingptr->lin_top = 0;
 	}
 	if (lingptr->latbot) {
-		lingptr->lin_bot = cob_get_int (COB_CTX_TODO, lingptr->latbot);
+		lingptr->lin_bot = cob_get_int_ctx (COB_CTX_TODO, lingptr->latbot);
 		if (lingptr->lin_bot < 0) {
 			goto linerr;
 		}
@@ -3751,7 +3751,7 @@ file_linage_check (cob_file *f)
 	}
 	return 0;
 linerr:
-	cob_set_int (COB_CTX_TODO, lingptr->linage_ctr, 0);
+	cob_set_int_ctx (COB_CTX_TODO, lingptr->linage_ctr, 0);
 	return 1;
 }
 
@@ -3765,7 +3765,7 @@ cob_linage_write_opt (cob_file *f, const int opt)
 
 	lingptr = f->linage;
 	if (opt & COB_WRITE_PAGE) {
-		i = cob_get_int (COB_CTX_TODO, lingptr->linage_ctr);
+		i = cob_get_int_ctx (COB_CTX_TODO, lingptr->linage_ctr);
 		if (i == 0) {
 			return COB_STATUS_57_I_O_LINAGE;
 		}
@@ -3782,14 +3782,14 @@ cob_linage_write_opt (cob_file *f, const int opt)
 		for (i = 0; i < lingptr->lin_top; ++i) {
 			COB_CHECKED_FPUTC ('\n', fp);
 		}
-		cob_set_int (COB_CTX_TODO, lingptr->linage_ctr, 1);
+		cob_set_int_ctx (COB_CTX_TODO, lingptr->linage_ctr, 1);
 	} else if (opt & COB_WRITE_LINES) {
-		n = cob_get_int (COB_CTX_TODO, lingptr->linage_ctr);
+		n = cob_get_int_ctx (COB_CTX_TODO, lingptr->linage_ctr);
 		if (n == 0) {
 			return COB_STATUS_57_I_O_LINAGE;
 		}
-		cob_add_int (COB_CTX_TODO, lingptr->linage_ctr, opt & COB_WRITE_MASK, 0);
-		i = cob_get_int (COB_CTX_TODO, lingptr->linage_ctr);
+		cob_add_int_ctx (COB_CTX_TODO, lingptr->linage_ctr, opt & COB_WRITE_MASK, 0);
+		i = cob_get_int_ctx (COB_CTX_TODO, lingptr->linage_ctr);
 		/* Set EOP status if requested */
 		if (check_eop_status && lingptr->lin_foot) {
 			if (i >= lingptr->lin_foot) {
@@ -3810,7 +3810,7 @@ cob_linage_write_opt (cob_file *f, const int opt)
 			if (file_linage_check (f)) {
 				return COB_STATUS_57_I_O_LINAGE;
 			}
-			cob_set_int (COB_CTX_TODO, lingptr->linage_ctr, 1);
+			cob_set_int_ctx (COB_CTX_TODO, lingptr->linage_ctr, 1);
 			for (i = 0; i < lingptr->lin_top; ++i) {
 				COB_CHECKED_FPUTC ('\n', fp);
 			}
@@ -4013,7 +4013,7 @@ check_mf_format(cob_file *f, char *filename)
 			f->record_prefix  = 2;
 		}
 		if (maxrcsz > (int)f->record_max) {
-			cob_runtime_error (COB_CTX_TODO, _("ERROR FILE %s has record size %d exceeds %d in program"),
+			cob_runtime_error_ctx (COB_CTX_TODO, _("ERROR FILE %s has record size %d exceeds %d in program"),
 							f->select_name,maxrcsz,(int)f->record_max);
 		} else {
 			f->record_min  = minrcsz;
@@ -4200,8 +4200,8 @@ cob_fd_file_open (cob_file *f, char *filename,
 		break;
 	/* LCOV_EXCL_START */
 	default:
-		cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "cob_fd_file_open");
-		cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("invalid internal call of %s"), "cob_fd_file_open");
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 	/* LCOV_EXCL_STOP */
 	}
 
@@ -4287,7 +4287,7 @@ cob_fd_file_open (cob_file *f, char *filename,
 	 && f->access_mode == COB_ACCESS_SEQUENTIAL) {
 		struct stat	st;
 		if (f->keys[0].field) {
-			cob_set_int (COB_CTX_TODO, f->keys[0].field, 0);
+			cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, 0);
 		}
 		f->cur_rec_num = 0;
 		if (f->open_mode == COB_OPEN_OUTPUT) {
@@ -4585,15 +4585,15 @@ cob_file_open (cob_file_api *a, cob_file *f, char *filename,
 			close (c_fds[0]);
 			if (p_fds[0] != STDIN_FILENO) {
 				if (dup2(p_fds[0], STDIN_FILENO) != STDIN_FILENO) {
-					cob_runtime_error (COB_CTX_TODO, _("ERROR FILE %s opening pipe"), f->select_name);
-					cob_stop_run (COB_CTX_TODO, -1);
+					cob_runtime_error_ctx (COB_CTX_TODO, _("ERROR FILE %s opening pipe"), f->select_name);
+					cob_stop_run_ctx (COB_CTX_TODO, -1);
 				}
 				close (p_fds[0]);
 			}
 			if (c_fds[1] != STDOUT_FILENO) {
 				if (dup2(c_fds[1], STDOUT_FILENO) != STDOUT_FILENO) {
-					cob_runtime_error (COB_CTX_TODO, _("ERROR FILE %s opening pipe"), f->select_name);
-					cob_stop_run (COB_CTX_TODO, -1);
+					cob_runtime_error_ctx (COB_CTX_TODO, _("ERROR FILE %s opening pipe"), f->select_name);
+					cob_stop_run_ctx (COB_CTX_TODO, -1);
 				}
 				close (c_fds[1]);
 			}
@@ -4688,8 +4688,8 @@ cob_file_open (cob_file_api *a, cob_file *f, char *filename,
 	/* LCOV_EXCL_START */
 	default:
 		fmode = NULL;
-		cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "cob_file_open");
-		cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("invalid internal call of %s"), "cob_file_open");
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 	/* LCOV_EXCL_STOP */
 	}
 
@@ -4751,7 +4751,7 @@ cob_file_open (cob_file_api *a, cob_file *f, char *filename,
 		}
 		f->flag_needs_top = 1;
 		lingptr = f->linage;
-		cob_set_int (COB_CTX_TODO, lingptr->linage_ctr, 1);
+		cob_set_int_ctx (COB_CTX_TODO, lingptr->linage_ctr, 1);
 	}
 	(void)cob_set_file_format(f, file_open_io_env, 1);		/* Set file format */
 
@@ -4846,7 +4846,7 @@ cob_file_close (cob_file_api *a, cob_file *f, const int opt)
 			lock.l_len = 0;
 			errno = 0;
 			if (fcntl (f->fd, F_SETLK, &lock) == -1) {
-				cob_runtime_warning (COB_CTX_TODO, "issue during unlock (%s), errno: %d", "cob_file_close", errno);
+				cob_runtime_warning_ctx (COB_CTX_TODO, "issue during unlock (%s), errno: %d", "cob_file_close", errno);
 			}
 #elif defined _WIN32
 			{
@@ -4858,7 +4858,7 @@ cob_file_close (cob_file_api *a, cob_file *f, const int opt)
 					const DWORD last_error = GetLastError ();
 					if (last_error != 158) {	/* no locked region */
 						/* not translated as "testing only" */
-						cob_runtime_warning (COB_CTX_TODO, "issue during UnLockFile (%s), lastError: " CB_FMT_LLU,
+						cob_runtime_warning_ctx (COB_CTX_TODO, "issue during UnLockFile (%s), lastError: " CB_FMT_LLU,
 							"cob_file_close", (cob_u64_t)last_error);
 					}
 #endif
@@ -5503,7 +5503,7 @@ lineseq_size (cob_file *f)
 		return f->record->size;
 	}
 	if (f->variable_record) {
-		f->record->size = (size_t)cob_get_int (COB_CTX_TODO, f->variable_record);
+		f->record->size = (size_t)cob_get_int_ctx (COB_CTX_TODO, f->variable_record);
 		if (f->record->size > f->record_max) {
 			f->record->size = f->record_max;
 		}
@@ -5955,7 +5955,7 @@ relative_start (cob_file_api *a, cob_file *f, const int cond, cob_field *k)
 	case COB_LT:
 	case COB_LE:
 		kcond = cond;
-		kindex = cob_get_int (COB_CTX_TODO, k) - 1;
+		kindex = cob_get_int_ctx (COB_CTX_TODO, k) - 1;
 		/* Check against current file size */
 		ksindex = (st.st_size - f->file_header) / f->record_slot - 1;
 		if (kindex > ksindex) {
@@ -5964,7 +5964,7 @@ relative_start (cob_file_api *a, cob_file *f, const int cond, cob_field *k)
 		break;
 	default:
 		kcond = cond;
-		kindex = cob_get_int (COB_CTX_TODO, k) - 1;
+		kindex = cob_get_int_ctx (COB_CTX_TODO, k) - 1;
 		break;
 	}
 
@@ -6016,7 +6016,7 @@ relative_start (cob_file_api *a, cob_file *f, const int cond, cob_field *k)
 			if (f->access_mode == COB_ACCESS_SEQUENTIAL
 			&&  f->keys[0].field) {
 				f->cur_rec_num = (((off - f->file_header) / f->record_slot) + 1);
-				cob_set_int (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
+				cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
 			}
 			return COB_STATUS_00_SUCCESS;
 		}
@@ -6070,8 +6070,8 @@ relative_read_off (cob_file *f, off_t off)
 
 	if (f->keys[0].field) {
 		f->cur_rec_num = (((off - f->file_header) / f->record_slot) + 1);
-		cob_set_int (COB_CTX_TODO, f->keys[0].field, 0);
-		if (cob_add_int (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num, COB_STORE_KEEP_ON_OVERFLOW) != 0) {
+		cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, 0);
+		if (cob_add_int_ctx (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num, COB_STORE_KEEP_ON_OVERFLOW) != 0) {
 			set_file_pos (f, off);
 			return COB_STATUS_14_OUT_OF_KEY_RANGE;
 		}
@@ -6103,7 +6103,7 @@ relative_read (cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
 		f->flag_operation = 0;
 	}
 
-	relnum = cob_get_int (COB_CTX_TODO, k) - 1;
+	relnum = cob_get_int_ctx (COB_CTX_TODO, k) - 1;
 	if (relnum < 0) {
 		return COB_STATUS_23_KEY_NOT_EXISTS;
 	}
@@ -6331,7 +6331,7 @@ relative_write (cob_file_api *a, cob_file *f, const int opt)
 
 	f->last_key = f->keys[0].field;
 	if (f->access_mode != COB_ACCESS_SEQUENTIAL) {
-		kindex = cob_get_int (COB_CTX_TODO, f->keys[0].field) - 1;
+		kindex = cob_get_int_ctx (COB_CTX_TODO, f->keys[0].field) - 1;
 		if (kindex < 0) {
 			return COB_STATUS_24_KEY_BOUNDARY;
 		}
@@ -6358,7 +6358,7 @@ relative_write (cob_file_api *a, cob_file *f, const int opt)
 	}
 
 	if (f->variable_record) {
-		f->record->size = (size_t)cob_get_int (COB_CTX_TODO, f->variable_record);
+		f->record->size = (size_t)cob_get_int_ctx (COB_CTX_TODO, f->variable_record);
 		if (f->record->size > rcsz) {
 			f->record->size = rcsz;
 		}
@@ -6389,7 +6389,7 @@ relative_write (cob_file_api *a, cob_file *f, const int opt)
 	if (f->access_mode == COB_ACCESS_SEQUENTIAL) {
 		if (f->keys[0].field) {
 			f->cur_rec_num = ((off + f->record_slot - f->file_header) / f->record_slot);
-			cob_set_int (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
+			cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
 		}
 	}
 
@@ -6410,7 +6410,7 @@ relative_rewrite (cob_file_api *a, cob_file *f, const int opt)
 		off = (off_t)f->record_off;
 		relnum = (off - f->file_header) / f->record_slot;
 	} else {
-		relnum = cob_get_int (COB_CTX_TODO, f->keys[0].field) - 1;
+		relnum = cob_get_int_ctx (COB_CTX_TODO, f->keys[0].field) - 1;
 		if (relnum < 0) {
 			return COB_STATUS_24_KEY_BOUNDARY;
 		}
@@ -6425,7 +6425,7 @@ relative_rewrite (cob_file_api *a, cob_file *f, const int opt)
 
 	set_lock_opts (f, opt);
 	if (f->variable_record) {
-		f->record->size = (size_t)cob_get_int (COB_CTX_TODO, f->variable_record);
+		f->record->size = (size_t)cob_get_int_ctx (COB_CTX_TODO, f->variable_record);
 		if (f->record->size > f->record_max) {
 			f->record->size = f->record_max;
 		}
@@ -6493,7 +6493,7 @@ relative_delete (cob_file_api *a, cob_file *f)
 
 	COB_UNUSED (a);
 	f->flag_operation = 1;
-	relnum = cob_get_int (COB_CTX_TODO, f->keys[0].field) - 1;
+	relnum = cob_get_int_ctx (COB_CTX_TODO, f->keys[0].field) - 1;
 	if (relnum < 0) {
 		return COB_STATUS_24_KEY_BOUNDARY;
 	}
@@ -6613,7 +6613,7 @@ cob_file_unlock (cob_file *f)
 					lock.l_start = 0;
 					lock.l_len = 0;
 					if (fcntl (f->fd, F_SETLK, &lock) == -1) {
-						cob_runtime_warning (COB_CTX_TODO, "issue during unlock (%s), errno: %d",
+						cob_runtime_warning_ctx (COB_CTX_TODO, "issue during unlock (%s), errno: %d",
 							"cob_file_unlock", errno);
 					}
 				}
@@ -6625,7 +6625,7 @@ cob_file_unlock (cob_file *f)
 					if (!UnlockFile (osHandle, 0, 0, MAXDWORD, MAXDWORD)) {
 #if 0 /* CHECKME - What is the correct thing to do here? */
 						/* not translated as "testing only" */
-						cob_runtime_warning (COB_CTX_TODO, "issue during UnLockFile (%s), lastError: " CB_FMT_LLU,
+						cob_runtime_warning_ctx (COB_CTX_TODO, "issue during UnLockFile (%s), lastError: " CB_FMT_LLU,
 							"cob_file_unlock", (cob_u64_t)GetLastError());
 #endif
 					}
@@ -6645,7 +6645,7 @@ cob_file_unlock (cob_file *f)
  * Allocate memory for cob_file
  */
 void
-cob_file_create (cob_context *ctx, 
+cob_file_create_ctx (cob_context *ctx, 
 	cob_file **	pfl,
 	const char *exname,
 	const char *select_name,
@@ -6664,10 +6664,10 @@ cob_file_create (cob_context *ctx,
 	int select = select_features;
 	int	extra = 4;
 	if (exname == NULL) {
-		fl = cob_cache_malloc (COB_CTX_TODO, sizeof (cob_file) + extra);
+		fl = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof (cob_file) + extra);
 		fl->file_version = COB_FILE_VERSION;
 	} else {
-		fl = cob_external_addr (COB_CTX_TODO, exname, sizeof (cob_file) + extra);
+		fl = cob_external_addr_ctx (COB_CTX_TODO, exname, sizeof (cob_file) + extra);
 		select |= COB_SELECT_EXTERNAL;
 		if (fl->file_version == 0)
 			fl->file_version = COB_FILE_VERSION;
@@ -6675,7 +6675,7 @@ cob_file_create (cob_context *ctx,
 	if (!fl->flag_ready) {
 		if (nkeys > 0
 		 && fl->keys == NULL) {
-			fl->keys = cob_cache_malloc (COB_CTX_TODO, sizeof (cob_file_key) * nkeys);
+			fl->keys = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof (cob_file_key) * nkeys);
 		}
 		fl->nkeys = nkeys;
 		memset (fl->file_status,'0',4);
@@ -6697,38 +6697,52 @@ cob_file_create (cob_context *ctx,
 	*pfl = fl;
 }
 
+/* compatibility: cob_file_create without context */
+void
+cob_file_create (cob_file ** pfl, const char *exname, const char *select_name, const enum cob_file_org fileorg, const enum cob_file_access accessmode, const int optional, const int format, const int select_features, const int nkeys, const int minrcsz, const int maxrcsz, cob_field * assign, cob_field * record)
+{
+	cob_file_create_ctx (COB_CTX_COMPAT, pfl, exname, select_name, fileorg, accessmode, optional, format, select_features, nkeys, minrcsz, maxrcsz, assign, record);
+}
+
 /*
  * Free memory for cob_file
  */
 void
-cob_file_destroy (cob_context *ctx, cob_file **pfl)
+cob_file_destroy_ctx (cob_context *ctx, cob_file **pfl)
 {
 	cob_file	*fl;
 	if (pfl != NULL
 	 && *pfl != NULL) {
 		fl = *pfl;
 		if (fl->linage) {
-			cob_cache_free (COB_CTX_TODO, fl->linage);
+			cob_cache_free_ctx (COB_CTX_TODO, fl->linage);
 			fl->linage = NULL;
 		}
 		if (fl->keys) {
-			cob_cache_free (COB_CTX_TODO, fl->keys);
+			cob_cache_free_ctx (COB_CTX_TODO, fl->keys);
 			fl->keys = NULL;
 		}
 		if (fl->org_filename) {
-			cob_cache_free (COB_CTX_TODO, fl->org_filename);
+			cob_cache_free_ctx (COB_CTX_TODO, fl->org_filename);
 			fl->org_filename = NULL;
 		}
-		cob_cache_free (COB_CTX_TODO, fl);
+		cob_cache_free_ctx (COB_CTX_TODO, fl);
 		*pfl = NULL;
 	}
+}
+
+/* compatibility: cob_file_destroy without context */
+void
+cob_file_destroy (cob_file **pfl)
+{
+	cob_file_destroy_ctx (COB_CTX_COMPAT, pfl);
 }
 
 /*
  * Set some attributes of the file
  */
 void
-cob_file_set_attr (cob_context *ctx, 
+cob_file_set_attr_ctx (cob_context *ctx, 
 	cob_file *	fl,
 	cob_field *	varsize,
 	const int	lineadv,
@@ -6754,20 +6768,18 @@ cob_file_set_attr (cob_context *ctx,
 	}
 }
 
+/* compatibility: cob_file_set_attr without context */
+void
+cob_file_set_attr (cob_file * fl, cob_field * varsize, const int lineadv, const int features, const unsigned char *codeset, cob_field * password, cob_field * cryptkey)
+{
+	cob_file_set_attr_ctx (COB_CTX_COMPAT, fl, varsize, lineadv, features, codeset, password, cryptkey);
+}
+
 /*
  * Define an index of the file
  */
-void
-cob_file_set_key (cob_context *ctx, 
-	cob_file *	fl,
-	const int	keyn,
-	cob_field *	key,
-	const int	dups,
-	const int	ascdesc,
-	const int	len_suppress,
-	const unsigned char	*suppress,
-	const int	parts,
-	...)				/* cob_field * for each component */
+static void
+cob_file_set_key_va_ctx (cob_context *ctx, cob_file * fl, const int keyn, cob_field * key, const int dups, const int ascdesc, const int len_suppress, const unsigned char *suppress, const int parts, va_list cob_va_args)
 {
 	cob_field	*kp;
 	va_list     args;
@@ -6807,7 +6819,7 @@ cob_file_set_key (cob_context *ctx,
 	}
 	if (parts > 0) {
 		fl->keys[keyn].count_components = (short)parts;
-		va_start (args, parts);
+		va_copy (args, cob_va_args);
 		for (i=0; i < parts && i < COB_MAX_KEYCOMP; i++) {
 			kp = va_arg (args, cob_field *);
 			fl->keys[keyn].component[i] = kp;
@@ -6821,11 +6833,32 @@ cob_file_set_key (cob_context *ctx,
 	}
 }
 
+void
+cob_file_set_key_ctx (cob_context *ctx, cob_file * fl, const int keyn, cob_field * key, const int dups, const int ascdesc, const int len_suppress, const unsigned char *suppress, const int parts, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parts);
+	cob_file_set_key_va_ctx (ctx, fl, keyn, key, dups, ascdesc, len_suppress, suppress, parts, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_file_set_key without context */
+void
+cob_file_set_key (cob_file * fl, const int keyn, cob_field * key, const int dups, const int ascdesc, const int len_suppress, const unsigned char *suppress, const int parts, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parts);
+	cob_file_set_key_va_ctx (COB_CTX_COMPAT, fl, keyn, key, dups, ascdesc, len_suppress, suppress, parts, cob_va_args);
+	va_end (cob_va_args);
+}
+
 /*
  * Extra Define for index of the file
  */
 void
-cob_file_set_key_extra (cob_context *ctx, 
+cob_file_set_key_extra_ctx (cob_context *ctx, 
 	cob_file *	fl,
 	const int	keyn,
 	const int	compress,
@@ -6845,11 +6878,18 @@ cob_file_set_key_extra (cob_context *ctx,
 	fl->keys[keyn].collating_sequence = collate;
 }
 
+/* compatibility: cob_file_set_key_extra without context */
+void
+cob_file_set_key_extra (cob_file * fl, const int keyn, const int compress, const int encrypt, cob_field * password, const unsigned char *collate)
+{
+	cob_file_set_key_extra_ctx (COB_CTX_COMPAT, fl, keyn, compress, encrypt, password, collate);
+}
+
 /*
  * Set the file LINAGE
  */
 void
-cob_file_set_linage (cob_context *ctx, 
+cob_file_set_linage_ctx (cob_context *ctx, 
 	cob_file *	fl,
 	cob_field	*linage,		/* LINAGE */
 	cob_field	*linage_ctr,	/* LINAGE-COUNTER */
@@ -6859,7 +6899,7 @@ cob_file_set_linage (cob_context *ctx,
 {
 	cob_linage *l;
 	if (fl->linage == NULL) {
-		fl->linage = cob_cache_malloc (COB_CTX_TODO, sizeof (cob_linage));
+		fl->linage = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof (cob_linage));
 	}
 	l = (cob_linage *)fl->linage;
 	l->linage = linage;
@@ -6873,11 +6913,18 @@ cob_file_set_linage (cob_context *ctx,
 	l->lin_bot = 0;
 }
 
+/* compatibility: cob_file_set_linage without context */
+void
+cob_file_set_linage (cob_file * fl, cob_field *linage, /* LINAGE */ cob_field *linage_ctr, /* LINAGE-COUNTER */ cob_field *latfoot, /* LINAGE FOOTING */ cob_field *lattop, /* LINAGE AT TOP */ cob_field *latbot)		/* LINAGE AT BOTTOM */
+{
+	cob_file_set_linage_ctx (COB_CTX_COMPAT, fl, linage, linage_ctr, latfoot, lattop, latbot);
+}
+
 /*
  * Set the file lock/retry option
  */
 void
-cob_file_set_retry (cob_context *ctx, 
+cob_file_set_retry_ctx (cob_context *ctx, 
 	cob_file *	fl,
 	const int	mode,
 	const int	value)
@@ -6897,40 +6944,61 @@ cob_file_set_retry (cob_context *ctx,
 	}
 }
 
+/* compatibility: cob_file_set_retry without context */
+void
+cob_file_set_retry (cob_file * fl, const int mode, const int value)
+{
+	cob_file_set_retry_ctx (COB_CTX_COMPAT, fl, mode, value);
+}
+
 /*
  * Set the file lock option
  */
 void
-cob_file_set_lock (cob_context *ctx, 
+cob_file_set_lock_ctx (cob_context *ctx, 
 	cob_file *	fl,
 	const int	mode)
 {
 	fl->lock_mode = (unsigned char)mode;
 }
 
+/* compatibility: cob_file_set_lock without context */
+void
+cob_file_set_lock (cob_file * fl, const int mode)
+{
+	cob_file_set_lock_ctx (COB_CTX_COMPAT, fl, mode);
+}
+
 /*
  * Setup of the file is now complete
  */
 void
-cob_file_complete (cob_context *ctx,  cob_file * fl)
+cob_file_complete_ctx (cob_context *ctx,  cob_file * fl)
 {
 	fl->flag_ready = 1;
+}
+
+/* compatibility: cob_file_complete without context */
+void
+cob_file_complete (cob_file * fl)
+{
+	cob_file_complete_ctx (COB_CTX_COMPAT, fl);
 }
 
 /*
  * Allocate memory for 'IS EXTERNAL' cob_file
  */
 void
-cob_file_external_addr (cob_context *ctx, const char *exname,
+cob_file_external_addr_ctx (cob_context *ctx, const char *exname,
 		cob_file **pfl, cob_file_key **pky,
 		const int nkeys, const int linage)
 {
-	cob_file	**epfl = cob_external_addr (COB_CTX_TODO, exname, sizeof (cob_file *));
+	cob_file	**epfl = cob_external_addr_ctx (COB_CTX_TODO, exname, sizeof (cob_file *));
 
 	if (file_globptr->cob_initial_external) {
 		/* if the pointer was setup the first time:
 		   allocate the file and store the address for next request */
-		cob_file_malloc (ctx, pfl, pky, nkeys, linage);
+		cob_file_malloc_ctx (ctx, pfl, pky, nkeys, linage);
 		*epfl = *pfl;
 	} else {
 		/* external pointer available - get the address stored
@@ -6952,48 +7020,69 @@ cob_file_external_addr (cob_context *ctx, const char *exname,
 	}
 }
 
+/* compatibility: cob_file_external_addr without context */
+void
+cob_file_external_addr (const char *exname, cob_file **pfl, cob_file_key **pky, const int nkeys, const int linage)
+{
+	cob_file_external_addr_ctx (COB_CTX_COMPAT, exname, pfl, pky, nkeys, linage);
+}
+
 /*
  * Save the XFD name for this file
  */
 void
-cob_file_xfdname (cob_context *ctx, cob_file *fl, const char *name)
+cob_file_xfdname_ctx (cob_context *ctx, cob_file *fl, const char *name)
 {
 	fl->xfdname = name;
+}
+
+/* compatibility: cob_file_xfdname without context */
+void
+cob_file_xfdname (cob_file *fl, const char *name)
+{
+	cob_file_xfdname_ctx (COB_CTX_COMPAT, fl, name);
 }
 
 /*
  * Allocate memory for cob_file
  */
 void
-cob_file_malloc (cob_context *ctx, cob_file **pfl, cob_file_key **pky,
+cob_file_malloc_ctx (cob_context *ctx, cob_file **pfl, cob_file_key **pky,
 		 const int nkeys, const int linage)
 {
 	cob_file	*fl;
-	fl = cob_cache_malloc (COB_CTX_TODO, sizeof (cob_file));
+	fl = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof (cob_file));
 	fl->file_version = COB_FILE_VERSION;
 	fl->open_mode = COB_OPEN_CLOSED;
 	fl->nkeys = nkeys;
 
 	if (nkeys > 0
 	 && pky != NULL) {
-		*pky = fl->keys = cob_cache_malloc (COB_CTX_TODO, sizeof (cob_file_key) * nkeys);
+		*pky = fl->keys = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof (cob_file_key) * nkeys);
 	}
 
 	if (linage > 0) {
-		fl->linage = cob_cache_malloc (COB_CTX_TODO, sizeof (cob_linage));
+		fl->linage = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof (cob_linage));
 	}
 	*pfl = fl;
+}
+
+/* compatibility: cob_file_malloc without context */
+void
+cob_file_malloc (cob_file **pfl, cob_file_key **pky, const int nkeys, const int linage)
+{
+	cob_file_malloc_ctx (COB_CTX_COMPAT, pfl, pky, nkeys, linage);
 }
 
 /*
  * Free memory for cob_file
  */
 void
-cob_file_free (cob_context *ctx, cob_file **pfl, cob_file_key **pky)
+cob_file_free_ctx (cob_context *ctx, cob_file **pfl, cob_file_key **pky)
 {
 	if (pky != NULL) {
 		if (*pky != NULL) {
-			cob_cache_free (COB_CTX_TODO, *pky);
+			cob_cache_free_ctx (COB_CTX_TODO, *pky);
 			*pky = NULL;
 		}
 	}
@@ -7001,7 +7090,7 @@ cob_file_free (cob_context *ctx, cob_file **pfl, cob_file_key **pky)
 		struct file_list *fc, *prev;
 		cob_file	*fl = *pfl;
 		if (fl->linage) {
-			cob_cache_free (COB_CTX_TODO, fl->linage);
+			cob_cache_free_ctx (COB_CTX_TODO, fl->linage);
 			fl->linage = NULL;
 		}
 		if (fl->org_filename) {
@@ -7028,24 +7117,38 @@ cob_file_free (cob_context *ctx, cob_file **pfl, cob_file_key **pky)
 			prev = fc;
 		}
 
-		cob_cache_free (COB_CTX_TODO, *pfl);
+		cob_cache_free_ctx (COB_CTX_TODO, *pfl);
 		*pfl = NULL;
 	}
 }
 
+/* compatibility: cob_file_free without context */
+void
+cob_file_free (cob_file **pfl, cob_file_key **pky)
+{
+	cob_file_free_ctx (COB_CTX_COMPAT, pfl, pky);
+}
+
 
 void
-cob_unlock_file (cob_context *ctx, cob_file *f, cob_field *fnstatus)
+cob_unlock_file_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus)
 {
 	cob_file_unlock (f);
 	cob_file_save_status (f, fnstatus, COB_STATUS_00_SUCCESS);
+}
+
+/* compatibility: cob_unlock_file without context */
+void
+cob_unlock_file (cob_file *f, cob_field *fnstatus)
+{
+	cob_unlock_file_ctx (COB_CTX_COMPAT, f, fnstatus);
 }
 
 /*
  * Prepare for Open of data file; Used by fextfh.c
  */
 void
-cob_pre_open (cob_context *ctx, cob_file *f)
+cob_pre_open_ctx (cob_context *ctx, cob_file *f)
 {
 	f->flag_file_map = 0;
 	f->flag_nonexistent = 0;
@@ -7096,11 +7199,18 @@ cob_pre_open (cob_context *ctx, cob_file *f)
 	}
 }
 
+/* compatibility: cob_pre_open without context */
+void
+cob_pre_open (cob_file *f)
+{
+	cob_pre_open_ctx (COB_CTX_COMPAT, f);
+}
+
 /*
  * Prepare for Open of data file; Used by cobfile.c
  */
 void
-cob_pre_open_def (cob_context *ctx, cob_file *f, char *setdef, char *isdef, int checkfile)
+cob_pre_open_def_ctx (cob_context *ctx, cob_file *f, char *setdef, char *isdef, int checkfile)
 {
 	f->flag_file_map = 1;
 	f->flag_nonexistent = 0;
@@ -7137,17 +7247,24 @@ cob_pre_open_def (cob_context *ctx, cob_file *f, char *setdef, char *isdef, int 
 		write_file_def (f, isdef);
 }
 
+/* compatibility: cob_pre_open_def without context */
+void
+cob_pre_open_def (cob_file *f, char *setdef, char *isdef, int checkfile)
+{
+	cob_pre_open_def_ctx (COB_CTX_COMPAT, f, setdef, isdef, checkfile);
+}
+
 /*
  * Open the data file
  */
 void
-cob_open (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, const int sharing, cob_field *fnstatus)
+cob_open_ctx (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, const int sharing, cob_field *fnstatus)
 {
 	char	*cp;
 	if (f->file_version != COB_FILE_VERSION) {
-		cob_runtime_error (COB_CTX_TODO, _("ERROR FILE %s does not match current version; Recompile the program"),
+		cob_runtime_error_ctx (COB_CTX_TODO, _("ERROR FILE %s does not match current version; Recompile the program"),
 							f->select_name);
-		cob_stop_run (COB_CTX_TODO, 1);
+		cob_stop_run_ctx (COB_CTX_TODO, 1);
 	}
 
 	f->last_operation = COB_LAST_OPEN;
@@ -7174,7 +7291,7 @@ cob_open (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, const in
 			}
 		} else if (mode == COB_OPEN_OUTPUT) {
 			/* FIXME: What to do here? */
-			cob_runtime_warning (COB_CTX_TODO, "Open %s OUTPUT with CLOSE pending", f->select_name);
+			cob_runtime_warning_ctx (COB_CTX_TODO, "Open %s OUTPUT with CLOSE pending", f->select_name);
 			f->cur_rec_num = f->max_rec_num = 0;
 		}
 		f->last_open_mode = (enum cob_open_mode)mode;
@@ -7222,7 +7339,7 @@ cob_open (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, const in
 		cob_fcd_file_sync (f, file_open_name);		/* Copy app's FCD to cob_file */
 	}
 
-	cob_pre_open (ctx, f);
+	cob_pre_open_ctx (ctx, f);
 
 	if (COB_FILE_STDIN (f)) {
 		if (mode != COB_OPEN_INPUT) {
@@ -7249,14 +7366,14 @@ cob_open (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, const in
 
 	if (f->assign == NULL) {
 		/* CHECKME: that _seems_ to be a codegen error, but may also happen with EXTFH */
-		cob_runtime_error (COB_CTX_TODO, _("ERROR FILE %s has ASSIGN field is NULL"),
+		cob_runtime_error_ctx (COB_CTX_TODO, _("ERROR FILE %s has ASSIGN field is NULL"),
 							f->select_name);
 		cob_file_save_status (f, fnstatus, COB_STATUS_31_INCONSISTENT_FILENAME);
 		return;
 	}
 	if (f->assign->data == NULL) {
 #if 0 /* we don't raise an error in other places and a similar error is raised in cob_fatal_error */
-		cob_runtime_error (COB_CTX_TODO, "file %s has ASSIGN field with NULL address",
+		cob_runtime_error_ctx (COB_CTX_TODO, "file %s has ASSIGN field with NULL address",
 			f->select_name);
 #endif
 		cob_file_save_status (f, fnstatus, COB_STATUS_31_INCONSISTENT_FILENAME);
@@ -7336,8 +7453,15 @@ cob_open (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, const in
 	}
 }
 
+/* compatibility: cob_open without context */
 void
-cob_close (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int opt, const int remfil)
+cob_open (cob_file *f, const enum cob_open_mode mode, const int sharing, cob_field *fnstatus)
+{
+	cob_open_ctx (COB_CTX_COMPAT, f, mode, sharing, fnstatus);
+}
+
+void
+cob_close_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int opt, const int remfil)
 {
 	int			ret;
 
@@ -7413,8 +7537,15 @@ cob_close (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int opt, co
 	f->cur_rec_num = 0;
 }
 
+/* compatibility: cob_close without context */
 void
-cob_start (cob_context *ctx, cob_file *f, const int cond, cob_field *key,
+cob_close (cob_file *f, cob_field *fnstatus, const int opt, const int remfil)
+{
+	cob_close_ctx (COB_CTX_COMPAT, f, fnstatus, opt, remfil);
+}
+
+void
+cob_start_ctx (cob_context *ctx, cob_file *f, const int cond, cob_field *key,
 						cob_field *keysize, cob_field *fnstatus)
 {
 	int		ret;
@@ -7442,7 +7573,7 @@ cob_start (cob_context *ctx, cob_file *f, const int cond, cob_field *key,
 	}
 
 	if (keysize) {
-		int		size = cob_get_int (COB_CTX_TODO, keysize);
+		int		size = cob_get_int_ctx (COB_CTX_TODO, keysize);
 		if (size < 1 || size > (int)key->size) {
 			cob_file_save_status (f, fnstatus, COB_STATUS_23_KEY_NOT_EXISTS);
 			return;
@@ -7467,8 +7598,15 @@ cob_start (cob_context *ctx, cob_file *f, const int cond, cob_field *key,
 	cob_file_save_status (f, fnstatus, ret);
 }
 
+/* compatibility: cob_start without context */
 void
-cob_read (cob_context *ctx, cob_file *f, cob_field *key, cob_field *fnstatus, const int read_opts)
+cob_start (cob_file *f, const int cond, cob_field *key, cob_field *keysize, cob_field *fnstatus)
+{
+	cob_start_ctx (COB_CTX_COMPAT, f, cond, key, keysize, fnstatus);
+}
+
+void
+cob_read_ctx (cob_context *ctx, cob_file *f, cob_field *key, cob_field *fnstatus, const int read_opts)
 {
 	int	ret;
 
@@ -7498,9 +7636,9 @@ cob_read (cob_context *ctx, cob_file *f, cob_field *key, cob_field *fnstatus, co
 				f->cur_rec_num = 1;
 			else
 				f->cur_rec_num++;
-			cob_set_int (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
+			cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
 		} else {
-			f->cur_rec_num = cob_get_int (COB_CTX_TODO, f->keys[0].field);
+			f->cur_rec_num = cob_get_int_ctx (COB_CTX_TODO, f->keys[0].field);
 		}
 	}
 	/* Sequential read at the end of file is an error */
@@ -7535,7 +7673,7 @@ cob_read (cob_context *ctx, cob_file *f, cob_field *key, cob_field *fnstatus, co
 		f->flag_end_of_file = 0;
 		f->flag_begin_of_file = 0;
 		if (f->variable_record) {
-			cob_set_int (COB_CTX_TODO, f->variable_record, (int) f->record->size);
+			cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) f->record->size);
 		}
 		break;
 	case COB_STATUS_10_END_OF_FILE:
@@ -7548,6 +7686,13 @@ cob_read (cob_context *ctx, cob_file *f, cob_field *key, cob_field *fnstatus, co
 	}
 
 	cob_file_save_status (f, fnstatus, ret);
+}
+
+/* compatibility: cob_read without context */
+void
+cob_read (cob_file *f, cob_field *key, cob_field *fnstatus, const int read_opts)
+{
+	cob_read_ctx (COB_CTX_COMPAT, f, key, fnstatus, read_opts);
 }
 
 static int
@@ -7608,7 +7753,7 @@ cob_chk_dups (cob_file *f)
 }
 
 void
-cob_read_next (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int read_opts)
+cob_read_next_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int read_opts)
 {
 	int	ret,idx;
 
@@ -7654,9 +7799,9 @@ Again:
 				else
 					f->cur_rec_num++;
 			}
-			cob_set_int (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
+			cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
 		} else {
-			f->cur_rec_num = cob_get_int (COB_CTX_TODO, f->keys[0].field);
+			f->cur_rec_num = cob_get_int_ctx (COB_CTX_TODO, f->keys[0].field);
 		}
 	}
 	ret = fileio_funcs[get_io_ptr (f)]->read_next (&file_api, f, read_opts);
@@ -7688,7 +7833,7 @@ Again:
 		f->flag_end_of_file = 0;
 		f->flag_begin_of_file = 0;
 		if (f->variable_record) {
-			cob_set_int (COB_CTX_TODO, f->variable_record, (int) f->record->size);
+			cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) f->record->size);
 		}
 		break;
 	case COB_STATUS_10_END_OF_FILE:
@@ -7704,6 +7849,13 @@ Again:
 	}
 
 	cob_file_save_status (f, fnstatus, ret);
+}
+
+/* compatibility: cob_read_next without context */
+void
+cob_read_next (cob_file *f, cob_field *fnstatus, const int read_opts)
+{
+	cob_read_next_ctx (COB_CTX_COMPAT, f, fnstatus, read_opts);
 }
 
 /* CODE-SET conversion for re-/write */
@@ -7742,7 +7894,7 @@ get_code_set_converted_data (cob_file *f)
 }
 
 void
-cob_write (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_field *fnstatus,
+cob_write_ctx (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_field *fnstatus,
 	   const unsigned int check_eop)
 {
 	int		ret;
@@ -7773,7 +7925,7 @@ cob_write (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_fie
 	}
 
 	if (f->variable_record) {
-		f->record->size = (size_t)cob_get_int (COB_CTX_TODO, f->variable_record);
+		f->record->size = (size_t)cob_get_int_ctx (COB_CTX_TODO, f->variable_record);
 		if (f->record->size > rec->size) {
 			f->record->size = rec->size;
 		}
@@ -7802,9 +7954,9 @@ cob_write (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_fie
 			f->cur_rec_num = f->max_rec_num + 1;
 			if (f->cur_rec_num < 1)
 				f->cur_rec_num = 1;
-			cob_set_int (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
+			cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, (int)f->cur_rec_num);
 		} else {
-			f->cur_rec_num = cob_get_int (COB_CTX_TODO, f->keys[0].field);
+			f->cur_rec_num = cob_get_int_ctx (COB_CTX_TODO, f->keys[0].field);
 		}
 	}
 
@@ -7888,8 +8040,15 @@ cob_write (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_fie
 	}
 }
 
+/* compatibility: cob_write without context */
 void
-cob_rewrite (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_field *fnstatus)
+cob_write (cob_file *f, cob_field *rec, const int opt, cob_field *fnstatus, const unsigned int check_eop)
+{
+	cob_write_ctx (COB_CTX_COMPAT, f, rec, opt, fnstatus, check_eop);
+}
+
+void
+cob_rewrite_ctx (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_field *fnstatus)
 {
 	int	read_done, ret;
 
@@ -7917,7 +8076,7 @@ cob_rewrite (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_f
 		}
 
 		if (f->variable_record) {
-			if (f->record->size != (size_t)cob_get_int (COB_CTX_TODO, f->variable_record)) {
+			if (f->record->size != (size_t)cob_get_int_ctx (COB_CTX_TODO, f->variable_record)) {
 				cob_file_save_status (f, fnstatus, COB_STATUS_44_RECORD_OVERFLOW);
 				return;
 			}
@@ -7925,7 +8084,7 @@ cob_rewrite (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_f
 	}
 
 	if (f->variable_record) {
-		f->record->size = (size_t)cob_get_int (COB_CTX_TODO, f->variable_record);
+		f->record->size = (size_t)cob_get_int_ctx (COB_CTX_TODO, f->variable_record);
 		if (f->record->size > rec->size) {
 			f->record->size = rec->size;
 		}
@@ -8023,8 +8182,15 @@ cob_rewrite (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob_f
 	}
 }
 
+/* compatibility: cob_rewrite without context */
 void
-cob_delete (cob_context *ctx, cob_file *f, cob_field *fnstatus)
+cob_rewrite (cob_file *f, cob_field *rec, const int opt, cob_field *fnstatus)
+{
+	cob_rewrite_ctx (COB_CTX_COMPAT, f, rec, opt, fnstatus);
+}
+
+void
+cob_delete_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus)
 {
 	int	read_done;
 
@@ -8059,8 +8225,15 @@ cob_delete (cob_context *ctx, cob_file *f, cob_field *fnstatus)
 		     fileio_funcs[get_io_ptr (f)]->recdelete (&file_api, f));
 }
 
+/* compatibility: cob_delete without context */
 void
-cob_commit (cob_context *ctx)
+cob_delete (cob_file *f, cob_field *fnstatus)
+{
+	cob_delete_ctx (COB_CTX_COMPAT, f, fnstatus);
+}
+
+void
+cob_commit_ctx (cob_context *ctx)
 {
 	struct file_list	*l;
 	cob_file	*f;
@@ -8084,22 +8257,29 @@ cob_commit (cob_context *ctx)
 			if (f->tran_open_mode != COB_OPEN_CLOSED
 			 && f->open_mode == COB_OPEN_CLOSED) {
 				f->open_mode = f->tran_open_mode;
-				cob_close (ctx, f, NULL, COB_CLOSE_NORMAL, 0);
+				cob_close_ctx (ctx, f, NULL, COB_CLOSE_NORMAL, 0);
 			}
 		}
 		f->tran_open_mode = COB_OPEN_CLOSED;
 	}
 	if (qblfd != -1) {
 		if (ftruncate (qblfd, 0)) {
-			cob_runtime_error (COB_CTX_TODO, _("I/O error doing COMMIT"));
+			cob_runtime_error_ctx (COB_CTX_TODO, _("I/O error doing COMMIT"));
 			cob_close_qbl ( qblfd, qblfilename, 1);
 			qblfd = -1;
 		}
 	}
 }
 
+/* compatibility: cob_commit without context */
 void
-cob_rollback (cob_context *ctx)
+cob_commit (void)
+{
+	cob_commit_ctx (COB_CTX_COMPAT);
+}
+
+void
+cob_rollback_ctx (cob_context *ctx)
 {
 	struct file_list	*l;
 	off_t	qblpos = -1;
@@ -8155,48 +8335,48 @@ cob_rollback (cob_context *ctx)
 					memcpy (f->record->data, qbl_hdr->data, reclen);
 				if (f->organization == COB_ORG_INDEXED) {
 					if (memcmp (qbl_hdr->type, QBL_NEW, 2) == 0) {
-						cob_delete (ctx, f, NULL);
+						cob_delete_ctx (ctx, f, NULL);
 					} else if (memcmp (qbl_hdr->type, QBL_BEFORE, 2) == 0) {
-						cob_rewrite (ctx, f, f->record, 0, NULL);
+						cob_rewrite_ctx (ctx, f, f->record, 0, NULL);
 					} else if (memcmp (qbl_hdr->type, QBL_DELETE, 2) == 0) {
-						cob_write (ctx, f, f->record, 0, NULL, 0);
+						cob_write_ctx (ctx, f, f->record, 0, NULL, 0);
 					}
 				} else
 				if (f->organization == COB_ORG_RELATIVE) {
-					svrecnum = (cob_u32_t)cob_get_int (COB_CTX_TODO, f->keys[0].field);
-					recnum = (cob_u32_t)cob_get_u64_compx (COB_CTX_TODO, qbl_hdr->recnum, 4);
-					filepos = cob_get_u64_compx (COB_CTX_TODO, qbl_hdr->filepos, 8);
-					cob_set_int (COB_CTX_TODO, f->keys[0].field, recnum);
+					svrecnum = (cob_u32_t)cob_get_int_ctx (COB_CTX_TODO, f->keys[0].field);
+					recnum = (cob_u32_t)cob_get_u64_compx_ctx (COB_CTX_TODO, qbl_hdr->recnum, 4);
+					filepos = cob_get_u64_compx_ctx (COB_CTX_TODO, qbl_hdr->filepos, 8);
+					cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, recnum);
 					if (memcmp (qbl_hdr->type, QBL_NEW, 2) == 0) {
-						cob_delete (ctx, f, NULL);
+						cob_delete_ctx (ctx, f, NULL);
 					} else if (memcmp (qbl_hdr->type, QBL_BEFORE, 2) == 0) {
-						cob_rewrite (ctx, f, f->record, 0, NULL);
+						cob_rewrite_ctx (ctx, f, f->record, 0, NULL);
 					} else if (memcmp (qbl_hdr->type, QBL_DELETE, 2) == 0) {
-						cob_write (ctx, f, f->record, 0, NULL, 0);
+						cob_write_ctx (ctx, f, f->record, 0, NULL, 0);
 					}
-					cob_set_int (COB_CTX_TODO, f->keys[0].field, svrecnum);
+					cob_set_int_ctx (COB_CTX_TODO, f->keys[0].field, svrecnum);
 					f->record_off = svfileoff;
 				} else
 				if (f->organization == COB_ORG_SEQUENTIAL) {
-					filepos = cob_get_u64_compx (COB_CTX_TODO, qbl_hdr->filepos, 8);
+					filepos = cob_get_u64_compx_ctx (COB_CTX_TODO, qbl_hdr->filepos, 8);
 					f->record_off = filepos;
 					f->flag_read_done = 1;
 					if (memcmp (qbl_hdr->type, QBL_NEW, 2) == 0) {
 						if (ftruncate (f->fd, (off_t)filepos)) {
-							cob_runtime_error (COB_CTX_TODO, _("I/O error doing ROLLBACK of %s"),
+							cob_runtime_error_ctx (COB_CTX_TODO, _("I/O error doing ROLLBACK of %s"),
 													f->select_name);
 						}
 					} else if (memcmp (qbl_hdr->type, QBL_BEFORE, 2) == 0) {
-						cob_rewrite (ctx, f, f->record, 0, NULL);
+						cob_rewrite_ctx (ctx, f, f->record, 0, NULL);
 					}
 				} else
 				if (f->organization == COB_ORG_LINE_SEQUENTIAL) {
-					filepos = cob_get_u64_compx (COB_CTX_TODO, qbl_hdr->filepos, 8);
+					filepos = cob_get_u64_compx_ctx (COB_CTX_TODO, qbl_hdr->filepos, 8);
 					f->record_off = filepos;
 					f->flag_read_done = 1;
 					if (memcmp (qbl_hdr->type, QBL_NEW, 2) == 0) {
 						if (ftruncate (f->fd, (off_t)filepos)) {
-							cob_runtime_error (COB_CTX_TODO, _("I/O error doing ROLLBACK of %s"),
+							cob_runtime_error_ctx (COB_CTX_TODO, _("I/O error doing ROLLBACK of %s"),
 													f->select_name);
 						}
 					} else if (memcmp (qbl_hdr->type, QBL_BEFORE, 2) == 0) {
@@ -8206,7 +8386,7 @@ cob_rollback (cob_context *ctx)
 							memcpy (f->record->data, qbl_hdr->data, reclen);
 						}
 						f->record->size = reclen;
-						cob_rewrite (ctx, f, f->record, 0, NULL);
+						cob_rewrite_ctx (ctx, f, f->record, 0, NULL);
 					}
 				}
 				memcpy (f->record->data, qbl_tmp, f->record_max);
@@ -8223,7 +8403,7 @@ cob_rollback (cob_context *ctx)
 		f = l->file;
 		if (f->open_mode == COB_OPEN_CLOSED		/* Close pending commit/rollback */
 		 && f->flag_close_pend) {
-			cob_open (ctx, f, f->tran_open_mode, 0, NULL);
+			cob_open_ctx (ctx, f, f->tran_open_mode, 0, NULL);
 			f->tran_open_mode = COB_OPEN_CLOSED;
 		}
 		f->flag_close_pend = 0;
@@ -8233,15 +8413,22 @@ cob_rollback (cob_context *ctx)
 	if (dorollback
 	 && qblfd != -1) {
 		if (ftruncate (qblfd, 0)) {
-			cob_runtime_error (COB_CTX_TODO, _("I/O error doing ROLLBACK"));
+			cob_runtime_error_ctx (COB_CTX_TODO, _("I/O error doing ROLLBACK"));
 			cob_close_qbl ( qblfd, qblfilename, 1);
 			qblfd = -1;
 		}
 	}
 }
 
+/* compatibility: cob_rollback without context */
 void
-cob_delete_file (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int override)
+cob_rollback (void)
+{
+	cob_rollback_ctx (COB_CTX_COMPAT);
+}
+
+void
+cob_delete_file_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int override)
 {
 	COB_UNUSED (override);
 	f->last_operation = COB_LAST_DELETE_FILE;
@@ -8316,16 +8503,30 @@ cob_delete_file (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int o
 	delete_file_status = 0;
 }
 
+/* compatibility: cob_delete_file without context */
+void
+cob_delete_file (cob_file *f, cob_field *fnstatus, const int override)
+{
+	cob_delete_file_ctx (COB_CTX_COMPAT, f, fnstatus, override);
+}
+
 /* Return index number for given key and set length attributes,
    storing resulting key field in file's last_key */
 int
-cob_findkey (cob_context *ctx, cob_file *f, cob_field *kf, int *fullkeylen, int *partlen)
+cob_findkey_ctx (cob_context *ctx, cob_file *f, cob_field *kf, int *fullkeylen, int *partlen)
 {
 	int 	k = cob_findkey_attr (f, kf, fullkeylen, partlen);
 	if (k >= 0) {
 		f->last_key = f->keys[k].field;
 	}
 	return k;
+}
+
+/* compatibility: cob_findkey without context */
+int
+cob_findkey (cob_file *f, cob_field *kf, int *fullkeylen, int *partlen)
+{
+	return cob_findkey_ctx (COB_CTX_COMPAT, f, kf, fullkeylen, partlen);
 }
 
 /* Copy key data and return length of data copied */
@@ -8360,7 +8561,7 @@ cob_field_no_quotes (const cob_field *f)
 	register unsigned char	*data, *s;
 	void		*mptr;
 
-	s = data = mptr = cob_get_picx (COB_CTX_TODO, f->data, f->size, NULL, 0);
+	s = data = mptr = cob_get_picx_ctx (COB_CTX_TODO, f->data, f->size, NULL, 0);
 	if (s == NULL) {
 		return NULL;
 	}
@@ -8430,7 +8631,7 @@ open_cbl_file (cob_u8_ptr fname, int file_access,
 			flag |= O_RDWR;
 			break;
 		default:
-			cob_runtime_warning (COB_CTX_TODO, _("call to CBL_OPEN_FILE with wrong access mode: %d"), file_access & 0x3F);
+			cob_runtime_warning_ctx (COB_CTX_TODO, _("call to CBL_OPEN_FILE with wrong access mode: %d"), file_access & 0x3F);
 			memset (file_handle, -1, (size_t)4);
 			return -1;
 	}
@@ -8482,10 +8683,10 @@ cob_sys_create_file (unsigned char *file_name, unsigned char *file_access,
 	COB_CHK_PARMS (CBL_CREATE_FILE, 5);
 
 	if (p_lock != 0) {
-		cob_runtime_warning (COB_CTX_TODO, _("call to CBL_CREATE_FILE with wrong file_lock: %d"), p_lock);
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("call to CBL_CREATE_FILE with wrong file_lock: %d"), p_lock);
 	}
 	if (p_dev != 0) {
-		cob_runtime_warning (COB_CTX_TODO, _("call to CBL_CREATE_FILE with wrong file_dev: %d"), p_dev);
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("call to CBL_CREATE_FILE with wrong file_dev: %d"), p_dev);
 	}
 
 	return open_cbl_file (file_name, (int)cob_get_s64_param (2), file_handle, O_CREAT | O_TRUNC);
@@ -8696,7 +8897,7 @@ cob_sys_check_file_exist (unsigned char *fname, unsigned char *file_info)
 		return -1;
 	}
 	if (cob_get_param_size(2) < 16) {
-		cob_runtime_error (COB_CTX_TODO, _("'%s' - File detail area is too short"), "CBL_CHECK_FILE_EXIST");
+		cob_runtime_error_ctx (COB_CTX_TODO, _("'%s' - File detail area is too short"), "CBL_CHECK_FILE_EXIST");
 #if 0 /* should be handled by the caller,
 		TODO: check for better return code (or the one from MF/ACU) */
 		cob_hard_failure ();
@@ -8973,7 +9174,7 @@ cob_sys_file_info (unsigned char *file_name, unsigned char *file_info)
 		return -1;
 	}
 	if (cob_get_param_size(2) < 16) {
-		cob_runtime_error (COB_CTX_TODO, _("'%s' - File detail area is too short"), "C$FILEINFO");
+		cob_runtime_error_ctx (COB_CTX_TODO, _("'%s' - File detail area is too short"), "C$FILEINFO");
 #if 0 /* should be handled by the caller,
 		TODO: check for better return code (or the one from ACU) */
 		cob_hard_failure ();
@@ -9095,7 +9296,7 @@ cob_file_sort_compare (struct cobitem *k1, struct cobitem *k2, void *pointer)
 		f1.data = k1->item + f->keys[i].offset;
 		f2.data = k2->item + f->keys[i].offset;
 		if (COB_FIELD_IS_NUMERIC (&f1)) {
-			cmp = cob_numeric_cmp (COB_CTX_TODO, &f1, &f2);
+			cmp = cob_numeric_cmp_ctx (COB_CTX_TODO, &f1, &f2);
 		} else {
 			cmp = sort_cmps (f1.data, f2.data, f1.size,
 					 f->sort_collating);
@@ -9199,7 +9400,7 @@ cob_get_sort_tempfile (struct cobsort *hp, const int n)
 		hp->file[n].fp = cob_create_tmpfile (NULL);
 #if 0 /* error to be handled by the caller */
 		if (hp->file[n].fp == NULL) {
-			cob_runtime_error (COB_CTX_TODO, _("SORT is unable to acquire temporary file"));
+			cob_runtime_error_ctx (COB_CTX_TODO, _("SORT is unable to acquire temporary file"));
 			cob_hard_failure ();
 		}
 #endif
@@ -9564,7 +9765,7 @@ cob_file_sort_retrieve (struct cobsort *hp, unsigned char *p)
 
 /* SORT/MERGE: initial setup with adding sort definitions to sort file 'f' */
 void
-cob_file_sort_init (cob_context *ctx, cob_file *f, const unsigned int nkeys,
+cob_file_sort_init_ctx (cob_context *ctx, cob_file *f, const unsigned int nkeys,
 		    const unsigned char *collating_sequence,
 		    void *sort_return, cob_field *fnstatus)
 {
@@ -9610,9 +9811,16 @@ cob_file_sort_init (cob_context *ctx, cob_file *f, const unsigned int nkeys,
 	cob_file_save_status (f, fnstatus, COB_STATUS_00_SUCCESS);
 }
 
-/* SORT/MERGE: additional options for sort file 'f' - so far only note "we're in MERGE" */
+/* compatibility: cob_file_sort_init without context */
 void
-cob_file_sort_options (cob_context *ctx, cob_file *f, const char *parms, ...)
+cob_file_sort_init (cob_file *f, const unsigned int nkeys, const unsigned char *collating_sequence, void *sort_return, cob_field *fnstatus)
+{
+	cob_file_sort_init_ctx (COB_CTX_COMPAT, f, nkeys, collating_sequence, sort_return, fnstatus);
+}
+
+/* SORT/MERGE: additional options for sort file 'f' - so far only note "we're in MERGE" */
+static void
+cob_file_sort_options_va_ctx (cob_context *ctx, cob_file *f, const char *parms, va_list cob_va_args)
 {
 	struct cobsort	*hp = f->file;
 
@@ -9624,9 +9832,30 @@ cob_file_sort_options (cob_context *ctx, cob_file *f, const char *parms, ...)
 	   that / raise COB_EC_SORT_MERGE_SEQUENCE */
 }
 
+void
+cob_file_sort_options_ctx (cob_context *ctx, cob_file *f, const char *parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_file_sort_options_va_ctx (ctx, f, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_file_sort_options without context */
+void
+cob_file_sort_options (cob_file *f, const char *parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_file_sort_options_va_ctx (COB_CTX_COMPAT, f, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
 /* SORT/MERGE: add key definition to internal sort file 'f' */
 void
-cob_file_sort_init_key (cob_context *ctx, cob_file *f, cob_field *field, const int flag,
+cob_file_sort_init_key_ctx (cob_context *ctx, cob_file *f, cob_field *field, const int flag,
 			const unsigned int offset)
 {
 	f->keys[f->nkeys].field = field;
@@ -9635,17 +9864,31 @@ cob_file_sort_init_key (cob_context *ctx, cob_file *f, cob_field *field, const i
 	f->nkeys++;
 }
 
+/* compatibility: cob_file_sort_init_key without context */
+void
+cob_file_sort_init_key (cob_file *f, cob_field *field, const int flag, const unsigned int offset)
+{
+	cob_file_sort_init_key_ctx (COB_CTX_COMPAT, f, field, flag, offset);
+}
+
 /* SORT/MERGE: add all records from GIVING file 'data_file' to 'sort_file' */
 void
-cob_file_sort_using (cob_context *ctx, cob_file *sort_file, cob_file *data_file)
+cob_file_sort_using_ctx (cob_context *ctx, cob_file *sort_file, cob_file *data_file)
 {
-	cob_file_sort_using_extfh (ctx, sort_file, data_file, NULL);
+	cob_file_sort_using_extfh_ctx (ctx, sort_file, data_file, NULL);
+}
+
+/* compatibility: cob_file_sort_using without context */
+void
+cob_file_sort_using (cob_file *sort_file, cob_file *data_file)
+{
+	cob_file_sort_using_ctx (COB_CTX_COMPAT, sort_file, data_file);
 }
 
 /* SORT/MERGE: add all records from GIVING file 'data_file' to 'sort_file',
    with optional external file handler 'callfh' */
 void
-cob_file_sort_using_extfh (cob_context *ctx, cob_file *sort_file, cob_file *data_file,
+cob_file_sort_using_extfh_ctx (cob_context *ctx, cob_file *sort_file, cob_file *data_file,
 	int (*callfh)(unsigned char *opcode, FCD3 *fcd))
 {
 	/* FIXME: on each error the appropriate USAGE AFTER EXCEPTION/ERROR must be called;
@@ -9654,13 +9897,13 @@ cob_file_sort_using_extfh (cob_context *ctx, cob_file *sort_file, cob_file *data
 	int 	ret;
 
 	if (callfh) {
-		cob_extfh_open (ctx, callfh, data_file, COB_OPEN_INPUT, 0, NULL);
+		cob_extfh_open_ctx (ctx, callfh, data_file, COB_OPEN_INPUT, 0, NULL);
 	} else {
-		cob_open (ctx, data_file, COB_OPEN_INPUT, 0, NULL);
+		cob_open_ctx (ctx, data_file, COB_OPEN_INPUT, 0, NULL);
 	}
 	if (data_file->file_status[0] != '0') {
 		if (data_file->file_status[0] == '4') {
-			cob_set_exception (COB_CTX_TODO, COB_EC_SORT_MERGE_FILE_OPEN);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SORT_MERGE_FILE_OPEN);
 		}
 		if (hp->sort_return) {
 			*(int *)(hp->sort_return) = 16;	/* TODO: recheck with MF */
@@ -9671,9 +9914,9 @@ cob_file_sort_using_extfh (cob_context *ctx, cob_file *sort_file, cob_file *data
 	}
 	for (;;) {
 		if (callfh) {
-			cob_extfh_read_next (ctx, callfh, data_file, NULL, COB_READ_NEXT);
+			cob_extfh_read_next_ctx (ctx, callfh, data_file, NULL, COB_READ_NEXT);
 		} else {
-			cob_read_next (ctx, data_file, NULL, COB_READ_NEXT);
+			cob_read_next_ctx (ctx, data_file, NULL, COB_READ_NEXT);
 		}
 		if (data_file->file_status[0] != '0') {
 			break;
@@ -9685,10 +9928,17 @@ cob_file_sort_using_extfh (cob_context *ctx, cob_file *sort_file, cob_file *data
 		}
 	}
 	if (callfh) {
-		cob_extfh_close (ctx, callfh, data_file, NULL, COB_CLOSE_NORMAL, 0);
+		cob_extfh_close_ctx (ctx, callfh, data_file, NULL, COB_CLOSE_NORMAL, 0);
 	} else {
-		cob_close (ctx, data_file, NULL, COB_CLOSE_NORMAL, 0);
+		cob_close_ctx (ctx, data_file, NULL, COB_CLOSE_NORMAL, 0);
 	}
+}
+
+/* compatibility: cob_file_sort_using_extfh without context */
+void
+cob_file_sort_using_extfh (cob_file *sort_file, cob_file *data_file, int (*callfh)(unsigned char *opcode, FCD3 *fcd))
+{
+	cob_file_sort_using_extfh_ctx (COB_CTX_COMPAT, sort_file, data_file, callfh);
 }
 
 
@@ -9711,9 +9961,9 @@ cob_file_sort_giving_internal (cob_file *sort_file, const size_t giving_cnt,
 	for (i = 0; i < giving_cnt; ++i) {
 		cob_file *using_file = fbase[i];
 		if (callfh && callfh[i]) {
-			cob_extfh_open (COB_CTX_TODO, callfh[i], using_file, COB_OPEN_OUTPUT, 0, NULL);
+			cob_extfh_open_ctx (COB_CTX_TODO, callfh[i], using_file, COB_OPEN_OUTPUT, 0, NULL);
 		} else {
-			cob_open (COB_CTX_TODO, using_file, COB_OPEN_OUTPUT, 0, NULL);
+			cob_open_ctx (COB_CTX_TODO, using_file, COB_OPEN_OUTPUT, 0, NULL);
 		}
 		if (using_file->file_status[0] == '0') {
 			if (COB_FILE_SPECIAL (using_file)
@@ -9724,7 +9974,7 @@ cob_file_sort_giving_internal (cob_file *sort_file, const size_t giving_cnt,
 			}
 		} else {
 			if (using_file->file_status[0] == '4') {
-				cob_set_exception (COB_CTX_TODO, COB_EC_SORT_MERGE_FILE_OPEN);
+				cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SORT_MERGE_FILE_OPEN);
 			}
 			if (!hp->sort_return) {
 				/* IBM doc: if not used then a runtime message is displayed */
@@ -9763,9 +10013,9 @@ cob_file_sort_giving_internal (cob_file *sort_file, const size_t giving_cnt,
 			using_file->record->size = using_file->record_max;
 			cob_copy_check (using_file->record, sort_file->record);
 			if (callfh && callfh[i]) {
-				cob_extfh_write (COB_CTX_TODO, callfh[i], using_file, using_file->record, opt[i], NULL, 0);
+				cob_extfh_write_ctx (COB_CTX_TODO, callfh[i], using_file, using_file->record, opt[i], NULL, 0);
 			} else {
-				cob_write (COB_CTX_TODO, using_file, using_file->record, opt[i], NULL, 0);
+				cob_write_ctx (COB_CTX_TODO, using_file, using_file->record, opt[i], NULL, 0);
 			}
 			/* stop writing to this file if we got a permanent write error;
 			   note: other files are still written to; therefore
@@ -9800,9 +10050,9 @@ cob_file_sort_giving_internal (cob_file *sort_file, const size_t giving_cnt,
 			continue;
 		}
 		if (callfh && callfh[i]) {
-			cob_extfh_close (COB_CTX_TODO, callfh[i], using_file, NULL, COB_CLOSE_NORMAL, 0);
+			cob_extfh_close_ctx (COB_CTX_TODO, callfh[i], using_file, NULL, COB_CLOSE_NORMAL, 0);
 		} else {
-			cob_close (COB_CTX_TODO, using_file, NULL, COB_CLOSE_NORMAL, 0);
+			cob_close_ctx (COB_CTX_TODO, using_file, NULL, COB_CLOSE_NORMAL, 0);
 		}
 	}
 
@@ -9825,15 +10075,15 @@ cob_file_sort_giving_internal (cob_file *sort_file, const size_t giving_cnt,
 }
 
 /* SORT: WRITE all records from 'sort_file' to all passed USING files */
-void
-cob_file_sort_giving (cob_context *ctx, cob_file *sort_file, const size_t varcnt, ...)
+static void
+cob_file_sort_giving_va_ctx (cob_context *ctx, cob_file *sort_file, const size_t varcnt, va_list cob_va_args)
 {
 	cob_file	**fbase;
 	va_list		args;
 	size_t		i;
 
 	fbase = cob_malloc (varcnt * sizeof (cob_file *));
-	va_start (args, varcnt);
+	va_copy (args, cob_va_args);
 	for (i = 0; i < varcnt; ++i) {
 		fbase[i] = va_arg (args, cob_file *);
 	}
@@ -9841,10 +10091,31 @@ cob_file_sort_giving (cob_context *ctx, cob_file *sort_file, const size_t varcnt
 	cob_file_sort_giving_internal (sort_file, varcnt, fbase, NULL);
 }
 
+void
+cob_file_sort_giving_ctx (cob_context *ctx, cob_file *sort_file, const size_t varcnt, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, varcnt);
+	cob_file_sort_giving_va_ctx (ctx, sort_file, varcnt, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_file_sort_giving without context */
+void
+cob_file_sort_giving (cob_file *sort_file, const size_t varcnt, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, varcnt);
+	cob_file_sort_giving_va_ctx (COB_CTX_COMPAT, sort_file, varcnt, cob_va_args);
+	va_end (cob_va_args);
+}
+
 /* SORT: WRITE all records from 'sort_file' to all passed USING files,
    with using their optional external file handlers */
-void
-cob_file_sort_giving_extfh (cob_context *ctx, cob_file *sort_file, const size_t varcnt, ...)
+static void
+cob_file_sort_giving_extfh_va_ctx (cob_context *ctx, cob_file *sort_file, const size_t varcnt, va_list cob_va_args)
 {
 	cob_file	**fbase;
 	EXTFH_FUNC *callfh;
@@ -9854,7 +10125,7 @@ cob_file_sort_giving_extfh (cob_context *ctx, cob_file *sort_file, const size_t 
 	fbase = cob_malloc (varcnt * sizeof (cob_file *));
 	callfh = cob_malloc (varcnt * sizeof (void *));
 	i_fh = 0;
-	va_start (args, varcnt);
+	va_copy (args, cob_va_args);
 	for (i = 0; i < varcnt; i += 2) {
 		fbase[i_fh] = va_arg (args, cob_file *);
 		callfh[i_fh++] = va_arg (args, EXTFH_FUNC);
@@ -9863,10 +10134,31 @@ cob_file_sort_giving_extfh (cob_context *ctx, cob_file *sort_file, const size_t 
 	cob_file_sort_giving_internal (sort_file, i_fh, fbase, callfh);
 }
 
+void
+cob_file_sort_giving_extfh_ctx (cob_context *ctx, cob_file *sort_file, const size_t varcnt, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, varcnt);
+	cob_file_sort_giving_extfh_va_ctx (ctx, sort_file, varcnt, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_file_sort_giving_extfh without context */
+void
+cob_file_sort_giving_extfh (cob_file *sort_file, const size_t varcnt, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, varcnt);
+	cob_file_sort_giving_extfh_va_ctx (COB_CTX_COMPAT, sort_file, varcnt, cob_va_args);
+	va_end (cob_va_args);
+}
+
 /* SORT: close of internal sort file 'f' and deallocation
    of temporary storage */
 void
-cob_file_sort_close (cob_context *ctx, cob_file *f)
+cob_file_sort_close_ctx (cob_context *ctx, cob_file *f)
 {
 	struct cobsort	*hp = f->file;
 	cob_field	*fnstatus;
@@ -9892,8 +10184,15 @@ cob_file_sort_close (cob_context *ctx, cob_file *f)
 	cob_file_save_status (f, fnstatus, COB_STATUS_00_SUCCESS);
 }
 
+/* compatibility: cob_file_sort_close without context */
 void
-cob_file_release (cob_context *ctx, cob_file *f)
+cob_file_sort_close (cob_file *f)
+{
+	cob_file_sort_close_ctx (COB_CTX_COMPAT, f);
+}
+
+void
+cob_file_release_ctx (cob_context *ctx, cob_file *f)
 {
 	struct cobsort	*hp = f->file;
 
@@ -9913,8 +10212,15 @@ cob_file_release (cob_context *ctx, cob_file *f)
 	}
 }
 
+/* compatibility: cob_file_release without context */
 void
-cob_file_return (cob_context *ctx, cob_file *f)
+cob_file_release (cob_file *f)
+{
+	cob_file_release_ctx (COB_CTX_COMPAT, f);
+}
+
+void
+cob_file_return_ctx (cob_context *ctx, cob_file *f)
 {
 	struct cobsort	*hp = f->file;
 
@@ -9936,6 +10242,13 @@ cob_file_return (cob_context *ctx, cob_file *f)
 	} else {
 		cob_file_save_status (f, NULL, COB_STATUS_30_PERMANENT_ERROR);
 	}
+}
+
+/* compatibility: cob_file_return without context */
+void
+cob_file_return (cob_file *f)
+{
+	cob_file_return_ctx (COB_CTX_COMPAT, f);
 }
 
 #ifdef _WIN32
@@ -10084,11 +10397,11 @@ cob_exit_fileio (void)
 		runtime_buffer = NULL;
 	}
 	if (qbl_hdr) {
-		cob_cache_free (COB_CTX_TODO, qbl_hdr);
+		cob_cache_free_ctx (COB_CTX_TODO, qbl_hdr);
 		qbl_hdr = NULL;
 	}
 	if (qbl_tmp) {
-		cob_cache_free (COB_CTX_TODO, qbl_tmp);
+		cob_cache_free_ctx (COB_CTX_TODO, qbl_tmp);
 		qbl_tmp = NULL;
 	}
 
@@ -10156,7 +10469,7 @@ cob_init_fileio (cob_global *lptr, cob_settings *sptr)
 
 	if (chk_filename_spaces == -1) {
 		chk_filename_spaces = 1;	/* Default TRUE */
-		if ((p = cob_get_env (COB_CTX_TODO, "COB_FILENAME_SPACES", NULL)) != NULL) {
+		if ((p = cob_get_env_ctx (COB_CTX_TODO, "COB_FILENAME_SPACES", NULL)) != NULL) {
 			if (toupper (*p) == 'N'
 			 || toupper (*p) == 'F')
 				chk_filename_spaces = 0;/* Set FALSE */
@@ -10267,7 +10580,7 @@ cob_fork_fileio (cob_global *lptr, cob_settings *sptr)
 }
 
 char *
-cob_path_to_absolute (cob_context *ctx, const char *path)
+cob_path_to_absolute_ctx (cob_context *ctx, const char *path)
 {
 	char *abs_path = NULL;
 	if (path) {
@@ -10291,6 +10604,13 @@ cob_path_to_absolute (cob_context *ctx, const char *path)
 		}
 	}
 	return abs_path;
+}
+
+/* compatibility: cob_path_to_absolute without context */
+char *
+cob_path_to_absolute (const char *path)
+{
+	return cob_path_to_absolute_ctx (COB_CTX_COMPAT, path);
 }
 
 /* ============================================ */
@@ -10343,7 +10663,7 @@ open_vfile (cob_u16_ptr heap_id, unsigned char status[2], const int gc_ext)
 	 || !COB_MODULE_PTR->cob_procedure_params[1]
 	 || COB_MODULE_PTR->cob_procedure_params[0]->size != sizeof(cob_u16_t)
 	 || COB_MODULE_PTR->cob_procedure_params[1]->size != 2) {
-		cob_set_exception (COB_CTX_TODO, COB_EC_PROGRAM_ARG_MISMATCH);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_PROGRAM_ARG_MISMATCH);
 		return 1;
 	}
 
@@ -10456,7 +10776,7 @@ locate_segment (cob_u16_t heap, cob_u64_t data_loc, cob_u32_t size, void *data_b
 	if (cobglobptr->cob_call_params < 4
 	 || !COB_MODULE_PTR->cob_procedure_params[3]
 	 || COB_MODULE_PTR->cob_procedure_params[3]->size < size) {
-		cob_set_exception (COB_CTX_TODO, COB_EC_PROGRAM_ARG_MISMATCH);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_PROGRAM_ARG_MISMATCH);
 		return 1;
 	}
 
@@ -10464,7 +10784,7 @@ locate_segment (cob_u16_t heap, cob_u64_t data_loc, cob_u32_t size, void *data_b
 
 	if (heap > MAX_HEAP || heap == 0
 	 || heap_array[heap - 1].heap_id == 0) {
-		cob_runtime_warning (COB_CTX_TODO, "heap out of bounds %u", heap);
+		cob_runtime_warning_ctx (COB_CTX_TODO, "heap out of bounds %u", heap);
 		return HEAP_OUT_BOUNDS;
 	}
 	
@@ -10505,7 +10825,7 @@ locate_segment (cob_u16_t heap, cob_u64_t data_loc, cob_u32_t size, void *data_b
 			ptr_seg = ptr_seg->ptr_prev_seg;
 			/* LCOV_EXCL_START */
 			if (!ptr_seg) {
-				cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "locate_segment");
+				cob_runtime_error_ctx (COB_CTX_TODO, _("invalid internal call of %s"), "locate_segment");
 				cob_hard_failure_internal ("libcob");
 			}
 			/* LCOV_EXCL_STOP */
