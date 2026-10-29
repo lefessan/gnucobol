@@ -273,6 +273,7 @@ static void output_integer	(cb_tree);
 static void output_index	(cb_tree);
 static void output_func_1	(const char *, cb_tree);
 static void output_param	(cb_tree, int);
+static int function_takes_ctx	(const char *);
 static void output_funcall	(cb_tree);
 static void output_report_summed_field (struct cb_field *);
 static int	any_source_moves (struct cb_report *r, struct cb_field *f, int first);
@@ -4555,6 +4556,10 @@ output_param (cb_tree x, int id)
 #endif
 		} else {
 			output ("%s (", ip->intr_tab->intr_routine);
+			if (function_takes_ctx (ip->intr_tab->intr_routine)) {
+				output ((ip->intr_tab->refmod || ip->intr_field || ip->args)
+					? "ctx, " : "ctx");
+			}
 			if (ip->intr_tab->refmod) {
 				if (ip->offset) {
 					output_integer (ip->offset);
@@ -4992,6 +4997,41 @@ output_funcall_item (cb_tree x, const int i, unsigned int func_nolitcast)
 	output_param (x, i);
 }
 
+/* libcob functions taking the execution context as first argument;
+   TODO (T1.2): during the migration file by file, the list of converted
+   functions; at the end, replaced by "all cob_ functions" */
+static const char *const ctx_functions[] = {
+	NULL
+};
+
+static int
+cmp_ctx_function (const void *key, const void *elem)
+{
+	return strcmp ((const char *)key, *(const char *const *)elem);
+}
+
+static int
+function_takes_ctx (const char *name)
+{
+	static int	sorted = 0;
+	static size_t	count = 0;
+
+	if (!sorted) {
+		while (ctx_functions[count] != NULL) {
+			if (count > 0
+			 && strcmp (ctx_functions[count - 1], ctx_functions[count]) >= 0) {
+				cobc_err_msg ("ctx_functions not sorted at %s",
+					ctx_functions[count]);
+				COBC_ABORT ();
+			}
+			count++;
+		}
+		sorted = 1;
+	}
+	return bsearch (name, ctx_functions, count, sizeof (char *),
+			cmp_ctx_function) != NULL;
+}
+
 static void
 output_funcall (cb_tree x)
 {
@@ -5064,6 +5104,9 @@ output_funcall (cb_tree x)
 
 	screenptr = p->screenptr;
 	output ("%s (", p->name);
+	if (function_takes_ctx (p->name)) {
+		output (p->argc ? "ctx, " : "ctx");
+	}
 	for (i = 0; i < p->argc; i++) {
 		if (i) {
 			output (", ");
@@ -5087,6 +5130,9 @@ static void
 output_func_1 (const char *name, cb_tree x)
 {
 	output ("%s (", name);
+	if (function_takes_ctx (name)) {
+		output ("ctx, ");
+	}
 	output_param (x, param_id);
 	output (")");
 }
