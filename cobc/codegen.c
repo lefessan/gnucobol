@@ -5001,6 +5001,7 @@ output_funcall_item (cb_tree x, const int i, unsigned int func_nolitcast)
    TODO (T1.2): during the migration file by file, the list of converted
    functions; at the end, replaced by "all cob_ functions" */
 static const char *const ctx_functions[] = {
+	"cob_accept",
 	"cob_accept_arg_number",
 	"cob_accept_arg_value",
 	"cob_accept_command_line",
@@ -5077,6 +5078,7 @@ static const char *const ctx_functions[] = {
 	"cob_decimal_sub",
 	"cob_delete",
 	"cob_delete_file",
+	"cob_display",
 	"cob_display_arg_number",
 	"cob_display_command_line",
 	"cob_display_env_value",
@@ -5084,6 +5086,9 @@ static const char *const ctx_functions[] = {
 	"cob_div",
 	"cob_div_quotient",
 	"cob_div_remainder",
+	"cob_dump_field",
+	"cob_dump_file",
+	"cob_dump_output",
 	"cob_external_addr",
 	"cob_extfh_close",
 	"cob_extfh_delete",

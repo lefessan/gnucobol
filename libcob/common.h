@@ -2826,11 +2826,11 @@ typedef struct __fcd2 {
 /*******************************/
 /* Functions in termio.c */
 
-COB_EXPIMP void cob_display	(const int, const int, const int, ...);
-COB_EXPIMP void cob_dump_output (const char *);
-COB_EXPIMP void cob_dump_file (const char *, cob_file *);
-COB_EXPIMP void cob_dump_field	(const int, const char *, cob_field *, const cob_uli_t, const cob_u32_t, ...);
-COB_EXPIMP void cob_accept	(cob_field *);
+COB_EXPIMP void cob_display	(cob_context *, const int, const int, const int, ...);
+COB_EXPIMP void cob_dump_output (cob_context *, const char *);
+COB_EXPIMP void cob_dump_file (cob_context *, const char *, cob_file *);
+COB_EXPIMP void cob_dump_field	(cob_context *, const int, const char *, cob_field *, const cob_uli_t, const cob_u32_t, ...);
+COB_EXPIMP void cob_accept	(cob_context *, cob_field *);
 
 /*******************************/
 /* Functions in fileio.c */
