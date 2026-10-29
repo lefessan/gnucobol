@@ -3193,21 +3193,21 @@ struct cob_prof_module {
 /* Function called to start profiling a COBOL module. Allocates the
    cob_prof_module structure that will be used to store the counters and
    times. */
-COB_EXPIMP struct cob_prof_module *cob_prof_init_module (
+COB_EXPIMP struct cob_prof_module *cob_prof_init_module (cob_context *,
 	cob_module *module,
 	struct cob_prof_procedure	*procedure_names,
 	size_t		procedure_count);
 
 /* Functions used to instrument the generated C code and measure
  * counters and times */
-COB_EXPIMP void cob_prof_enter_procedure	(struct cob_prof_module *, int);
-COB_EXPIMP void cob_prof_exit_procedure 	(struct cob_prof_module *, int);
-COB_EXPIMP void cob_prof_enter_section  	(struct cob_prof_module *, int);
-COB_EXPIMP void cob_prof_exit_section   	(struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_enter_procedure	(cob_context *, struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_exit_procedure 	(cob_context *, struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_enter_section  	(cob_context *, struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_exit_section   	(cob_context *, struct cob_prof_module *, int);
 
 /* Enter a paragraph in the middle, using an ENTRY statement */
-COB_EXPIMP void cob_prof_use_paragraph_entry	(struct cob_prof_module *, int, int);
+COB_EXPIMP void cob_prof_use_paragraph_entry	(cob_context *, struct cob_prof_module *, int, int);
 /* Exit a paragraph using a GO TO */
-COB_EXPIMP void cob_prof_goto			(struct cob_prof_module *);
+COB_EXPIMP void cob_prof_goto			(cob_context *, struct cob_prof_module *);
 
 #endif	/* COB_COMMON_H */
