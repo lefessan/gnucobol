@@ -2339,44 +2339,44 @@ COB_EXPIMP cob_s64_t	cob_s64_pow (cob_s64_t, cob_s64_t);
 /*******************************/
 /* Functions in call.c */
 
-DECLNORET COB_EXPIMP void	cob_call_error		(void) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_call_error		(cob_context *) COB_A_NORETURN;
 COB_EXPIMP void		cob_field_constant (cob_field *f, cob_field *t, cob_field_attr *a, void *d);
 COB_EXPIMP void		cob_field_value (cob_field *f, cob_field *t, cob_field_attr *a, void *d);
 COB_EXPIMP void		cob_field_content (cob_field *f, cob_field *t, cob_field_attr *a, void *d);
 COB_EXPIMP unsigned int	cob_get_name_hash (const char *name);
 
-COB_EXPIMP void		cob_set_cancel		(cob_module *);
-COB_EXPIMP void *	cob_load_lib (const char *library, const char *entry, char *reason);
+COB_EXPIMP void		cob_set_cancel		(cob_context *, cob_module *);
+COB_EXPIMP void *	cob_load_lib (cob_context *, const char *library, const char *entry, char *reason);
 COB_EXPIMP int		cob_encode_program_id (const unsigned char * const, unsigned char * const,
 						 const int, const int);
-COB_EXPIMP void		*cob_resolve		(const char *);
-COB_EXPIMP void		*cob_resolve_cobol	(const char *, const int,
+COB_EXPIMP void		*cob_resolve		(cob_context *, const char *);
+COB_EXPIMP void		*cob_resolve_cobol	(cob_context *, const char *, const int,
 						 const int);
-COB_EXPIMP void		*cob_resolve_func	(const char *);
-COB_EXPIMP const char	*cob_resolve_error	(void);
-COB_EXPIMP void		*cob_call_field		(const cob_field *,
+COB_EXPIMP void		*cob_resolve_func	(cob_context *, const char *);
+COB_EXPIMP const char	*cob_resolve_error	(cob_context *);
+COB_EXPIMP void		*cob_call_field		(cob_context *, const cob_field *,
 						 const struct cob_call_struct *,
 						 const unsigned int,
 						 const int);
-COB_EXPIMP void		cob_cancel_field	(const cob_field *,
+COB_EXPIMP void		cob_cancel_field	(cob_context *, const cob_field *,
 						 const struct cob_call_struct *);
-COB_EXPIMP void		cob_cancel		(const char *);
-COB_EXPIMP int		cob_call_with_exception_check (const char*, const int, void **);
-COB_EXPIMP int		cob_call		(const char *, const int, void **);
-COB_EXPIMP int		cob_func		(const char *, const int, void **);
+COB_EXPIMP void		cob_cancel		(cob_context *, const char *);
+COB_EXPIMP int		cob_call_with_exception_check (cob_context *, const char*, const int, void **);
+COB_EXPIMP int		cob_call		(cob_context *, const char *, const int, void **);
+COB_EXPIMP int		cob_func		(cob_context *, const char *, const int, void **);
 
 #ifndef COB_WITHOUT_JMP
-COB_EXPIMP void		*cob_savenv		(struct cobjmp_buf *);
-COB_EXPIMP void		*cob_savenv2		(struct cobjmp_buf *, const int);
-COB_EXPIMP void		cob_longjmp		(struct cobjmp_buf *);
+COB_EXPIMP void		*cob_savenv		(cob_context *, struct cobjmp_buf *);
+COB_EXPIMP void		*cob_savenv2		(cob_context *, struct cobjmp_buf *, const int);
+COB_EXPIMP void		cob_longjmp		(cob_context *, struct cobjmp_buf *);
 #endif
 
-COB_EXPIMP int		cob_call_cobol	(const char *, const int, ...);
-COB_EXPIMP int		cob_call_entry	(void *, const int, ...);
-COB_EXPIMP int		cob_get_name_line ( char *prog, int *line );
+COB_EXPIMP int		cob_call_cobol	(cob_context *, const char *, const int, ...);
+COB_EXPIMP int		cob_call_entry	(cob_context *, void *, const int, ...);
+COB_EXPIMP int		cob_get_name_line (cob_context *,  char *prog, int *line );
 
-COB_EXPIMP void		cob_runtime_warning_external	(const char *, const int,
-						const char *, ...) COB_A_FORMAT34;
+COB_EXPIMP void		cob_runtime_warning_external	(cob_context *, const char *, const int,
+						const char *, ...) COB_A_FORMAT45;
 
 /*******************************/
 /* Functions in screenio.c */

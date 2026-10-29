@@ -116,19 +116,19 @@ cob_get_param_field (int n, const char *caller_name)
 	if (cobglobptr == NULL
 	 || COB_MODULE_PTR == NULL) {
 		/* note: same message in call.c */
-		cob_runtime_warning_external (caller_name, 1,
+		cob_runtime_warning_external (COB_CTX_TODO, caller_name, 1,
 			_("cob_init() has not been called"));
 		return NULL;
 	}
 	if (n < 1
 	 || n > cobglobptr->cob_call_params) {
-		cob_runtime_warning_external (caller_name, 1,
+		cob_runtime_warning_external (COB_CTX_TODO, caller_name, 1,
 			_("parameter %d is not within range of %d"),
 			n, cobglobptr->cob_call_params);
 		return NULL;
 	}
 	if (COB_MODULE_PTR->cob_procedure_params[n - 1] == NULL) {
-		cob_runtime_warning_external (caller_name, 1,
+		cob_runtime_warning_external (COB_CTX_TODO, caller_name, 1,
 			_("parameter %d is NULL"), n);
 		return NULL;
 	}
@@ -136,7 +136,7 @@ cob_get_param_field (int n, const char *caller_name)
 }
 
 int
-cob_get_name_line (char *prog, int *line)
+cob_get_name_line (cob_context *ctx, char *prog, int *line)
 {
 	int	k;
 	if (line != NULL)
@@ -157,7 +157,7 @@ cob_get_num_params (void)
 	}
 
 	/* note: same message in call.c */
-	cob_runtime_warning_external ("cob_get_num_params", 1,
+	cob_runtime_warning_external (COB_CTX_TODO, "cob_get_num_params", 1,
 		_("cob_init() has not been called"));
 	return -1;
 }
@@ -510,7 +510,7 @@ cob_get_field_str (const cob_field *f, char *buffer, size_t size)
 		return _("field not allocated");
 	}
 	if (!buffer || !size) {
-		cob_runtime_warning_external ("cob_get_field_str", 0, "bad buffer/size");
+		cob_runtime_warning_external (COB_CTX_TODO, "cob_get_field_str", 0, "bad buffer/size");
 		return "";
 	}
 	{
@@ -572,7 +572,7 @@ cob_put_field_str (const cob_field *dst, const char *str)
 	if (dst->size <= 0) return EINVAL;
 
 	if (COB_FIELD_CONSTANT (dst)) {
-		cob_runtime_warning_external ("cob_put_field_str", 1,
+		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_field_str", 1,
 			_ ("attempt to over-write constant field with '%s'"),
 			str);
 		return EINVAL;
@@ -614,7 +614,7 @@ cob_put_s64_param (int n, cob_s64_t val)
 	if (COB_FIELD_CONSTANT (f)) {
 		char buff[20];
 		sprintf (buff, CB_FMT_LLD, val);
-		cob_runtime_warning_external ("cob_put_s64_param", 1,
+		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_s64_param", 1,
 			_("attempt to over-write constant parameter %d with '%s'"),
 			n, buff);
 		return;
@@ -672,7 +672,7 @@ cob_put_u64_param (int n, cob_u64_t val)
 	if (COB_FIELD_CONSTANT (f)) {
 		char buff[20];
 		sprintf (buff, CB_FMT_LLD, val);
-		cob_runtime_warning_external ("cob_put_u64_param", 1,
+		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_u64_param", 1,
 			_("attempt to over-write constant parameter %d with '%s'"),
 			n, buff);
 		return;
@@ -724,7 +724,7 @@ cob_put_picx_param (int n, void *char_field)
 	}
 
 	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning_external ("cob_put_picx_param", 1,
+		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_picx_param", 1,
 			_("attempt to over-write constant parameter %d with '%s'"),
 			n, (char*)char_field);
 		return;
@@ -772,7 +772,7 @@ cob_put_grp_param (int n, void *char_field, size_t len)
 	}
 
 	if (COB_FIELD_CONSTANT (f)) {
-		cob_runtime_warning_external ("cob_put_grp_param", 1,
+		cob_runtime_warning_external (COB_CTX_TODO, "cob_put_grp_param", 1,
 			"attempt to over-write constant parameter %d", n);
 		return;
 	}

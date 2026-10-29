@@ -3559,7 +3559,7 @@ output_integer (cb_tree x)
 			output (")");
 			break;
 		case CB_CAST_PROGRAM_POINTER:
-			output ("cob_call_field (");
+			output ("cob_call_field (ctx, ");
 			output_param (x, -1);
 			if (current_prog->nested_prog_list) {
 				gen_nested_tab = 1;
@@ -3860,7 +3860,7 @@ output_long_integer (cb_tree x)
 			output (")");
 			break;
 		case CB_CAST_PROGRAM_POINTER:
-			output ("cob_call_field (");
+			output ("cob_call_field (ctx, ");
 			output_param (x, -1);
 			if (current_prog->nested_prog_list) {
 				gen_nested_tab = 1;
@@ -5006,6 +5006,14 @@ static const char *const ctx_functions[] = {
 	"cob_add_packed_int",
 	"cob_add_packed_int64",
 	"cob_alloc_move",
+	"cob_call",
+	"cob_call_cobol",
+	"cob_call_entry",
+	"cob_call_error",
+	"cob_call_field",
+	"cob_call_with_exception_check",
+	"cob_cancel",
+	"cob_cancel_field",
 	"cob_check_numval",
 	"cob_cmp_float",
 	"cob_cmp_int",
@@ -5033,11 +5041,13 @@ static const char *const ctx_functions[] = {
 	"cob_div",
 	"cob_div_quotient",
 	"cob_div_remainder",
+	"cob_func",
 	"cob_get_comp1",
 	"cob_get_comp2",
 	"cob_get_indirect_field",
 	"cob_get_int",
 	"cob_get_llint",
+	"cob_get_name_line",
 	"cob_get_picx",
 	"cob_get_s64_comp3",
 	"cob_get_s64_comp5",
@@ -5173,6 +5183,7 @@ static const char *const ctx_functions[] = {
 	"cob_intr_variance",
 	"cob_intr_when_compiled",
 	"cob_intr_year_to_yyyy",
+	"cob_load_lib",
 	"cob_logical_and",
 	"cob_logical_left",
 	"cob_logical_left_c",
@@ -5181,6 +5192,7 @@ static const char *const ctx_functions[] = {
 	"cob_logical_right",
 	"cob_logical_right_c",
 	"cob_logical_xor",
+	"cob_longjmp",
 	"cob_move",
 	"cob_move_bcd",
 	"cob_move_ibm",
@@ -5200,6 +5212,14 @@ static const char *const ctx_functions[] = {
 	"cob_put_u64_comp6",
 	"cob_put_u64_compx",
 	"cob_put_u64_pic9",
+	"cob_resolve",
+	"cob_resolve_cobol",
+	"cob_resolve_error",
+	"cob_resolve_func",
+	"cob_runtime_warning_external",
+	"cob_savenv",
+	"cob_savenv2",
+	"cob_set_cancel",
 	"cob_set_compx",
 	"cob_set_int",
 	"cob_set_llcon",
@@ -8131,7 +8151,7 @@ output_call (struct cb_call *p)
 					nlp->nested_prog->toplev_count);
 			} else {
 				output ("call_%s.funcvoid = ", name_str);
-				output ("cob_resolve_cobol (");
+				output ("cob_resolve_cobol (ctx, ");
 				output_string ((const unsigned char *)s,
 						(int)strlen (s), 0);
 				output (", %d, %d);", cb_fold_call, !p->stmt1);
@@ -8141,7 +8161,7 @@ output_call (struct cb_call *p)
 		} else {
 			name_str = NULL;
 			needs_unifunc = 1;
-			output ("cob_unifunc.funcvoid = cob_call_field (");
+			output ("cob_unifunc.funcvoid = cob_call_field (ctx, ");
 			output_param (p->name, -1);
 			if (current_prog->nested_prog_list) {
 				gen_nested_tab = 1;
@@ -8442,7 +8462,7 @@ output_cancel (struct cb_cancel *p)
 			}
 			output (");");
 		} else {
-			output ("cob_cancel (");
+			output ("cob_cancel (ctx, ");
 			output_string ((const unsigned char *)s,
 					(int)strlen (s), 0);
 			output (");");
@@ -8451,7 +8471,7 @@ output_cancel (struct cb_cancel *p)
 		return;
 	}
 	output_prefix ();
-	output ("cob_cancel_field (");
+	output ("cob_cancel_field (ctx, ");
 	output_param (p->target, -1);
 	if (current_prog->nested_prog_list) {
 		gen_nested_tab = 1;
@@ -10077,7 +10097,7 @@ output_assign (const struct cb_assign *ap)
 				output_data (cp->val);
 				break;
 			case CB_CAST_PROGRAM_POINTER:
-				output ("cob_call_field (");
+				output ("cob_call_field (ctx, ");
 				output_param (ap->val, -1);
 				if (current_prog->nested_prog_list) {
 					gen_nested_tab = 1;
@@ -14022,7 +14042,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 
 	/* Resolve user functions */
 	for (clp = func_call_cache; clp; clp = clp->next) {
-		output_line ("func_%s.funcvoid = cob_resolve_func (\"%s\");",
+		output_line ("func_%s.funcvoid = cob_resolve_func (ctx, \"%s\");",
 			      clp->call_name, clp->call_name);
 	}
 
@@ -14048,7 +14068,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	/* Setup up CANCEL callback */
 	if (!prog->nested_level && prog->prog_type == COB_MODULE_TYPE_PROGRAM) {
 		output_line ("/* Initialize cancel callback */");
-		output_line ("cob_set_cancel (module);");
+		output_line ("cob_set_cancel (ctx, module);");
 		output_newline ();
 	}
 
