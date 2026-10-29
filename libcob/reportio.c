@@ -760,16 +760,16 @@ write_rec (cob_report *r, int opt)
 		 && (opt & COB_WRITE_LINES)) {
 			opt = (opt & ~COB_WRITE_MASK) | 1;
 			while (num > 0) {
-		 		cob_write (f, f->record, opt, NULL, 0);
+		 		cob_write (COB_CTX_TODO, f, f->record, opt, NULL, 0);
 				memset (data + r->code_len, ' ', record_size_left);
 				num--;
 			}
 		} else {
-			cob_write (f, f->record, opt, NULL, 0);
+			cob_write (COB_CTX_TODO, f, f->record, opt, NULL, 0);
 		}
 		f->record->data = orig_data;
 	} else {
-		cob_write (f, f->record, opt, NULL, 0);
+		cob_write (COB_CTX_TODO, f, f->record, opt, NULL, 0);
 	}
 	if (memcmp (f->file_status,"00",2) != 0) {
 		DEBUG_LOG("rw",("Note File Write status '%.4s'\n",f->file_status));

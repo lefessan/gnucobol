@@ -2835,53 +2835,53 @@ COB_EXPIMP void cob_accept	(cob_field *);
 /*******************************/
 /* Functions in fileio.c */
 
-COB_EXPIMP void	cob_file_external_addr (const char *,
+COB_EXPIMP void	cob_file_external_addr (cob_context *, const char *,
 				 cob_file **, cob_file_key **,
 				 const int nkeys, const int linage);
-COB_EXPIMP void	cob_file_malloc (cob_file **, cob_file_key **,
+COB_EXPIMP void	cob_file_malloc (cob_context *, cob_file **, cob_file_key **,
 				 const int nkeys, const int linage);
-COB_EXPIMP void	cob_file_xfdname (cob_file *, const char *);
-COB_EXPIMP void	cob_file_free   (cob_file **, cob_file_key **);
-COB_EXPIMP void cob_commit		(void);
-COB_EXPIMP void cob_rollback	(void);
-COB_EXPIMP void cob_pre_open	(cob_file *f);
-COB_EXPIMP void cob_pre_open_def (cob_file *f, char *setdef, char *isdef, int checkit);
-COB_EXPIMP int	cob_findkey (cob_file *, cob_field *, int *, int *);
-COB_EXPIMP void cob_file_create (cob_file ** pfl, const char *exname, const char *select_name,
+COB_EXPIMP void	cob_file_xfdname (cob_context *, cob_file *, const char *);
+COB_EXPIMP void	cob_file_free   (cob_context *, cob_file **, cob_file_key **);
+COB_EXPIMP void cob_commit		(cob_context *);
+COB_EXPIMP void cob_rollback	(cob_context *);
+COB_EXPIMP void cob_pre_open	(cob_context *, cob_file *f);
+COB_EXPIMP void cob_pre_open_def (cob_context *, cob_file *f, char *setdef, char *isdef, int checkit);
+COB_EXPIMP int	cob_findkey (cob_context *, cob_file *, cob_field *, int *, int *);
+COB_EXPIMP void cob_file_create (cob_context *, cob_file ** pfl, const char *exname, const char *select_name,
 					const enum cob_file_org fileorg, const enum cob_file_access accessmode, const int optional,
 					const int format, const int select_features, const int nkeys, 
 					const int minrcsz, const int maxrcsz, cob_field * assign, cob_field * record);
-COB_EXPIMP void cob_file_destroy (cob_file ** pfl);
-COB_EXPIMP void cob_file_set_attr (cob_file * fl, cob_field * varsize,
+COB_EXPIMP void cob_file_destroy (cob_context *, cob_file ** pfl);
+COB_EXPIMP void cob_file_set_attr (cob_context *, cob_file * fl, cob_field * varsize,
 					const int lineadv, const int features,
 					const unsigned char *codeset, cob_field * password, cob_field * cryptkey);
-COB_EXPIMP void cob_file_set_key (cob_file * fl, const int keyn, cob_field * key,
+COB_EXPIMP void cob_file_set_key (cob_context *, cob_file * fl, const int keyn, cob_field * key,
 					const int dups, const int ascdesc, const int len_suppress,
 					const unsigned char *suppress, const int parts, ...);
-COB_EXPIMP void cob_file_set_key_extra (cob_file * fl, const int keyn, const int compress,
+COB_EXPIMP void cob_file_set_key_extra (cob_context *, cob_file * fl, const int keyn, const int compress,
 					const int encrypt, cob_field * password, const unsigned char *collate);
-COB_EXPIMP void cob_file_set_linage (cob_file * fl, cob_field *linage, cob_field *linage_ctr,
+COB_EXPIMP void cob_file_set_linage (cob_context *, cob_file * fl, cob_field *linage, cob_field *linage_ctr,
 					cob_field *latfoot, cob_field *lattop, cob_field *latbot);
-COB_EXPIMP void cob_file_set_retry (cob_file * fl, const int mode, const int value);
-COB_EXPIMP void cob_file_set_lock  (cob_file * fl, const int mode);
-COB_EXPIMP void cob_file_complete (cob_file * fl);
+COB_EXPIMP void cob_file_set_retry (cob_context *, cob_file * fl, const int mode, const int value);
+COB_EXPIMP void cob_file_set_lock  (cob_context *, cob_file * fl, const int mode);
+COB_EXPIMP void cob_file_complete (cob_context *, cob_file * fl);
 
 /******************************************/
 /* Functions in fileio.c  API for codegen */
 /******************************************/
-COB_EXPIMP void cob_open	(cob_file *, const enum cob_open_mode, const int, cob_field *);
-COB_EXPIMP void cob_close	(cob_file *, cob_field *, const int, const int);
-COB_EXPIMP void cob_read	(cob_file *, cob_field *, cob_field *, const int);
-COB_EXPIMP void cob_read_next	(cob_file *, cob_field *, const int);
-COB_EXPIMP void cob_rewrite	(cob_file *, cob_field *, const int, cob_field *);
-COB_EXPIMP void cob_delete	(cob_file *, cob_field *);
-COB_EXPIMP void cob_start	(cob_file *, const int, cob_field *,
+COB_EXPIMP void cob_open	(cob_context *, cob_file *, const enum cob_open_mode, const int, cob_field *);
+COB_EXPIMP void cob_close	(cob_context *, cob_file *, cob_field *, const int, const int);
+COB_EXPIMP void cob_read	(cob_context *, cob_file *, cob_field *, cob_field *, const int);
+COB_EXPIMP void cob_read_next	(cob_context *, cob_file *, cob_field *, const int);
+COB_EXPIMP void cob_rewrite	(cob_context *, cob_file *, cob_field *, const int, cob_field *);
+COB_EXPIMP void cob_delete	(cob_context *, cob_file *, cob_field *);
+COB_EXPIMP void cob_start	(cob_context *, cob_file *, const int, cob_field *,
 				 cob_field *, cob_field *);
-COB_EXPIMP void cob_write	(cob_file *, cob_field *, const int,
+COB_EXPIMP void cob_write	(cob_context *, cob_file *, cob_field *, const int,
 				 cob_field *, const unsigned int);
 
-COB_EXPIMP void cob_delete_file	(cob_file *, cob_field *, const int);
-COB_EXPIMP void cob_unlock_file	(cob_file *, cob_field *);
+COB_EXPIMP void cob_delete_file	(cob_context *, cob_file *, cob_field *, const int);
+COB_EXPIMP void cob_unlock_file	(cob_context *, cob_file *, cob_field *);
 
 /***************************************************************/
 /* functions in fextfh.c which is the MF style EXTFH interface */
@@ -2890,27 +2890,27 @@ COB_EXPIMP int	EXTFH		(unsigned char *, FCD3 *);
 
 typedef int (*EXTFH_FUNC)(unsigned char *opcode, FCD3 *fcd);
 
-COB_EXPIMP void cob_extfh_open		(EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_open		(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					const enum cob_open_mode, const int, cob_field *);
-COB_EXPIMP void cob_extfh_close		(EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_close		(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					cob_field *, const int, const int);
-COB_EXPIMP void cob_extfh_read		(EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_read		(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					cob_field *, cob_field *, const int);
-COB_EXPIMP void cob_extfh_read_next	(EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_read_next	(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					cob_field *, const int);
-COB_EXPIMP void cob_extfh_rewrite	(EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_rewrite	(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					cob_field *, const int, cob_field *);
-COB_EXPIMP void cob_extfh_delete	(EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_delete	(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					cob_field *);
-COB_EXPIMP void cob_extfh_start		(EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_start		(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					const int, cob_field *,
 					cob_field *, cob_field *);
-COB_EXPIMP void cob_extfh_write		(EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_write		(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					cob_field *, const int,
 				 	cob_field *, const unsigned int);
 
-COB_EXPIMP void cob_file_fcd_adrs		(cob_file *, void *);
-COB_EXPIMP void cob_file_fcdkey_adrs	(cob_file *, void *);
+COB_EXPIMP void cob_file_fcd_adrs		(cob_context *, cob_file *, void *);
+COB_EXPIMP void cob_file_fcdkey_adrs	(cob_context *, cob_file *, void *);
 
 /* File system routines */
 COB_EXPIMP int cob_sys_open_file	(unsigned char *, unsigned char *,
@@ -2943,22 +2943,22 @@ COB_EXPIMP int cob_sys_file_info	(unsigned char *, unsigned char *);
 COB_EXPIMP int cob_sys_file_delete	(unsigned char *, unsigned char *);
 
 /* SORT routines */
-COB_EXPIMP void	cob_file_sort_init	(cob_file *, const unsigned int,
+COB_EXPIMP void	cob_file_sort_init	(cob_context *, cob_file *, const unsigned int,
 					 const unsigned char *,
 					 void *, cob_field *);
-COB_EXPIMP void	cob_file_sort_options (cob_file *, const char *, ...);
-COB_EXPIMP void	cob_file_sort_init_key	(cob_file *, cob_field *,
+COB_EXPIMP void	cob_file_sort_options (cob_context *, cob_file *, const char *, ...);
+COB_EXPIMP void	cob_file_sort_init_key	(cob_context *, cob_file *, cob_field *,
 					 const int, const unsigned int);
-COB_EXPIMP void	cob_file_sort_close	(cob_file *);
-COB_EXPIMP void	cob_file_sort_using	(cob_file *, cob_file *);
-COB_EXPIMP void	cob_file_sort_using_extfh	(cob_file *, cob_file *,
+COB_EXPIMP void	cob_file_sort_close	(cob_context *, cob_file *);
+COB_EXPIMP void	cob_file_sort_using	(cob_context *, cob_file *, cob_file *);
+COB_EXPIMP void	cob_file_sort_using_extfh	(cob_context *, cob_file *, cob_file *,
 					 int (*callfh)(unsigned char *opcode, FCD3 *fcd));
-COB_EXPIMP void	cob_file_sort_giving	(cob_file *, const size_t, ...);
-COB_EXPIMP void	cob_file_sort_giving_extfh	(cob_file *, const size_t, ...);
-COB_EXPIMP void	cob_file_release	(cob_file *);
-COB_EXPIMP void	cob_file_return		(cob_file *);
+COB_EXPIMP void	cob_file_sort_giving	(cob_context *, cob_file *, const size_t, ...);
+COB_EXPIMP void	cob_file_sort_giving_extfh	(cob_context *, cob_file *, const size_t, ...);
+COB_EXPIMP void	cob_file_release	(cob_context *, cob_file *);
+COB_EXPIMP void	cob_file_return		(cob_context *, cob_file *);
 
-COB_EXPIMP char * cob_path_to_absolute (const char *path);
+COB_EXPIMP char * cob_path_to_absolute (cob_context *, const char *path);
 
 /***************************/
 /* Functions in reportio.c */

@@ -663,7 +663,7 @@ insert (const char *name, void *func, lt_dlhandle handle,
 	p->module = module;
 
 	if (path) {
-		p->path = cob_path_to_absolute (path);
+		p->path = cob_path_to_absolute (COB_CTX_TODO, path);
 	}
 	p->no_phys_cancel = nocanc;
 	val = hash ((const unsigned char *)name);

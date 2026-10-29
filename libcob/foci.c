@@ -1437,7 +1437,7 @@ oci_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 	struct file_xfd	*fx;
 	COB_UNUSED (a);
 
-	ky = cob_findkey (f, key, &klen, &partlen);
+	ky = cob_findkey (COB_CTX_TODO, f, key, &klen, &partlen);
 	if (ky < 0) {
 		DEBUG_LOG("db",("Start key not found!\n"));
 		return COB_STATUS_30_PERMANENT_ERROR;
@@ -1520,7 +1520,7 @@ oci_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 	if (fx->fileorg == COB_ORG_RELATIVE) {
 		ky = 0;
 	} else {
-		ky = cob_findkey (f, key, &klen, &partlen);
+		ky = cob_findkey (COB_CTX_TODO, f, key, &klen, &partlen);
 		if (ky < 0) {
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
