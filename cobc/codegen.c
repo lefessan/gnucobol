@@ -4655,7 +4655,7 @@ output_funcall_typed_report (struct cb_funcall *p, const char type)
 		output_line ("frame_ptr--;");
 		output_newline ();
 		output_prefix ();
-		output("while ( cob_report_generate (");
+		output("while ( cob_report_generate (ctx, ");
 		output_param (p->argv[0], 0);
 		output(", ");
 		output_param (p->argv[1], 1);
@@ -4673,7 +4673,7 @@ output_funcall_typed_report (struct cb_funcall *p, const char type)
 	case 'T':	/* Terminate REPORT */
 		output_newline ();
 		output_prefix ();
-		output("while ( cob_report_terminate (");
+		output("while ( cob_report_terminate (ctx, ");
 		output_param (p->argv[0], 0);
 		output(") > 0 ) {");
 		output_newline ();
@@ -4778,7 +4778,7 @@ output_funcall_typed_report (struct cb_funcall *p, const char type)
 			output_line ("%s%s.code_is_present = 0;", CB_PREFIX_REPORT, r->cname);
 		}
 		output_prefix ();
-		output("while ( cob_report_initiate (");
+		output("while ( cob_report_initiate (ctx, ");
 		output_param (p->argv[0], 0);
 		output(") > 0 ) {");
 		output_indent_level += 2;
@@ -4885,7 +4885,7 @@ output_funcall_typed (struct cb_funcall *p, const char type)
 		output_param (p->argv[1], 0);
 		output (".suppress = 1;");
 		output_newline ();
-		output("cob_report_suppress (");
+		output("cob_report_suppress (ctx, ");
 		output_param (p->argv[0], 0);
 		output(", ");
 		output ("&%s",CB_PREFIX_REPORT_LINE);
@@ -5331,6 +5331,10 @@ static const char *const ctx_functions[] = {
 	"cob_read",
 	"cob_read_next",
 	"cob_ready_trace",
+	"cob_report_generate",
+	"cob_report_initiate",
+	"cob_report_suppress",
+	"cob_report_terminate",
 	"cob_reset_trace",
 	"cob_resolve",
 	"cob_resolve_cobol",

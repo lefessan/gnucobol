@@ -1420,7 +1420,7 @@ cob_exit_reportio()
  * INITIATE report
  */
 int
-cob_report_initiate (cob_report *r)
+cob_report_initiate (cob_context *ctx, cob_report *r)
 {
 static	cob_report_control	*rc;
 static	cob_report_control_ref	*rr;
@@ -1524,7 +1524,7 @@ static	int		k;
  * TERMINATE report
  */
 int
-cob_report_terminate (cob_report *r)
+cob_report_terminate (cob_context *ctx, cob_report *r)
 {
 static	cob_report_control	*rc;
 static	cob_report_control_ref	*rr;
@@ -1654,7 +1654,7 @@ PrintReportFooting:
  * GENERATE report-line
  */
 int
-cob_report_generate (cob_report *r, cob_report_line *l)
+cob_report_generate (cob_context *ctx, cob_report *r, cob_report_line *l)
 {
 static	cob_report_control	*rc;
 static	cob_report_control_ref	*rr;
@@ -2037,7 +2037,7 @@ PrintDetail:	;
  * SUPPRESS printing of this CONTROL level
  */
 void
-cob_report_suppress(cob_report *r, cob_report_line *l)
+cob_report_suppress(cob_context *ctx, cob_report *r, cob_report_line *l)
 {
 	cob_report_control	*rc;
 	cob_report_control_ref	*rr;
