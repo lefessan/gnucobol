@@ -132,7 +132,7 @@ cob_str_memcpy (cob_field *dst, unsigned char *src, const int size)
 	temp.size = size;
 	temp.data = src;
 	temp.attr = &const_alpha_attr;
-	cob_move (COB_CTX_TODO, &temp, dst);
+	cob_move_ctx (COB_CTX_TODO, &temp, dst);
 }
 
 static void
@@ -366,7 +366,7 @@ inspect_common_no_replace (
 	}
 
 	if (n != 0) {
-		cob_add_int (COB_CTX_TODO, f1, n, 0);
+		cob_add_int_ctx (COB_CTX_TODO, f1, n, 0);
 	}
 }
 
@@ -493,7 +493,7 @@ inspect_common (
 				alloc_figurative (f1, f2);
 				f1 = &alpha_fld;
 			} else {
-				cob_set_exception (COB_CTX_TODO, COB_EC_RANGE_INSPECT_SIZE);
+				cob_set_exception_ctx (COB_CTX_TODO, COB_EC_RANGE_INSPECT_SIZE);
 				return;
 			}
 		}
@@ -566,9 +566,16 @@ cob_inspect_init_intern (struct cob_inspect_state *st, cob_field *var, const cob
 	st->mark_min = st->mark_max = 0;
 }
 void
-cob_inspect_init (cob_context *ctx, cob_field *var, const cob_u32_t replacing)
+cob_inspect_init_ctx (cob_context *ctx, cob_field *var, const cob_u32_t replacing)
 {
 	cob_inspect_init_intern (&share_inspect_state, var, replacing);
+}
+
+/* compatibility: cob_inspect_init without context */
+void
+cob_inspect_init (cob_field *var, const cob_u32_t replacing)
+{
+	cob_inspect_init_ctx (COB_CTX_COMPAT, var, replacing);
 }
 
 /* an INSPECT CONVERTING / TRANSFORM is split into multiple parts:
@@ -587,9 +594,16 @@ cob_inspect_init_converting_intern (struct cob_inspect_state *st, cob_field *var
 	st->replacing = 0;	/* only set for pre 3.2 compat because of cob_inspect_finish */
 }
 void
-cob_inspect_init_converting (cob_context *ctx, cob_field *var)
+cob_inspect_init_converting_ctx (cob_context *ctx, cob_field *var)
 {
 	cob_inspect_init_converting_intern (&share_inspect_state, var);
+}
+
+/* compatibility: cob_inspect_init_converting without context */
+void
+cob_inspect_init_converting (cob_field *var)
+{
+	cob_inspect_init_converting_ctx (COB_CTX_COMPAT, var);
 }
 
 static void
@@ -599,9 +613,16 @@ cob_inspect_start_intern (struct cob_inspect_state *st)
 	st->end = st->data + st->size;
 }
 void
-cob_inspect_start (cob_context *ctx)
+cob_inspect_start_ctx (cob_context *ctx)
 {
 	cob_inspect_start_intern (&share_inspect_state);
+}
+
+/* compatibility: cob_inspect_start without context */
+void
+cob_inspect_start (void)
+{
+	cob_inspect_start_ctx (COB_CTX_COMPAT);
 }
 
 static void
@@ -612,9 +633,16 @@ cob_inspect_before_intern (struct cob_inspect_state *st, const cob_field *str)
 		st->end = data_pos;
 }
 void
-cob_inspect_before (cob_context *ctx, const cob_field *str)
+cob_inspect_before_ctx (cob_context *ctx, const cob_field *str)
 {
 	cob_inspect_before_intern (&share_inspect_state, str);
+}
+
+/* compatibility: cob_inspect_before without context */
+void
+cob_inspect_before (const cob_field *str)
+{
+	cob_inspect_before_ctx (COB_CTX_COMPAT, str);
 }
 
 static void
@@ -627,9 +655,16 @@ cob_inspect_after_intern (struct cob_inspect_state *st, const cob_field *str)
 		st->start = st->end;
 }
 void
-cob_inspect_after (cob_context *ctx, const cob_field *str)
+cob_inspect_after_ctx (cob_context *ctx, const cob_field *str)
 {
 	cob_inspect_after_intern (&share_inspect_state, str);
+}
+
+/* compatibility: cob_inspect_after without context */
+void
+cob_inspect_after (const cob_field *str)
+{
+	cob_inspect_after_ctx (COB_CTX_COMPAT, str);
 }
 
 static void
@@ -679,19 +714,26 @@ cob_inspect_characters_intern (struct cob_inspect_state *st, cob_field *f1)
 				}
 			}
 			if (n > 0) {
-				cob_add_int (COB_CTX_TODO, f1, n, 0);
+				cob_add_int_ctx (COB_CTX_TODO, f1, n, 0);
 			}
 		} else {
 			/* common case: no markers in the length to check */
-			cob_add_int (COB_CTX_TODO, f1, (int)len, 0);
+			cob_add_int_ctx (COB_CTX_TODO, f1, (int)len, 0);
 		}
 	}
 	set_inspect_mark (st, pos, len);
 }
 void
-cob_inspect_characters (cob_context *ctx, cob_field *f1)
+cob_inspect_characters_ctx (cob_context *ctx, cob_field *f1)
 {
 	cob_inspect_characters_intern (&share_inspect_state, f1);
+}
+
+/* compatibility: cob_inspect_characters without context */
+void
+cob_inspect_characters (cob_field *f1)
+{
+	cob_inspect_characters_ctx (COB_CTX_COMPAT, f1);
 }
 
 static void
@@ -701,9 +743,16 @@ cob_inspect_all_intern (struct cob_inspect_state *st, cob_field *f1, cob_field *
 	inspect_common (st, f1, f2);
 }
 void
-cob_inspect_all (cob_context *ctx, cob_field *f1, cob_field *f2)
+cob_inspect_all_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	cob_inspect_all_intern (&share_inspect_state, f1, f2);
+}
+
+/* compatibility: cob_inspect_all without context */
+void
+cob_inspect_all (cob_field *f1, cob_field *f2)
+{
+	cob_inspect_all_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 static void
@@ -713,9 +762,16 @@ cob_inspect_leading_intern (struct cob_inspect_state *st, cob_field *f1, cob_fie
 	inspect_common (st, f1, f2);
 }
 void
-cob_inspect_leading (cob_context *ctx, cob_field *f1, cob_field *f2)
+cob_inspect_leading_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	cob_inspect_leading_intern (&share_inspect_state, f1, f2);
+}
+
+/* compatibility: cob_inspect_leading without context */
+void
+cob_inspect_leading (cob_field *f1, cob_field *f2)
+{
+	cob_inspect_leading_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 static void
@@ -725,9 +781,16 @@ cob_inspect_first_intern (struct cob_inspect_state *st, cob_field *f1, cob_field
 	inspect_common (st, f1, f2);
 }
 void
-cob_inspect_first (cob_context *ctx, cob_field *f1, cob_field *f2)
+cob_inspect_first_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	cob_inspect_first_intern (&share_inspect_state, f1, f2);
+}
+
+/* compatibility: cob_inspect_first without context */
+void
+cob_inspect_first (cob_field *f1, cob_field *f2)
+{
+	cob_inspect_first_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 static void
@@ -737,9 +800,16 @@ cob_inspect_trailing_intern (struct cob_inspect_state *st, cob_field *f1, cob_fi
 	inspect_common (st, f1, f2);
 }
 void
-cob_inspect_trailing (cob_context *ctx, cob_field *f1, cob_field *f2)
+cob_inspect_trailing_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	cob_inspect_trailing_intern (&share_inspect_state, f1, f2);
+}
+
+/* compatibility: cob_inspect_trailing without context */
+void
+cob_inspect_trailing (cob_field *f1, cob_field *f2)
+{
+	cob_inspect_trailing_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 static void
@@ -770,7 +840,7 @@ cob_inspect_converting_intern (
 			alloc_figurative (f2, f1);
 			f2 = &alpha_fld;
 		} else {
-			cob_set_exception (COB_CTX_TODO, COB_EC_RANGE_INSPECT_SIZE);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_RANGE_INSPECT_SIZE);
 			goto end;
 		}
 	}
@@ -855,9 +925,16 @@ end:
 	}
 }
 void
-cob_inspect_converting (cob_context *ctx, const cob_field *f1, const cob_field *f2)
+cob_inspect_converting_ctx (cob_context *ctx, const cob_field *f1, const cob_field *f2)
 {
 	cob_inspect_converting_intern (&share_inspect_state, f1, f2);
+}
+
+/* compatibility: cob_inspect_converting without context */
+void
+cob_inspect_converting (const cob_field *f1, const cob_field *f2)
+{
+	cob_inspect_converting_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 /* note: currently not used by cobc (disabled unfinished prototype) */
@@ -888,9 +965,16 @@ cob_inspect_translating_intern (struct cob_inspect_state *st, const unsigned cha
 	}
 }
 void
-cob_inspect_translating (cob_context *ctx, const unsigned char* conv_table)
+cob_inspect_translating_ctx (cob_context *ctx, const unsigned char* conv_table)
 {
 	cob_inspect_translating_intern (&share_inspect_state, conv_table);
+}
+
+/* compatibility: cob_inspect_translating without context */
+void
+cob_inspect_translating (const unsigned char* conv_table)
+{
+	cob_inspect_translating_ctx (COB_CTX_COMPAT, conv_table);
 }
 
 static void
@@ -923,9 +1007,16 @@ cob_inspect_finish_intern (struct cob_inspect_state *st)
 	}
 }
 void
-cob_inspect_finish (cob_context *ctx)
+cob_inspect_finish_ctx (cob_context *ctx)
 {
 	cob_inspect_finish_intern (&share_inspect_state);
+}
+
+/* compatibility: cob_inspect_finish without context */
+void
+cob_inspect_finish (void)
+{
+	cob_inspect_finish_ctx (COB_CTX_COMPAT);
 }
 
 
@@ -955,16 +1046,23 @@ cob_string_init_intern (struct cob_string_state *st, cob_field *dst, cob_field *
 	cobglobptr->cob_exception_code = 0;
 
 	if (st->ptr) {
-		st->offset = cob_get_int (COB_CTX_TODO, st->ptr) - 1;
+		st->offset = cob_get_int_ctx (COB_CTX_TODO, st->ptr) - 1;
 		if (st->offset < 0 || st->offset >= (int)st->dst->size) {
-			cob_set_exception (COB_CTX_TODO, COB_EC_OVERFLOW_STRING);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_OVERFLOW_STRING);
 		}
 	}
 }
 void
-cob_string_init (cob_context *ctx, cob_field *dst, cob_field *ptr)
+cob_string_init_ctx (cob_context *ctx, cob_field *dst, cob_field *ptr)
 {
 	cob_string_init_intern (&share_string_state, dst, ptr);
+}
+
+/* compatibility: cob_string_init without context */
+void
+cob_string_init (cob_field *dst, cob_field *ptr)
+{
+	cob_string_init_ctx (COB_CTX_COMPAT, dst, ptr);
 }
 
 static void
@@ -981,9 +1079,16 @@ cob_string_delimited_intern (struct cob_string_state *st, cob_field *dlm)
 	}
 }
 void
-cob_string_delimited (cob_context *ctx, cob_field *dlm)
+cob_string_delimited_ctx (cob_context *ctx, cob_field *dlm)
 {
 	cob_string_delimited_intern (&share_string_state, dlm);
+}
+
+/* compatibility: cob_string_delimited without context */
+void
+cob_string_delimited (cob_field *dlm)
+{
+	cob_string_delimited_ctx (COB_CTX_COMPAT, dlm);
 }
 
 static void
@@ -1019,26 +1124,40 @@ cob_string_append_intern (struct cob_string_state *st, cob_field *src)
 		size = (int)(st->dst->size - st->offset);
 		memcpy (st->dst->data + st->offset, src->data, (size_t)size);
 		st->offset += size;
-		cob_set_exception (COB_CTX_TODO, COB_EC_OVERFLOW_STRING);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_OVERFLOW_STRING);
 	}
 }
 void
-cob_string_append (cob_context *ctx, cob_field *src)
+cob_string_append_ctx (cob_context *ctx, cob_field *src)
 {
 	cob_string_append_intern (&share_string_state, src);
+}
+
+/* compatibility: cob_string_append without context */
+void
+cob_string_append (cob_field *src)
+{
+	cob_string_append_ctx (COB_CTX_COMPAT, src);
 }
 
 static void
 cob_string_finish_intern (struct cob_string_state *st)
 {
 	if (st->ptr) {
-		cob_set_int (COB_CTX_TODO, st->ptr, st->offset + 1);
+		cob_set_int_ctx (COB_CTX_TODO, st->ptr, st->offset + 1);
 	}
 }
 void
-cob_string_finish (cob_context *ctx)
+cob_string_finish_ctx (cob_context *ctx)
 {
 	cob_string_finish_intern (&share_string_state);
+}
+
+/* compatibility: cob_string_finish without context */
+void
+cob_string_finish (void)
+{
+	cob_string_finish_ctx (COB_CTX_COMPAT);
 }
 
 /* UNSTRING */
@@ -1090,20 +1209,27 @@ cob_unstring_init_intern (
 	}
 
 	if (st->ptr) {
-		st->offset = cob_get_int (COB_CTX_TODO, st->ptr) - 1;
+		st->offset = cob_get_int_ctx (COB_CTX_TODO, st->ptr) - 1;
 		if (st->offset < 0 || st->offset >= (int)st->src->size) {
-			cob_set_exception (COB_CTX_TODO, COB_EC_OVERFLOW_UNSTRING);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_OVERFLOW_UNSTRING);
 		}
 	}
 }
 void
-cob_unstring_init (cob_context *ctx, 
+cob_unstring_init_ctx (cob_context *ctx, 
 	cob_field *src,
 	cob_field *ptr,
 	const size_t num_dlm
 )
 {
 	cob_unstring_init_intern (&share_unstring_state, src, ptr, num_dlm);
+}
+
+/* compatibility: cob_unstring_init without context */
+void
+cob_unstring_init (cob_field *src, cob_field *ptr, const size_t num_dlm)
+{
+	cob_unstring_init_ctx (COB_CTX_COMPAT, src, ptr, num_dlm);
 }
 
 static void
@@ -1114,9 +1240,16 @@ cob_unstring_delimited_intern (struct cob_unstring_state *st, cob_field *dlm, co
 	st->ndlms++;
 }
 void
-cob_unstring_delimited (cob_context *ctx, cob_field *dlm, const cob_u32_t all)
+cob_unstring_delimited_ctx (cob_context *ctx, cob_field *dlm, const cob_u32_t all)
 {
 	cob_unstring_delimited_intern (&share_unstring_state, dlm, all);
+}
+
+/* compatibility: cob_unstring_delimited without context */
+void
+cob_unstring_delimited (cob_field *dlm, const cob_u32_t all)
+{
+	cob_unstring_delimited_ctx (COB_CTX_COMPAT, dlm, all);
 }
 
 static void
@@ -1247,7 +1380,7 @@ cob_unstring_into_intern (
 		if (dlm_data) {
 			cob_str_memcpy (dlm, dlm_data, (int) dlm_size);
 		} else if (COB_FIELD_IS_NUMERIC (dlm)) {
-			cob_set_int (COB_CTX_TODO, dlm, 0);
+			cob_set_int_ctx (COB_CTX_TODO, dlm, 0);
 		} else {
 			memset (dlm->data, ' ', dlm->size);
 		}
@@ -1255,11 +1388,11 @@ cob_unstring_into_intern (
 
 	/* set COUNT IN */
 	if (cnt) {
-		cob_set_int (COB_CTX_TODO, cnt, match_size);
+		cob_set_int_ctx (COB_CTX_TODO, cnt, match_size);
 	}
 }
 void
-cob_unstring_into (cob_context *ctx, 
+cob_unstring_into_ctx (cob_context *ctx, 
 	cob_field *dst,
 	cob_field *dlm,
 	cob_field *cnt
@@ -1268,15 +1401,29 @@ cob_unstring_into (cob_context *ctx,
 	cob_unstring_into_intern (&share_unstring_state, dst, dlm, cnt);
 }
 
+/* compatibility: cob_unstring_into without context */
+void
+cob_unstring_into (cob_field *dst, cob_field *dlm, cob_field *cnt)
+{
+	cob_unstring_into_ctx (COB_CTX_COMPAT, dst, dlm, cnt);
+}
+
 static void
 cob_unstring_tallying_intern (struct cob_unstring_state *st, cob_field *f)
 {
-	cob_add_int (COB_CTX_TODO, f, st->count, 0);
+	cob_add_int_ctx (COB_CTX_TODO, f, st->count, 0);
 }
 void
-cob_unstring_tallying (cob_context *ctx, cob_field *f)
+cob_unstring_tallying_ctx (cob_context *ctx, cob_field *f)
 {
 	cob_unstring_tallying_intern (&share_unstring_state, f);
+}
+
+/* compatibility: cob_unstring_tallying without context */
+void
+cob_unstring_tallying (cob_field *f)
+{
+	cob_unstring_tallying_ctx (COB_CTX_COMPAT, f);
 }
 
 static void
@@ -1284,17 +1431,24 @@ cob_unstring_finish_intern (struct cob_unstring_state *st)
 {
 	if (st->offset < (int)st->src->size) {
 		/* overflow from any iteration -> overflow exception */
-		cob_set_exception (COB_CTX_TODO, COB_EC_OVERFLOW_UNSTRING);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_OVERFLOW_UNSTRING);
 	}
 
 	if (st->ptr) {
-		cob_set_int (COB_CTX_TODO, st->ptr, st->offset + 1);
+		cob_set_int_ctx (COB_CTX_TODO, st->ptr, st->offset + 1);
 	}
 }
 void
-cob_unstring_finish (cob_context *ctx)
+cob_unstring_finish_ctx (cob_context *ctx)
 {
 	cob_unstring_finish_intern (&share_unstring_state);
+}
+
+/* compatibility: cob_unstring_finish without context */
+void
+cob_unstring_finish (void)
+{
+	cob_unstring_finish_ctx (COB_CTX_COMPAT);
 }
 
 /* Initialization/Termination */

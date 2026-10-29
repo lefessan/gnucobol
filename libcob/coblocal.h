@@ -231,6 +231,15 @@
    every use must disappear when 'ctx' is propagated */
 #define COB_CTX_TODO	(cob_get_current_context ())
 
+/* context used by the compatibility functions (old names without context);
+   TODO (T1.5): raise an error when several contexts are used */
+#define COB_CTX_COMPAT	(cob_get_current_context ())
+
+/* used by the variadic functions taking a va_list */
+#ifndef va_copy
+#define va_copy(dst, src)	((dst) = (src))
+#endif
+
 /* Runtime structure (one per process), opaque outside of libcob;
    filled in T1.3 when the global state is moved */
 struct cob_runtime {

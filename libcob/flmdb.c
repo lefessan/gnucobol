@@ -82,7 +82,7 @@ static const char	**db_data_dir = NULL;
 #define MDB_MAX_MAP_INC 1073741824
 
 #define WARN(format, ...)  {						\
-   cob_runtime_warning(COB_CTX_TODO, "%s:%d: " format "\n",				\
+   cob_runtime_warning_ctx(COB_CTX_TODO, "%s:%d: " format "\n",				\
 		       __FILE__, __LINE__, ## __VA_ARGS__);		\
 }
 
@@ -898,7 +898,7 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 
 		is_local = local_file(sb.st_dev, &devname);
 		if (!is_local) {
-			cob_runtime_warning(COB_CTX_TODO, "file %s - shared filesystem detected!", filename);
+			cob_runtime_warning_ctx(COB_CTX_TODO, "file %s - shared filesystem detected!", filename);
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
 	}
@@ -926,8 +926,8 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		break;
 	/* LCOV_EXCL_START */
 	default:
-		cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "indexed_open");
-		cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("invalid internal call of %s"), "indexed_open");
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 	/* LCOV_EXCL_STOP */
 	}
 

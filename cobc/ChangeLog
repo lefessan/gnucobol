@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_integer, output_long_integer, output_param,
+	  output_funcall_typed_report, output_funcall_typed,
+	  output_funcall_item, ...), codeoptim.c (cob_gen_optim): suffix _ctx
+	  for functions taking the context, old names kept
 	* codegen.c (output_funcall, output_goto, output_internal_function):
 	  profiling functions take the context
 	* codegen.c (output_xml_parse): XML / JSON functions take the context

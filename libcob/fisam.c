@@ -339,8 +339,8 @@ indexed_keydesc (cob_file *f, struct keydesc *kd, cob_file_key *key)
 	/* LCOV_EXCL_START */
 	if (key->count_components < 1) {
 		/* Should not happen as this was generated pre GC 3.0 */
-		cob_runtime_error (COB_CTX_TODO, "file i/o version mismatch");
-		cob_stop_run (COB_CTX_TODO, 1);
+		cob_runtime_error_ctx (COB_CTX_TODO, "file i/o version mismatch");
+		cob_stop_run_ctx (COB_CTX_TODO, 1);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -360,7 +360,7 @@ indexed_keydesc (cob_file *f, struct keydesc *kd, cob_file_key *key)
 	/* LCOV_EXCL_START */
 	if (key->count_components > max_keycomp) {
 		/* not translated as this is safety guard unlikely to be ever triggered */
-		cob_runtime_warning (COB_CTX_TODO, "module specifies %d key components, "
+		cob_runtime_warning_ctx (COB_CTX_TODO, "module specifies %d key components, "
 			"%s runtime ignores all parts greater than %d",
 			key->count_components, isam_name, max_keycomp);
 		key->count_components = max_keycomp;
@@ -665,14 +665,14 @@ get_isreclen (cob_file *f)
 		if (f->variable_record) {
 			for (k = f->record_max; k > f->record_min && f->record->data[k-1] == 0; k--);
 			f->record->size = k;
-			cob_set_int (COB_CTX_TODO, f->variable_record, (int) k);
+			cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) k);
 		}
 #else
 		f->record->size = ISRECLEN;
 		if (f->record->size < f->record_max)
 			memset(&f->record->data[f->record->size], 0, f->record_max - f->record->size);
 		if (f->variable_record)
-			cob_set_int (COB_CTX_TODO, f->variable_record, (int) f->record->size);
+			cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) f->record->size);
 #endif
 	}
 }
@@ -1148,7 +1148,7 @@ dobuild:
 					f->record_min = f->record_max = di.di_recsize;
 					f->record->size = di.di_recsize;
 					if (f->variable_record)
-						cob_set_int (COB_CTX_TODO, f->variable_record, (int) f->record->size);
+						cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) f->record->size);
 				} else
 				if (f->flag_keycheck
 				|| f->record_max < di.di_recsize) {

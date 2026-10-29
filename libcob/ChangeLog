@@ -1,6 +1,46 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (set_resolve_error, cache_preload, insert,
+	  cob_resolve_internal, cob_resolve_error, cob_call_error, ...),
+	  cconv.c (cob_load_collation), cobcapi.c (cob_get_param_field,
+	  cob_get_name_line, cob_get_num_params, cob_get_dbl_param,
+	  cob_put_dbl_param, cob_get_s64_param, ...), cobcapi.h, coblocal.h,
+	  common.c (cob_get_strerror, cob_sig_handler, sort_compare,
+	  sort_compare_collate, cob_move_intermediate,
+	  cob_move_to_group_as_alnum, ...), common.h (print_runtime_conf,
+	  cob_relocate_string, cob_last_exception_is, cob_last_runtime_error,
+	  cob_context_leave, cob_module_global_enter, ...), fbdb.c
+	  (bdb_bt_compare, bdb_err_event, join_environment, bdb_lock_file,
+	  bdb_lock_record, bdb_test_record_lock, ...), fextfh.c
+	  (free_extfh_fcd, copy_file_to_fcd, update_fcd_to_file,
+	  copy_keys_fcd_to_file, copy_fcd_to_file, find_fcd, ...), fileio.c
+	  (get_io_ptr, isam_to_file, cob_key_def, set_qbl_buf, cob_open_qbl,
+	  cob_close_qbl, ...), fisam.c (indexed_keydesc, get_isreclen), flmdb.c
+	  (lmdb_open), focextfh.c (get_io_ptr), foci.c (oci_open, oci_start,
+	  oci_read), fodbc.c (odbc_open, odbc_start, odbc_read), fsqlxfd.c
+	  (db_cmpkey, eval_expr, cob_load_xfd, cob_load_ddl, getSchemaEnvName,
+	  cob_sql_stmt, ...), intrinsic.c (comp_field, cob_alloc_field,
+	  cob_mod_or_rem, numval, get_min_and_max_of_args, calc_mean_of_args,
+	  ...), mlio.c (set_xml_code, set_xml_exception, get_xml_code,
+	  set_json_code, set_json_exception, get_num, ...), move.c
+	  (store_common_region, optimized_move_display_to_edited,
+	  indirect_move, cob_move_all, cob_move_ibm, cob_init_table, ...),
+	  numeric.c (cob_gmp_free, cob_decimal_init, cob_decimal_clear,
+	  cob_decimal_set_ullint, cob_decimal_set_llint, cob_decimal_print,
+	  ...), profiling.c (cob_prof_init_module, cob_prof_realloc_arrays,
+	  cob_prof_enter_procedure, cob_prof_exit_procedure,
+	  cob_prof_enter_section, cob_prof_use_paragraph_entry, ...),
+	  reportio.c (cob_field_init, cob_field_dup, cob_add_fields,
+	  limitCheckOneLine, saveLineCounter, write_rec, ...), screenio.c
+	  (init_cob_screen_if_needed, handle_status,
+	  raise_ec_on_invalid_line_or_col, adjust_attr_from_color_field,
+	  cob_screen_attr, cob_screen_init, ...), strings.c (cob_str_memcpy,
+	  inspect_common_no_replace, inspect_common, cob_inspect_init,
+	  cob_inspect_init_converting, cob_inspect_start, ...), termio.c
+	  (display_numeric, pretty_display_numeric, cob_display_common,
+	  cob_display, cob_dump_output, cob_dump_file, ...): suffix _ctx for
+	  functions taking the context, old names kept
 	* common.h (cob_prof_init_module, cob_prof_exit_section,
 	  cob_prof_use_paragraph_entry), profiling.c
 	  (cob_prof_use_paragraph_entry, cob_prof_goto, cob_prof_end):

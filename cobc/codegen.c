@@ -3487,7 +3487,7 @@ output_integer (cb_tree x)
 		const struct cb_binary_op *p = CB_BINARY_OP (x);
 		if (p->flag == BOP_RESOLVE_AS_INTEGER) {
 			if (!cb_fits_int (p->x) || !cb_fits_int (p->y)) {
-				output ("cob_get_int (ctx, ");
+				output ("cob_get_int_ctx (ctx, ");
 				output_param (x, -1);
 				output (")");
 				break;
@@ -3559,7 +3559,7 @@ output_integer (cb_tree x)
 			output (")");
 			break;
 		case CB_CAST_PROGRAM_POINTER:
-			output ("cob_call_field (ctx, ");
+			output ("cob_call_field_ctx (ctx, ");
 			output_param (x, -1);
 			if (current_prog->nested_prog_list) {
 				gen_nested_tab = 1;
@@ -3604,7 +3604,7 @@ output_integer (cb_tree x)
 		case CB_USAGE_POINTER:
 		case CB_USAGE_PROGRAM_POINTER:
 #ifdef	COB_NON_ALIGNED
-			output ("(cob_get_pointer (ctx, ");
+			output ("(cob_get_pointer_ctx (ctx, ");
 			output_data (x);
 			output ("))");
 #else
@@ -3780,7 +3780,7 @@ output_integer (cb_tree x)
 		break;
 	}
 	case CB_TAG_INTRINSIC:
-		output ("cob_get_int (ctx, ");
+		output ("cob_get_int_ctx (ctx, ");
 		output_param (x, -1);
 		output (")");
 		break;
@@ -3829,7 +3829,7 @@ output_long_integer (cb_tree x)
 		if (p->flag == BOP_RESOLVE_AS_INTEGER) {
 			if (!cb_fits_long_long (p->x) 
 			 || !cb_fits_long_long (p->y)) {
-				output ("cob_get_llint (ctx, ");
+				output ("cob_get_llint_ctx (ctx, ");
 				output_param (x, -1);
 				output (")");
 				break;
@@ -3860,7 +3860,7 @@ output_long_integer (cb_tree x)
 			output (")");
 			break;
 		case CB_CAST_PROGRAM_POINTER:
-			output ("cob_call_field (ctx, ");
+			output ("cob_call_field_ctx (ctx, ");
 			output_param (x, -1);
 			if (current_prog->nested_prog_list) {
 				gen_nested_tab = 1;
@@ -3905,7 +3905,7 @@ output_long_integer (cb_tree x)
 		case CB_USAGE_POINTER:
 		case CB_USAGE_PROGRAM_POINTER:
 #ifdef	COB_NON_ALIGNED
-			output ("(cob_get_pointer (ctx, ");
+			output ("(cob_get_pointer_ctx (ctx, ");
 			output_data (x);
 			output ("))");
 #else
@@ -4037,7 +4037,7 @@ output_long_integer (cb_tree x)
 		break;
 	}
 	case CB_TAG_INTRINSIC:
-		output ("cob_get_llint (ctx, ");
+		output ("cob_get_llint_ctx (ctx, ");
 		output_param (x, -1);
 		output (")");
 		break;
@@ -4494,7 +4494,7 @@ output_param (cb_tree x, int id)
 	}
 	case CB_TAG_BINARY_OP: {
 		const struct cb_binary_op	*bp = CB_BINARY_OP (x);
-		output ("cob_intr_binop (ctx, ");
+		output ("cob_intr_binop_ctx (ctx, ");
 		output_param (bp->x, id);
 		output (", ");
 		if (isprint(bp->op)
@@ -4528,7 +4528,7 @@ output_param (cb_tree x, int id)
 			lookup_func_call (func);
 			if ((call_cache || func_call_cache)
 			 && (cb_flag_memory_check & CB_MEMCHK_POINTER)) {
-				output ("(cob_check_fence (ctx, call_fence_pre, call_fence_post, %s, NULL), ",
+				output ("(cob_check_fence_ctx (ctx, call_fence_pre, call_fence_post, %s, NULL), ",
 					cb_statement_enum_name[STMT_BEFORE_UDF]);
 			}
 			output ("func_%s.funcfld (&cob_dyn_%u", func, gen_dynamic);
@@ -4555,10 +4555,12 @@ output_param (cb_tree x, int id)
 			}
 #endif
 		} else {
-			output ("%s (", ip->intr_tab->intr_routine);
 			if (function_takes_ctx (ip->intr_tab->intr_routine)) {
+				output ("%s_ctx (", ip->intr_tab->intr_routine);
 				output ((ip->intr_tab->refmod || ip->intr_field || ip->args)
 					? "ctx, " : "ctx");
+			} else {
+				output ("%s (", ip->intr_tab->intr_routine);
 			}
 			if (ip->intr_tab->refmod) {
 				if (ip->offset) {
@@ -4655,7 +4657,7 @@ output_funcall_typed_report (struct cb_funcall *p, const char type)
 		output_line ("frame_ptr--;");
 		output_newline ();
 		output_prefix ();
-		output("while ( cob_report_generate (ctx, ");
+		output("while ( cob_report_generate_ctx (ctx, ");
 		output_param (p->argv[0], 0);
 		output(", ");
 		output_param (p->argv[1], 1);
@@ -4673,7 +4675,7 @@ output_funcall_typed_report (struct cb_funcall *p, const char type)
 	case 'T':	/* Terminate REPORT */
 		output_newline ();
 		output_prefix ();
-		output("while ( cob_report_terminate (ctx, ");
+		output("while ( cob_report_terminate_ctx (ctx, ");
 		output_param (p->argv[0], 0);
 		output(") > 0 ) {");
 		output_newline ();
@@ -4778,7 +4780,7 @@ output_funcall_typed_report (struct cb_funcall *p, const char type)
 			output_line ("%s%s.code_is_present = 0;", CB_PREFIX_REPORT, r->cname);
 		}
 		output_prefix ();
-		output("while ( cob_report_initiate (ctx, ");
+		output("while ( cob_report_initiate_ctx (ctx, ");
 		output_param (p->argv[0], 0);
 		output(") > 0 ) {");
 		output_indent_level += 2;
@@ -4885,7 +4887,7 @@ output_funcall_typed (struct cb_funcall *p, const char type)
 		output_param (p->argv[1], 0);
 		output (".suppress = 1;");
 		output_newline ();
-		output("cob_report_suppress (ctx, ");
+		output("cob_report_suppress_ctx (ctx, ");
 		output_param (p->argv[0], 0);
 		output(", ");
 		output ("&%s",CB_PREFIX_REPORT_LINE);
@@ -4997,9 +4999,10 @@ output_funcall_item (cb_tree x, const int i, unsigned int func_nolitcast)
 	output_param (x, i);
 }
 
-/* libcob functions taking the execution context as first argument;
-   TODO (T1.2): during the migration file by file, the list of converted
-   functions; at the end, replaced by "all cob_ functions" */
+/* libcob functions taking the execution context as first argument,
+   called with the suffix _ctx (the name without suffix is kept in libcob
+   for compatibility and gets the current context of the thread);
+   TODO (T1.2): at the end, replaced by "all cob_ functions" */
 static const char *const ctx_functions[] = {
 	"cob_accept",
 	"cob_accept_arg_number",
@@ -5019,8 +5022,6 @@ static const char *const ctx_functions[] = {
 	"cob_accept_user_name",
 	"cob_add",
 	"cob_add_int",
-	"cob_add_packed_int",
-	"cob_add_packed_int64",
 	"cob_alloc_attr",
 	"cob_alloc_move",
 	"cob_allocate",
@@ -5311,7 +5312,6 @@ static const char *const ctx_functions[] = {
 	"cob_numeric_display_cmp_zero",
 	"cob_open",
 	"cob_path_to_absolute",
-	"cob_pointer_manip",
 	"cob_pre_open",
 	"cob_pre_open_def",
 	"cob_prof_enter_procedure",
@@ -5413,6 +5413,16 @@ cmp_ctx_function (const void *key, const void *elem)
 	return strcmp ((const char *)key, *(const char *const *)elem);
 }
 
+/* helpers generated by codeoptim.c taking the context, without suffix */
+static const char *const ctx_helpers[] = {
+	"cob_add_packed_int",
+	"cob_add_packed_int64",
+	"cob_pointer_manip",
+	NULL
+};
+
+/* returns 1 for a libcob function taking the context (called NAME_ctx),
+   2 for a generated helper taking the context, 0 otherwise */
 static int
 function_takes_ctx (const char *name)
 {
@@ -5431,8 +5441,19 @@ function_takes_ctx (const char *name)
 		}
 		sorted = 1;
 	}
-	return bsearch (name, ctx_functions, count, sizeof (char *),
-			cmp_ctx_function) != NULL;
+	if (bsearch (name, ctx_functions, count, sizeof (char *),
+			cmp_ctx_function) != NULL) {
+		return 1;
+	}
+	{
+		const char *const *h;
+		for (h = ctx_helpers; *h; h++) {
+			if (!strcmp (name, *h)) {
+				return 2;
+			}
+		}
+	}
+	return 0;
 }
 
 static void
@@ -5458,27 +5479,27 @@ output_funcall (cb_tree x)
 
 		case COB_PROF_EXIT_PARAGRAPH:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_exit_procedure (ctx, prof_info, %d)", proc_idx);
+			output ("cob_prof_exit_procedure_ctx (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_ENTER_SECTION:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_enter_section (ctx, prof_info, %d)", proc_idx);
+			output ("cob_prof_enter_section_ctx (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_EXIT_SECTION:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_exit_section (ctx, prof_info, %d)", proc_idx);
+			output ("cob_prof_exit_section_ctx (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_ENTER_CALL:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_enter_procedure (ctx, prof_info, %d)", proc_idx);
+			output ("cob_prof_enter_procedure_ctx (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_EXIT_CALL:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_exit_procedure (ctx, prof_info, %d)", proc_idx);
+			output ("cob_prof_exit_procedure_ctx (ctx, prof_info, %d)", proc_idx);
 			break;
 		case COB_PROF_ENTER_PARAGRAPH:
 			proc_idx = CB_INTEGER(p->argv[1])->val;
-			output ("cob_prof_enter_procedure (ctx, prof_info, %d);", proc_idx);
+			output ("cob_prof_enter_procedure_ctx (ctx, prof_info, %d);", proc_idx);
 			output_newline ();
 			output_prefix ();
 			output ("fallthrough_label = 0");
@@ -5488,7 +5509,7 @@ output_funcall (cb_tree x)
 			int entry_idx = CB_INTEGER(p->argv[2])->val;
 			output ("if (!fallthrough_label)");
 			output_block_open ();
-			output_line ("cob_prof_use_paragraph_entry (ctx, prof_info, %d, %d);",
+			output_line ("cob_prof_use_paragraph_entry_ctx (ctx, prof_info, %d, %d);",
 				     paragraph_idx, entry_idx);
 			output_block_close ();
 			output_line ("else");
@@ -5506,8 +5527,9 @@ output_funcall (cb_tree x)
 
 
 	screenptr = p->screenptr;
-	output ("%s (", p->name);
-	if (function_takes_ctx (p->name)) {
+	i = function_takes_ctx (p->name);
+	output ("%s%s (", p->name, i == 1 ? "_ctx" : "");
+	if (i) {
 		output (p->argc ? "ctx, " : "ctx");
 	}
 	for (i = 0; i < p->argc; i++) {
@@ -5532,9 +5554,11 @@ output_funcall (cb_tree x)
 static void
 output_func_1 (const char *name, cb_tree x)
 {
-	output ("%s (", name);
 	if (function_takes_ctx (name)) {
-		output ("ctx, ");
+		output ("%s%s (ctx, ", name,
+			function_takes_ctx (name) == 1 ? "_ctx" : "");
+	} else {
+		output ("%s (", name);
 	}
 	output_param (x, param_id);
 	output (")");
@@ -5856,7 +5880,7 @@ propagate_table (cb_tree x, int bgn_idx)
 	} else {
 		/* Table size is only known at run time */
 		output_prefix ();
-		output ("cob_init_table (ctx, ");
+		output ("cob_init_table_ctx (ctx, ");
 		output_data (x);
 		output (", ");
 		output_size (x);
@@ -6137,7 +6161,7 @@ output_initialize_chaining (struct cb_field *f, struct cb_initialize *p)
 	         must have standard initialization */
 	if (f->flag_chained) {
 		output_prefix ();
-		output ("cob_chain_setup (ctx, ");
+		output ("cob_chain_setup_ctx (ctx, ");
 		output_data (p->var);
 		output (", %d, %d);", f->param_num, f->size);
 		output_newline ();
@@ -6541,7 +6565,7 @@ output_init_comment_and_source_ref (struct cb_field *f)
 	      copybooks in there to be visible to the debugger */
 	if (cb_flag_c_line_directives && f->common.source_line) {
 		output_cobol_info (CB_TREE (f));
-		output_line ("cob_nop (ctx);");
+		output_line ("cob_nop_ctx (ctx);");
 		output_c_info ();
 	}
 #endif
@@ -7530,7 +7554,7 @@ output_call_by_value_args (cb_tree x, cb_tree l)
 		return;
 	case CB_TAG_INTRINSIC:
 		if (CB_INTRINSIC(x)->intr_tab->category == CB_CATEGORY_NUMERIC) {
-			output ("cob_get_int (ctx, ");
+			output ("cob_get_int_ctx (ctx, ");
 			output_param (x, -1);
 			output (")");
 		} else {
@@ -7786,7 +7810,7 @@ output_memory_check_call (struct cb_call *p, const enum cob_statement stmt)
 						output_line ("} else {");
 						output_indent_level += indent_adjust_level;
 					}
-					output_line ("cob_check_fence (ctx, %s%d_fence_pre, %s%d_fence_post, %s, \"%s\");",
+					output_line ("cob_check_fence_ctx (ctx, %s%d_fence_pre, %s%d_fence_post, %s, \"%s\");",
 						CB_PREFIX_BASE, fchck->id, CB_PREFIX_BASE, fchck->id,
 						cb_statement_enum_name[stmt],
 						fchck->name);
@@ -7801,7 +7825,7 @@ output_memory_check_call (struct cb_call *p, const enum cob_statement stmt)
 	/* fencing for internal pointer, to prevent SIGSEGV on CALL out-of-bound-data-in-ptr */
 	if ((call_cache || func_call_cache)
 	 && (cb_flag_memory_check & CB_MEMCHK_POINTER)) {
-		output_line ("cob_check_fence (ctx, call_fence_pre, call_fence_post, %s, NULL);",
+		output_line ("cob_check_fence_ctx (ctx, call_fence_pre, call_fence_post, %s, NULL);",
 			cb_statement_enum_name[stmt]);
 	}
 }
@@ -8016,7 +8040,7 @@ output_call (struct cb_call *p)
 				output_prefix ();
 				if (cb_fit_to_int (x)) {
 					pval = (unsigned int)cb_get_int (x);
-					output ("cob_set_int(ctx, &content_fb_%d, %d)",n,pval);
+					output ("cob_set_int_ctx(ctx, &content_fb_%d, %d)",n,pval);
 				} else {
 					if (CB_LITERAL (x)->sign >= 0) {
 						output ("content_%u.dataull = ", n);
@@ -8059,7 +8083,7 @@ output_call (struct cb_call *p)
 					output_prefix ();
 					if (cb_fit_to_int (x)) {
 						pval = (unsigned int)cb_get_int (x);
-						output ("cob_set_int(ctx, &content_fb_%d, %d)",n,pval);
+						output ("cob_set_int_ctx(ctx, &content_fb_%d, %d)",n,pval);
 					} else if (CB_LITERAL (x)->sign >= 0) {
 						output ("content_%u.dataull = ", n);
 						output (CB_FMT_LLU_F, cb_get_u_long_long (x));
@@ -8317,7 +8341,7 @@ output_call (struct cb_call *p)
 					nlp->nested_prog->toplev_count);
 			} else {
 				output ("call_%s.funcvoid = ", name_str);
-				output ("cob_resolve_cobol (ctx, ");
+				output ("cob_resolve_cobol_ctx (ctx, ");
 				output_string ((const unsigned char *)s,
 						(int)strlen (s), 0);
 				output (", %d, %d);", cb_fold_call, !p->stmt1);
@@ -8327,7 +8351,7 @@ output_call (struct cb_call *p)
 		} else {
 			name_str = NULL;
 			needs_unifunc = 1;
-			output ("cob_unifunc.funcvoid = cob_call_field (ctx, ");
+			output ("cob_unifunc.funcvoid = cob_call_field_ctx (ctx, ");
 			output_param (p->name, -1);
 			if (current_prog->nested_prog_list) {
 				gen_nested_tab = 1;
@@ -8498,7 +8522,7 @@ output_call (struct cb_call *p)
 #endif
 		} else if (p->call_returning != cb_null) {
 			output_prefix ();
-			output ("cob_set_int (ctx, ");
+			output ("cob_set_int_ctx (ctx, ");
 			output_param (p->call_returning, -1);
 			output (", ret);");
 			output_newline ();
@@ -8575,7 +8599,7 @@ output_xml_parse (struct cb_xml_parse *p)
 	output_block_open ();
 	output_line ("void *xml_state = NULL;");
 	output_prefix ();
-	output ("cob_set_int (ctx, "),
+	output ("cob_set_int_ctx (ctx, "),
 	output_param (CB_TREE (current_program->xml_code), 0);
 	output (", 0);");
 	output_newline ();
@@ -8586,7 +8610,7 @@ output_xml_parse (struct cb_xml_parse *p)
 	/* actual XML parsing function and possible end */
 	output_source_reference (CB_TREE (p), STMT_XML_PARSE);
 	output_prefix ();
-	output ("if (cob_xml_parse (ctx, "),
+	output ("if (cob_xml_parse_ctx (ctx, "),
 	output_param (p->data, 0);
 	output (", ");
 	output_param (p->encoding, 1);
@@ -8628,7 +8652,7 @@ output_cancel (struct cb_cancel *p)
 			}
 			output (");");
 		} else {
-			output ("cob_cancel (ctx, ");
+			output ("cob_cancel_ctx (ctx, ");
 			output_string ((const unsigned char *)s,
 					(int)strlen (s), 0);
 			output (");");
@@ -8637,7 +8661,7 @@ output_cancel (struct cb_cancel *p)
 		return;
 	}
 	output_prefix ();
-	output ("cob_cancel_field (ctx, ");
+	output ("cob_cancel_field_ctx (ctx, ");
 	output_param (p->target, -1);
 	if (current_prog->nested_prog_list) {
 		gen_nested_tab = 1;
@@ -8719,7 +8743,7 @@ output_perform_call (struct cb_label *lb, struct cb_label *le)
 	}
 	if (cb_flag_stack_check) {
 		output_line ("if (frame_ptr == frame_overflow)");
-		output_line ("\tcob_fatal_error (ctx, COB_FERROR_STACK);");
+		output_line ("\tcob_fatal_error_ctx (ctx, COB_FERROR_STACK);");
 	}
 	output_line ("frame_ptr->perform_through = %d;", le ? le->id : lb->id);
 	if (!cb_flag_computed_goto) {
@@ -8787,11 +8811,11 @@ output_perform_exit (struct cb_label *l)
 		output_newline ();
 		output_line ("/* Implicit GLOBAL DECLARATIVE return */");
 		output_line ("if (entry == %d) {", l->id);
-		output_line ("  cob_module_leave (ctx, module);");
+		output_line ("  cob_module_leave_ctx (ctx, module);");
 		if (cb_flag_stack_on_heap || current_prog->flag_recursive) {
 			output_line ("  cob_free (frame_stack);");
 			output_line ("  cob_free (cob_procedure_params);");
-			output_line ("  cob_module_free (ctx, &module);");
+			output_line ("  cob_module_free_ctx (ctx, &module);");
 		}
 		output_line ("  return 0;");
 		output_line ("}");
@@ -8831,12 +8855,12 @@ output_perform_exit (struct cb_label *l)
 	if (l->flag_fatal_check) {
 		output_newline ();
 		output_line ("/* Fatal error if reached */");
-		output_line ("cob_fatal_error (ctx, COB_FERROR_GLOBAL);");
+		output_line ("cob_fatal_error_ctx (ctx, COB_FERROR_GLOBAL);");
 	} else
 	if (current_program->flag_report) {
 		output_newline ();
 		output_line ("/* Report Fatal error if reached */");
-		output_line ("cob_fatal_error (ctx, COB_FERROR_GLOBAL);");
+		output_line ("cob_fatal_error_ctx (ctx, COB_FERROR_GLOBAL);");
 	}
 }
 
@@ -8987,7 +9011,7 @@ output_perform_until (struct cb_perform *p, cb_tree l)
 					 && f->index_qual) {
 						f = f->index_qual;
 						output_prefix ();
-						output ("cob_check_subscript (ctx, ");
+						output ("cob_check_subscript_ctx (ctx, ");
 						output_integer (v->name);
 						output (", ");
 						if (f->depending) {
@@ -9329,7 +9353,7 @@ output_goto (struct cb_goto *p)
 	if (cb_flag_prof) {
 		/* Output this only if we are exiting the paragraph... */
 		if ( !(p->flags & CB_GOTO_FLAG_SAME_PARAGRAPH) ){
-			output_line ("cob_prof_goto (ctx, prof_info);");
+			output_line ("cob_prof_goto_ctx (ctx, prof_info);");
 		}
 	}
 
@@ -9751,7 +9775,7 @@ output_section_info (const struct cb_label *lp)
 
 	if (lp->flag_entry) {
 		if (cb_flag_trace) {
-			output_line ("cob_trace_entry (ctx, %s%d);",
+			output_line ("cob_trace_entry_ctx (ctx, %s%d);",
 					 CB_PREFIX_STRING, lookup_string (lp->orig_name));
 		}
 		return;
@@ -9763,13 +9787,13 @@ output_section_info (const struct cb_label *lp)
 			output_line ("module->section_name = %s%d;", CB_PREFIX_STRING, str_num);
 			output_line ("module->paragraph_name = NULL;");
 			if (cb_flag_trace) {
-				output_line ("cob_trace_sect (ctx, %s%d);", CB_PREFIX_STRING, str_num);
+				output_line ("cob_trace_sect_ctx (ctx, %s%d);", CB_PREFIX_STRING, str_num);
 			}
 		} else {
 			output_line ("module->section_name = NULL;");
 			output_line ("module->paragraph_name = NULL;");
 			if (cb_flag_trace) {
-				output_line ("cob_trace_sect (ctx, NULL);");
+				output_line ("cob_trace_sect_ctx (ctx, NULL);");
 			}
 		}
 		return;
@@ -9779,11 +9803,11 @@ output_section_info (const struct cb_label *lp)
 		const int str_num = lookup_string (lp->orig_name);
 		output_line ("module->paragraph_name = %s%d;", CB_PREFIX_STRING, str_num);
 		if (cb_flag_trace) {
-			output_line ("cob_trace_para (ctx, %s%d);", CB_PREFIX_STRING, str_num);
+			output_line ("cob_trace_para_ctx (ctx, %s%d);", CB_PREFIX_STRING, str_num);
 		}
 	} else {
 		if (cb_flag_trace) {
-			output_line ("cob_trace_para (ctx, NULL);");
+			output_line ("cob_trace_para_ctx (ctx, NULL);");
 		}
 	}
 }
@@ -9804,9 +9828,9 @@ output_line_and_trace_info (cb_tree x, const enum cob_statement stmnt)
 		if (cb_flag_source_location
 		 && cb_flag_trace) {
 			output_line ("if ((module->flag_debug_trace & COB_MODULE_READYTRACE))");
-			output_line ("   cob_trace_statement (ctx, %s);", stmnt_enum);
+			output_line ("   cob_trace_statement_ctx (ctx, %s);", stmnt_enum);
 		} else if (cb_flag_c_line_directives) {
-			output_line ("cob_nop (ctx);");
+			output_line ("cob_nop_ctx (ctx);");
 			output_c_info ();
 		}
 	} else {
@@ -9816,7 +9840,7 @@ output_line_and_trace_info (cb_tree x, const enum cob_statement stmnt)
 		if (cb_flag_source_location
 		 && cb_flag_trace) {
 			output_line ("if ((module->flag_debug_trace & COB_MODULE_READYTRACE))");
-			output_line ("   cob_trace_statement (ctx, %s);", stmnt_enum);
+			output_line ("   cob_trace_statement_ctx (ctx, %s);", stmnt_enum);
 		}
 	}
 }
@@ -10077,7 +10101,7 @@ output_label_as_c (const struct cb_label *lp)
 	if (*ptr == '_') ptr++;
 	if (lp->flag_section) {
 		/* SECTION label */
-		output_line ("SECTION_%s:\t%s;", ptr, "cob_nop (ctx)");
+		output_line ("SECTION_%s:\t%s;", ptr, "cob_nop_ctx (ctx)");
 	} else if (lp->flag_entry_for_goto) {
 		/* ENTRY FOR GOTO label */
 		if (cb_flag_source_location) {
@@ -10086,7 +10110,7 @@ output_label_as_c (const struct cb_label *lp)
 			output_line ("ENTRY_GOTO_%s:\tmodule->statement = %s;",
 				ptr, stmnt_enum);
 		} else {
-			output_line ("ENTRY_GOTO_%s:\t%s;", ptr, "cob_nop (ctx)");
+			output_line ("ENTRY_GOTO_%s:\t%s;", ptr, "cob_nop_ctx (ctx)");
 		}
 	} else if (lp->flag_entry) {
 		/* ENTRY label */
@@ -10096,7 +10120,7 @@ output_label_as_c (const struct cb_label *lp)
 			output_line ("ENTRY_%s:\tmodule->statement = %s;",
 				ptr, stmnt_enum);
 		} else {
-			output_line ("ENTRY_%s:\t%s;", ptr, "cob_nop (ctx)");
+			output_line ("ENTRY_%s:\t%s;", ptr, "cob_nop_ctx (ctx)");
 		}
 	} else {
 		/* Paragraph label */
@@ -10112,7 +10136,7 @@ output_label_as_c (const struct cb_label *lp)
 			output_line ("PARAGRAPH_%s_l_%d:\tmodule->statement = %s;",
 				ptr, lp->id, stmnt_enum);
 		} else {
-			output_line ("PARAGRAPH_%s_l_%d:\t%s;", ptr, lp->id, "cob_nop (ctx)");
+			output_line ("PARAGRAPH_%s_l_%d:\t%s;", ptr, lp->id, "cob_nop_ctx (ctx)");
 		}
 	}
 }
@@ -10132,7 +10156,7 @@ output_label (const struct cb_label *lp)
 			last_section = NULL;
 		}
 		if (last_section != NULL) {
-			output_line ("cob_check_beyond_exit (ctx, %s%d);"
+			output_line ("cob_check_beyond_exit_ctx (ctx, %s%d);"
 				"\t/* prevent fall-through */", CB_PREFIX_STRING,
 				lookup_string (last_section->name));
 		}
@@ -10167,7 +10191,7 @@ output_label (const struct cb_label *lp)
 			}
 		} else {
 			if (cb_flag_c_line_directives) {
-				output_line ("cob_nop (ctx);");
+				output_line ("cob_nop_ctx (ctx);");
 				output_c_info ();
 			}
 		}
@@ -10218,7 +10242,7 @@ output_assign (const struct cb_assign *ap)
 		 && f1->usage != CB_USAGE_LENGTH) {
 			output_prefix ();
 		 	if (f1->usage == CB_USAGE_COMP_X) {
-				output ("cob_set_compx (ctx, ");
+				output ("cob_set_compx_ctx (ctx, ");
 				output_param (ap->var, 0);
 				output (", (cob_s64_t)");
 				output_integer (ap->val);
@@ -10228,10 +10252,10 @@ output_assign (const struct cb_assign *ap)
 			if (CB_NUMERIC_LITERAL_P (ap->val)
 			 && CB_LITERAL (ap->val)->scale == 0
 			 && cb_get_long_long (ap->val) < cob_exp10_ll[f1->pic->digits]) {
-				output ("cob_set_llcon (ctx, ");
+				output ("cob_set_llcon_ctx (ctx, ");
 				output_param (ap->var, 0);
 			} else {
-				output ("cob_set_llint (ctx, ");
+				output ("cob_set_llint_ctx (ctx, ");
 				output_param (ap->var, 0);
 				output (", ");
 				output (CB_FMT_LLD_F, cob_exp10_ll[f1->pic->digits]);
@@ -10263,7 +10287,7 @@ output_assign (const struct cb_assign *ap)
 				output_data (cp->val);
 				break;
 			case CB_CAST_PROGRAM_POINTER:
-				output ("cob_call_field (ctx, ");
+				output ("cob_call_field_ctx (ctx, ");
 				output_param (ap->val, -1);
 				if (current_prog->nested_prog_list) {
 					gen_nested_tab = 1;
@@ -10480,12 +10504,12 @@ output_stmt (cb_tree x)
 			/* LCOV_EXCL_STOP */
 
 			if (p->flag_retry_forever) {
-				output_line ("cob_file_set_retry (ctx, %s%s,COB_RETRY_FOREVER,0);",
+				output_line ("cob_file_set_retry_ctx (ctx, %s%s,COB_RETRY_FOREVER,0);",
 									CB_PREFIX_FILE, fl->cname);
 			} else
 			if (p->flag_retry_times) {
 				output_prefix ();
-				output ("cob_file_set_retry (ctx, %s%s,COB_RETRY_TIMES,",
+				output ("cob_file_set_retry_ctx (ctx, %s%s,COB_RETRY_TIMES,",
 									CB_PREFIX_FILE, fl->cname);
 				output_integer (p->retry);
 				output (");");
@@ -10493,14 +10517,14 @@ output_stmt (cb_tree x)
 			} else
 			if (p->flag_retry_seconds) {
 				output_prefix ();
-				output ("cob_file_set_retry (ctx, %s%s,COB_RETRY_SECONDS,",
+				output ("cob_file_set_retry_ctx (ctx, %s%s,COB_RETRY_SECONDS,",
 									CB_PREFIX_FILE, fl->cname);
 				output_integer (p->retry);
 				output (");");
 				output_newline ();
 			} else
 			if (p->flag_advancing_lock) {
-				output_line ("cob_file_set_retry (ctx, %s%s,COB_ADVANCING_LOCK,0);",
+				output_line ("cob_file_set_retry_ctx (ctx, %s%s,COB_ADVANCING_LOCK,0);",
 									CB_PREFIX_FILE, fl->cname);
 			}
 		}
@@ -10863,7 +10887,7 @@ output_file_initialization (struct cb_file *f)
 		strcpy (extname, "NULL");
 	}
 	/* TODO: generate enum names here */
-	output_line ("cob_file_create (ctx, &%s, %s, \"%s\",", file_name, extname, f->name);
+	output_line ("cob_file_create_ctx (ctx, &%s, %s, \"%s\",", file_name, extname, f->name);
 	output_indent_level += 17;
 	output_line ("%s,%s,%d,",org_name,acc_name,f->optional);
 	output_line ("%s,%s,%d,%d,%d,",fmt_name,features,nkeys,f->record_min,f->record_max);
@@ -10881,7 +10905,7 @@ output_file_initialization (struct cb_file *f)
 	 || f->organization == COB_ORG_INDEXED) {
 		struct cb_alt_key	*l;
 		output_prefix ();
-		output ("cob_file_set_key (ctx, %s, 0, ", file_name);
+		output ("cob_file_set_key_ctx (ctx, %s, 0, ", file_name);
 		if (f->organization == COB_ORG_RELATIVE
 		 && f->key == NULL) {
 			output ("&%s%s_recnum", CB_PREFIX_FIELD, f->cname);
@@ -10894,7 +10918,7 @@ output_file_initialization (struct cb_file *f)
 			cb_tree col = get_indexed_file_key_colseq (f, NULL);
 			if (col != NULL) {
 				output_prefix ();
-				output ("cob_file_set_key_extra (ctx, %s, 0, -1, -1, NULL, ", file_name);
+				output ("cob_file_set_key_extra_ctx (ctx, %s, 0, -1, -1, NULL, ", file_name);
 				output_param (col, -1);
 				output (");");
 				output_newline ();
@@ -10902,7 +10926,7 @@ output_file_initialization (struct cb_file *f)
 		}
 		for (l = f->alt_key_list; l; l = l->next) {
 			output_prefix ();
-			output ("cob_file_set_key (ctx, %s, %d, ", file_name, nkeys);
+			output ("cob_file_set_key_ctx (ctx, %s, %d, ", file_name, nkeys);
 			output_param (l->key, -1);
 			if (l->keycompress)
 				output (", (%d << 8) + %d, 0" , l->keycompress, l->duplicates);
@@ -10926,7 +10950,7 @@ output_file_initialization (struct cb_file *f)
 				cb_tree col = get_indexed_file_key_colseq (f, l);
 				if (col != NULL) {
 					output_prefix ();
-					output ("cob_file_set_key_extra (ctx, %s, %d, -1, -1, NULL, ", file_name, nkeys);
+					output ("cob_file_set_key_extra_ctx (ctx, %s, %d, -1, -1, NULL, ", file_name, nkeys);
 					output_param (col, -1);
 					output (");");
 					output_newline ();
@@ -10940,7 +10964,7 @@ output_file_initialization (struct cb_file *f)
 	 || f->record_depending
 	 || strcmp(file_features,"0") != 0) {
 		output_prefix ();
-		output ("cob_file_set_attr (ctx, %s,",file_name);
+		output ("cob_file_set_attr_ctx (ctx, %s,",file_name);
 		if (f->record_depending) {
 			output_param (f->record_depending, -1);
 		} else {
@@ -10957,7 +10981,7 @@ output_file_initialization (struct cb_file *f)
 	if (f->lock_mode) {
 		strcpy(nxt,"");
 		output_prefix ();
-		output ("cob_file_set_lock (ctx, %s,",file_name);
+		output ("cob_file_set_lock_ctx (ctx, %s,",file_name);
 		if ((f->lock_mode & COB_LOCK_OPEN_EXCLUSIVE)) {
 			output("%sCOB_LOCK_OPEN_EXCLUSIVE",nxt);
 			strcpy(nxt,"|");
@@ -10990,7 +11014,7 @@ output_file_initialization (struct cb_file *f)
 
 	if (f->linage) {
 		output_prefix ();
-		output ("cob_file_set_linage (ctx, %s,",file_name);
+		output ("cob_file_set_linage_ctx (ctx, %s,",file_name);
 		output_param (f->linage, -1);
 		output (",");
 		output_param (f->linage_ctr, -1);
@@ -11025,7 +11049,7 @@ output_file_initialization (struct cb_file *f)
 		if ((f->flag_sql_xfd || cb_all_files_xfd)
 		 && cb_flag_sql_xfd) {
 			if (f->sql_name) {
-				output_line ("cob_file_xfdname (ctx, %s%s, \"%s\");", 
+				output_line ("cob_file_xfdname_ctx (ctx, %s%s, \"%s\");", 
 								CB_PREFIX_FILE, f->cname, f->sql_name);
 			}
 			output_xfd_file (f);
@@ -11078,7 +11102,7 @@ output_file_initialization (struct cb_file *f)
 		}
 	}
 
-	output_line ("cob_file_complete (ctx, %s);",file_name);
+	output_line ("cob_file_complete_ctx (ctx, %s);",file_name);
 	output_newline ();
 }
 
@@ -12348,7 +12372,7 @@ output_report_move_sums (struct cb_field *f, int first)
 		if (CB_BINARY_OP_P (x)) {
 			output_line ("/* Compute %s */", cb_name (x));
 			output_prefix ();
-			output ("cob_move (ctx, ");
+			output ("cob_move_ctx (ctx, ");
 			output_param (x, -1);
 			output (", ");
 			output_param (CB_PURPOSE (l), -1);
@@ -12440,7 +12464,7 @@ output_report_move_source (struct cb_field *f, int first)
 		}
 		stack_id = 0;
 		output_prefix ();
-		output ("cob_move (ctx, ");
+		output ("cob_move_ctx (ctx, ");
 		output_param (f->report_source, -1);
 		output (", ");
 		if (f->report_from) {
@@ -12800,7 +12824,7 @@ output_error_handler (struct cb_program *prog)
 		output_block_open ();
 	}
 	output_line ("if (!(cob_glob_ptr->cob_error_file->flag_select_features & COB_SELECT_FILE_STATUS)) {");
-	output_line ("\tcob_fatal_error (ctx, COB_FERROR_FILE);");
+	output_line ("\tcob_fatal_error_ctx (ctx, COB_FERROR_FILE);");
 	if (cb_standard_error_handler) {		/* Emit 'goto' to avoid unreferenced label C warning */
 		output_line ("    goto %s%d;", CB_PREFIX_LABEL,
 				     CB_LABEL (cb_standard_error_handler)->id);
@@ -12814,7 +12838,7 @@ output_error_handler (struct cb_program *prog)
 	output_perform_exit (CB_LABEL (cb_standard_error_handler));
 	output_newline ();
 	output_line ("/* Fatal error if reached */");
-	output_line ("cob_fatal_error (ctx, COB_FERROR_CODEGEN);");
+	output_line ("cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);");
 	output_newline ();
 }
 
@@ -13071,7 +13095,7 @@ pickup_cob_param (cb_tree l, cob_u32_t inc)
 			strcpy(wrk,"0");
 		}
 		output_line ("if (cob_glob_ptr->cob_call_params > %u) { /* BY VALUE %s */", inc, f->name);
-		output_line ("    cob_alloc_move(ctx, %s[%u], &%s%d, %s);",
+		output_line ("    cob_alloc_move_ctx(ctx, %s[%u], &%s%d, %s);",
 				     "module->next->cob_procedure_params", inc,
 				     CB_PREFIX_FIELD, f->id, wrk);
 		if (!cb_sticky_linkage) {
@@ -13202,7 +13226,7 @@ pickup_c_param (cb_tree l, cob_u32_t inc, int is_enter)
 							CB_PREFIX_FIELD, f->id);
 			output_line ("if (%s%d.size > 0 && %s%d.size < 20)",
 						CB_PREFIX_FIELD, f->id,CB_PREFIX_FIELD, f->id);
-			output_line ("  %s%d.attr = cob_alloc_attr(ctx, COB_TYPE_NUMERIC_DISPLAY,%s%d.size,0,0);",
+			output_line ("  %s%d.attr = cob_alloc_attr_ctx(ctx, COB_TYPE_NUMERIC_DISPLAY,%s%d.size,0,0);",
 						CB_PREFIX_FIELD, f->id, CB_PREFIX_FIELD, f->id);
 			output_indent_level -= 2;
 			output_line ("}");
@@ -13565,7 +13589,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	output_line ("/* Check initialized, check module allocated, */");
 	output_line ("/* get context and global pointer, */");
 	output_line ("/* push module stack, save call parameter count */");
-	output_line ("if (cob_module_global_enter (&ctx, &module, &cob_glob_ptr, %d, entry, %sname_hash))",
+	output_line ("if (cob_module_global_enter_ctx (&ctx, &module, &cob_glob_ptr, %d, entry, %sname_hash))",
 				      cb_flag_implicit_init, CB_PREFIX_STRING);
 	if (prog->prog_type == COB_MODULE_TYPE_FUNCTION) {
 		output_line ("\treturn NULL;");
@@ -13577,7 +13601,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	if (prog->flag_chained) {
 		output_line ("/* Check program with CHAINING being main program */");
 		output_line ("if (cob_glob_ptr->cob_current_module->next)");
-		output_line ("\tcob_fatal_error (ctx, COB_FERROR_CHAINING);");
+		output_line ("\tcob_fatal_error_ctx (ctx, COB_FERROR_CHAINING);");
 		output_newline ();
 	}
 
@@ -13704,9 +13728,9 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_line ("/* Allocate decimal numbers */");
 		output_prefix ();
 		if (prog->flag_recursive) {
-			output ("cob_decimal_push (ctx, %u", prog->decimal_index_max);
+			output ("cob_decimal_push_ctx (ctx, %u", prog->decimal_index_max);
 		} else {
-			output ("cob_decimal_alloc (ctx, %u", prog->decimal_index_max);
+			output ("cob_decimal_alloc_ctx (ctx, %u", prog->decimal_index_max);
 		}
 		for (inc = 0; inc < prog->decimal_index_max; inc++) {
 			output (", &%s%u", CB_PREFIX_DECIMAL, inc);
@@ -13912,10 +13936,10 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	/* Classification */
 	if (prog->classification) {
 		if (prog->classification == cb_int1) {
-			output_line ("cob_set_locale (ctx, NULL, COB_LC_CLASS);");
+			output_line ("cob_set_locale_ctx (ctx, NULL, COB_LC_CLASS);");
 		} else {
 			output_prefix ();
-			output ("cob_set_locale (ctx, ");
+			output ("cob_set_locale_ctx (ctx, ");
 			output_param  (prog->classification, -1);
 			output (", COB_LC_CTYPE);");
 		}
@@ -13927,7 +13951,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	if (cb_flag_prof) {
 		output_line ("if (!prof_info) {");
 		output_line (
-			"\tprof_info = cob_prof_init_module (ctx, module, prof_procedures, %d);",
+			"\tprof_info = cob_prof_init_module_ctx (ctx, module, prof_procedures, %d);",
 			prog->procedure_list_len);
 		output_line ("}");
 
@@ -13935,7 +13959,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		   we keep pointers to static data there. */
 		output_line ("if (prof_info) { module->flag_no_phys_canc = 1; }");
 
-		output_line ("cob_prof_enter_procedure (ctx, prof_info, 0);");
+		output_line ("cob_prof_enter_procedure_ctx (ctx, prof_info, 0);");
 	}
 	if (cb_flag_stack_extended) {
 		/* entry marker = first frameptr is the one with
@@ -13975,7 +13999,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		}
 		output_block_close ();
 		output_line ("/* This should never be reached */");
-		output_line ("cob_fatal_error (ctx, COB_FERROR_MODULE);");
+		output_line ("cob_fatal_error_ctx (ctx, COB_FERROR_MODULE);");
 	} else {
 		l = CB_PURPOSE (prog->entry_list);
 		if (cb_flag_stack_extended) {
@@ -14016,7 +14040,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 			  lookup_source (prog->common.source_file)));
 		if (cb_flag_c_line_directives) {
 			output_c_info ();
-			output_line ("cob_nop (ctx);");
+			output_line ("cob_nop_ctx (ctx);");
 		}
 		output_newline ();
 	}
@@ -14025,7 +14049,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		if (!cb_flag_source_location) {
 			output_newline ();
 		}
-		output_line ("cob_check_beyond_exit (ctx, %s%d);"
+		output_line ("cob_check_beyond_exit_ctx (ctx, %s%d);"
 			"\t/* prevent fall-through */", CB_PREFIX_STRING,
 			lookup_string ("PROCEDURE DIVISION"));
 	}
@@ -14048,7 +14072,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		}
 	}
 	if (cb_flag_prof){
-		output_line ("cob_prof_exit_procedure (ctx, prof_info, 0);");
+		output_line ("cob_prof_exit_procedure_ctx (ctx, prof_info, 0);");
 	}
 	if (!prog->flag_recursive) {
 		output_line ("/* Decrement module active count */");
@@ -14095,7 +14119,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		for (f = prog->local_storage; f; f = f->sister) {
 			if (f->flag_item_based) {
 				output_line ("if (%s%d) {", CB_PREFIX_BASE, f->id);
-				output_line ("\tcob_free_alloc (ctx, &%s%d, NULL);",
+				output_line ("\tcob_free_alloc_ctx (ctx, &%s%d, NULL);",
 					     CB_PREFIX_BASE, f->id);
 				output_line ("\t%s%d = NULL;", CB_PREFIX_BASE, f->id);
 				output_line ("}");
@@ -14107,7 +14131,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	if (prog->decimal_index_max && prog->flag_recursive) {
 		output_line ("/* Free decimal structures */");
 		output_prefix ();
-		output ("cob_decimal_pop (ctx, %u", prog->decimal_index_max);
+		output ("cob_decimal_pop_ctx (ctx, %u", prog->decimal_index_max);
 		for (inc = 0; inc < prog->decimal_index_max; inc++) {
 			output (", %s%u", CB_PREFIX_DECIMAL, inc);
 		}
@@ -14125,17 +14149,17 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 
 	if (cb_flag_trace) {
 		output_line ("if ((module->flag_debug_trace & COB_MODULE_READYTRACE))");
-		output_line ("   cob_trace_exit (ctx, %s%d);",
+		output_line ("   cob_trace_exit_ctx (ctx, %s%d);",
 			     CB_PREFIX_STRING, lookup_string(excp_current_program_id));
 		output_newline ();
 	}
 
-	output_line ("cob_module_leave (ctx, module);");
+	output_line ("cob_module_leave_ctx (ctx, module);");
 	output_newline ();
 
 	if (prog->flag_recursive) {
 		output_line ("/* Free for recursive module */");
-		output_line ("cob_module_free (ctx, &module);");
+		output_line ("cob_module_free_ctx (ctx, &module);");
 		output_newline ();
 	}
 
@@ -14161,7 +14185,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 
 	if (prog->prog_type == COB_MODULE_TYPE_FUNCTION) {
 		output_prefix ();
-		output ("return cob_function_return (ctx, ");
+		output ("return cob_function_return_ctx (ctx, ");
 		output_param (prog->returning, -1);
 		output (")");
 	} else {
@@ -14208,7 +14232,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 
 	/* Resolve user functions */
 	for (clp = func_call_cache; clp; clp = clp->next) {
-		output_line ("func_%s.funcvoid = cob_resolve_func (ctx, \"%s\");",
+		output_line ("func_%s.funcvoid = cob_resolve_func_ctx (ctx, \"%s\");",
 			      clp->call_name, clp->call_name);
 	}
 
@@ -14234,7 +14258,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	/* Setup up CANCEL callback */
 	if (!prog->nested_level && prog->prog_type == COB_MODULE_TYPE_PROGRAM) {
 		output_line ("/* Initialize cancel callback */");
-		output_line ("cob_set_cancel (ctx, module);");
+		output_line ("cob_set_cancel_ctx (ctx, module);");
 		output_newline ();
 	}
 
@@ -14249,7 +14273,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 					*p = '_';
 				}
 			}
-			output_line ("%s%d = cob_external_addr (ctx, \"%s\", %d);",
+			output_line ("%s%d = cob_external_addr_ctx (ctx, \"%s\", %d);",
 				     CB_PREFIX_BASE, f->id, string_buffer,
 				     CB_FILE (CB_VALUE (l))->record_max);
 		}
@@ -14265,7 +14289,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 			continue;
 		output_prefix ();
 		output_base (f, 0);
-		output (" = cob_external_addr (ctx, \"%s\", %d);",
+		output (" = cob_external_addr_ctx (ctx, \"%s\", %d);",
 			f->ename, f->size);
 		output_newline ();
 	}
@@ -14301,8 +14325,8 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		}
 		output_line ("%s%d = &%s%d;", CB_PREFIX_DEC_CONST, m->id,
 			     CB_PREFIX_DEC_FIELD, m->id);
-		output_line ("cob_decimal_init (ctx, %s%d);", CB_PREFIX_DEC_CONST, m->id);
-		output_line ("cob_decimal_set_field (ctx, %s%d, (cob_field *)&%s%d);",
+		output_line ("cob_decimal_init_ctx (ctx, %s%d);", CB_PREFIX_DEC_CONST, m->id);
+		output_line ("cob_decimal_set_field_ctx (ctx, %s%d, (cob_field *)&%s%d);",
 			     CB_PREFIX_DEC_CONST, m->id,
 			     CB_PREFIX_CONST, m->id);
 		output_newline ();
@@ -14398,7 +14422,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		}
 	}
 	output_line ("P_cgerror:");
-	output_line ("\tcob_fatal_error (ctx, COB_FERROR_CODEGEN);");
+	output_line ("\tcob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);");
 	output_newline ();
 
 	/* Set up CANCEL callback code */
@@ -14414,7 +14438,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	output_line ("if (!initialized)");
 	output_line ("\treturn 0;");
 	output_line ("if (module && module->module_active)");
-	output_line ("\tcob_fatal_error (ctx, COB_FERROR_CANCEL);");
+	output_line ("\tcob_fatal_error_ctx (ctx, COB_FERROR_CANCEL);");
 	output_newline ();
 
 	if (prog->flag_main) {
@@ -14444,14 +14468,14 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 			/* CHECKME: Shouldn't we raise a runtime warning when still open? */
 			output_line ("if (%s%s->open_mode != COB_OPEN_CLOSED)",
 					CB_PREFIX_FILE, fl->cname);
-			output_line ("\tcob_close (ctx, %s%s, NULL, COB_CLOSE_NORMAL, 1);",
+			output_line ("\tcob_close_ctx (ctx, %s%s, NULL, COB_CLOSE_NORMAL, 1);",
 					CB_PREFIX_FILE, fl->cname);
 			if (!fl->flag_external) {
-				output_line ("cob_file_destroy (ctx, &%s%s);",
+				output_line ("cob_file_destroy_ctx (ctx, &%s%s);",
 					CB_PREFIX_FILE, fl->cname);
 			}
 		} else {
-			output_line ("cob_cache_free (ctx, %s%s);",
+			output_line ("cob_cache_free_ctx (ctx, %s%s);",
 					CB_PREFIX_FILE, fl->cname);
 			output_line ("%s%s = NULL;",
 					CB_PREFIX_FILE, fl->cname);
@@ -14473,7 +14497,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	for (f = prog->working_storage; f; f = f->sister) {
 		if (f->flag_item_based) {
 			output_line ("if (%s%d) {", CB_PREFIX_BASE, f->id);
-			output_line ("\tcob_free_alloc (ctx, &%s%d, NULL);",
+			output_line ("\tcob_free_alloc_ctx (ctx, &%s%d, NULL);",
 				     CB_PREFIX_BASE, f->id);
 			output_line ("}");
 		}
@@ -14503,7 +14527,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_newline ();
 	}
 
-	output_line ("cob_module_free (ctx, &module);");
+	output_line ("cob_module_free_ctx (ctx, &module);");
 	output_newline ();
 
 cancel_end:
@@ -14516,7 +14540,7 @@ cancel_end:
 			seen = 1;
 			output_line ("/* Clear Decimal Constant values */");
 		}
-		output_line ("cob_decimal_clear (ctx, %s%d);", CB_PREFIX_DEC_CONST, m->id);
+		output_line ("cob_decimal_clear_ctx (ctx, %s%d);", CB_PREFIX_DEC_CONST, m->id);
 		output_line ("%s%d = NULL;", CB_PREFIX_DEC_CONST, m->id);
 	}
 	if (seen) {
@@ -14609,7 +14633,7 @@ output_function_entry_function (struct cb_program *prog, cb_tree entry,
 
 	output_line ("/* Save environment */");
 	output_prefix ();
-	output ("floc = cob_save_func (ctx, cob_fret, cob_pam, %u", parmnum);
+	output ("floc = cob_save_func_ctx (ctx, cob_fret, cob_pam, %u", parmnum);
 	for (n = 0; n < parmnum; ++n) {
 		output (", f%u", n);
 	}
@@ -14644,7 +14668,7 @@ output_function_entry_function (struct cb_program *prog, cb_tree entry,
 	output_newline ();
 
 	output_line ("/* Restore environment */");
-	output_line ("cob_restore_func (ctx, floc);");
+	output_line ("cob_restore_func_ctx (ctx, floc);");
 	output_line ("return ret;");
 	output_block_close ();
 	output_newline ();
@@ -15158,7 +15182,7 @@ output_main_function (struct cb_program *prog)
 		output_block_open ();
 		output_line ("cob_init (__argc, __argv);");
 	}
-	output_line ("cob_stop_run (cob_get_current_context (), %s ());", prog->program_id);
+	output_line ("cob_stop_run_ctx (cob_get_current_context (), %s ());", prog->program_id);
 	output_block_close ();
 	output_newline ();
 }

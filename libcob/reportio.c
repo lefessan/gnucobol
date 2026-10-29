@@ -75,7 +75,7 @@ cob_field_init (cob_field *f)
 		temp.data = (unsigned char*)" ";	/* MOVE SPACES to field */
 		temp.attr = &const_alpha_attr;
 	}
-	cob_move (COB_CTX_TODO, &temp, f);
+	cob_move_ctx (COB_CTX_TODO, &temp, f);
 	return f;
 }
 
@@ -102,7 +102,7 @@ cob_field_dup (cob_field *f, int incr)
 		temp.data = (unsigned char*)" ";	/* MOVE SPACES to new field */
 		temp.attr = &const_alpha_attr;
 	}
-	cob_move (COB_CTX_TODO, &temp, fld);
+	cob_move_ctx (COB_CTX_TODO, &temp, fld);
 	return fld;
 }
 
@@ -284,7 +284,7 @@ cob_add_fields (cob_field *op1, cob_field *op2, cob_field *rslt)
 	fld1.data	= (unsigned char*)data1;
 	memset(data1,'0',fld1.size);
 	cobrpglobptr->cob_exception_code = 0;
-	cob_move(COB_CTX_TODO, op1, &fld1);
+	cob_move_ctx(COB_CTX_TODO, op1, &fld1);
 
 #ifdef COB_DEBUG_LOG
 	if (DEBUG_ISON("rw")) {
@@ -299,7 +299,7 @@ cob_add_fields (cob_field *op1, cob_field *op2, cob_field *rslt)
 	attr2.type	= COB_TYPE_NUMERIC_DISPLAY;
 	fld2.data	= (unsigned char*)data2;
 	memset(data2,'0',fld2.size);
-	cob_move(COB_CTX_TODO, op2, &fld2);
+	cob_move_ctx(COB_CTX_TODO, op2, &fld2);
 
 #ifdef COB_DEBUG_LOG
 	if (DEBUG_ISON ("rw")) {
@@ -308,9 +308,9 @@ cob_add_fields (cob_field *op1, cob_field *op2, cob_field *rslt)
 	}
 #endif
 
-	cob_add(COB_CTX_TODO, &fld1,&fld2,0);
+	cob_add_ctx(COB_CTX_TODO, &fld1,&fld2,0);
 
-	cob_move(COB_CTX_TODO, &fld1, rslt);			/* Copy SUM back to result field */
+	cob_move_ctx(COB_CTX_TODO, &fld1, rslt);			/* Copy SUM back to result field */
 
 #ifdef COB_DEBUG_LOG
 	if (DEBUG_ISON("rw")) {
@@ -589,31 +589,31 @@ limitCheckOneLine(cob_report *r, cob_report_line *fl)
 	cob_report_field	*rf;
 
 	if((fl->line > 0 && r->def_lines > 0 && fl->line > r->def_lines)) {
-		cob_runtime_error (COB_CTX_TODO, _("INITIATE %s LINE %d exceeds PAGE LIMIT %d"),r->report_name,fl->line,r->def_lines);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("INITIATE %s LINE %d exceeds PAGE LIMIT %d"),r->report_name,fl->line,r->def_lines);
 		DEBUG_LOG("rw",("PAGE LIMITs is incorrect; LINE %d > LIMIT %d\n",fl->line,r->def_lines));
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 		r->initiate_done = FALSE;
 		return;
 	}
 	if((fl->next_group_line > 0 && r->def_lines > 0 && fl->next_group_line > r->def_lines)) {
-		cob_runtime_error (COB_CTX_TODO, _("INITIATE %s NEXT GROUP %d exceeds PAGE LIMIT"),r->report_name,fl->next_group_line);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("INITIATE %s NEXT GROUP %d exceeds PAGE LIMIT"),r->report_name,fl->next_group_line);
 		DEBUG_LOG("rw",("PAGE LIMITs is incorrect; NEXT GROUP %d > LIMIT %d\n",fl->next_group_line,r->def_lines));
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 		r->initiate_done = FALSE;
 		return;
 	}
 	for(rf = fl->fields; rf; rf = rf->next) {
 		if((rf->line && rf->line > r->def_lines)) {
-			cob_runtime_error (COB_CTX_TODO, _("INITIATE %s LINE %d exceeds PAGE LIMIT"),r->report_name,rf->line);
+			cob_runtime_error_ctx (COB_CTX_TODO, _("INITIATE %s LINE %d exceeds PAGE LIMIT"),r->report_name,rf->line);
 			DEBUG_LOG("rw",("PAGE LIMITs is incorrect; LINE %d > LIMIT %d\n",rf->line,r->def_lines));
-			cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 			r->initiate_done = FALSE;
 			return;
 		}
 		if((rf->next_group_line && rf->next_group_line > r->def_lines)) {
-			cob_runtime_error (COB_CTX_TODO, _("INITIATE %s NEXT GROUP %d exceeds PAGE LIMIT"),r->report_name,rf->next_group_line);
+			cob_runtime_error_ctx (COB_CTX_TODO, _("INITIATE %s NEXT GROUP %d exceeds PAGE LIMIT"),r->report_name,rf->next_group_line);
 			DEBUG_LOG("rw",("PAGE LIMITs is incorrect; NEXT GROUP %d > LIMIT %d\n",rf->next_group_line,r->def_lines));
-			cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 			r->initiate_done = FALSE;
 			return;
 		}
@@ -653,8 +653,8 @@ saveLineCounter(cob_report *r)
 	if(ln < 0)
 		ln = 0;
 
-	cob_set_int(COB_CTX_TODO, r->page_counter,r->curr_page);
-	cob_set_int(COB_CTX_TODO, r->line_counter,ln);
+	cob_set_int_ctx(COB_CTX_TODO, r->page_counter,r->curr_page);
+	cob_set_int_ctx(COB_CTX_TODO, r->line_counter,ln);
 }
 
 /*
@@ -760,16 +760,16 @@ write_rec (cob_report *r, int opt)
 		 && (opt & COB_WRITE_LINES)) {
 			opt = (opt & ~COB_WRITE_MASK) | 1;
 			while (num > 0) {
-		 		cob_write (COB_CTX_TODO, f, f->record, opt, NULL, 0);
+		 		cob_write_ctx (COB_CTX_TODO, f, f->record, opt, NULL, 0);
 				memset (data + r->code_len, ' ', record_size_left);
 				num--;
 			}
 		} else {
-			cob_write (COB_CTX_TODO, f, f->record, opt, NULL, 0);
+			cob_write_ctx (COB_CTX_TODO, f, f->record, opt, NULL, 0);
 		}
 		f->record->data = orig_data;
 	} else {
-		cob_write (COB_CTX_TODO, f, f->record, opt, NULL, 0);
+		cob_write_ctx (COB_CTX_TODO, f, f->record, opt, NULL, 0);
 	}
 	if (memcmp (f->file_status,"00",2) != 0) {
 		DEBUG_LOG("rw",("Note File Write status '%.4s'\n",f->file_status));
@@ -973,10 +973,10 @@ copy_line_fields (cob_report *r, cob_report_line *l, int doset)
 			continue;
 		}
 		if (rf->from.data) {		/* Copy source field in */
-			cob_move (COB_CTX_TODO, &rf->from, rf->f);
+			cob_move_ctx (COB_CTX_TODO, &rf->from, rf->f);
 			print_field (rf, rec);
 		} else if (rf->sum) {		/* Copy SUM field in */
-			cob_move (COB_CTX_TODO, rf->sum, rf->f);
+			cob_move_ctx (COB_CTX_TODO, rf->sum, rf->f);
 			print_field (rf, rec);
 		} else if (rf->litval) {		/* Refresh literal value */
 			if (rf->f
@@ -986,7 +986,7 @@ copy_line_fields (cob_report *r, cob_report_line *l, int doset)
 				temp.size = (size_t)rf->litlen;
 				temp.data = (unsigned char *)rf->litval;
 				temp.attr = &const_alpha_attr;
-				cob_move (COB_CTX_TODO, &temp, rf->f);
+				cob_move_ctx (COB_CTX_TODO, &temp, rf->f);
 				print_field(rf, rec);
 			} else {
 				memcpy(&rec[rf->column-1], rf->litval, rf->litlen);
@@ -1420,7 +1420,7 @@ cob_exit_reportio()
  * INITIATE report
  */
 int
-cob_report_initiate (cob_context *ctx, cob_report *r)
+cob_report_initiate_ctx (cob_context *ctx, cob_report *r)
 {
 static	cob_report_control	*rc;
 static	cob_report_control_ref	*rr;
@@ -1429,15 +1429,15 @@ static	int		k;
 	cob_file	*f = r->report_file;
 
 	if (r->report_ver != COB_REPORT_VERSION) {
-		cob_runtime_error (COB_CTX_TODO, _("INITIATE has invalid version; recompile"));
+		cob_runtime_error_ctx (COB_CTX_TODO, _("INITIATE has invalid version; recompile"));
 		DEBUG_LOG("rw",("REPORT version %X instead of %X\n",r->report_ver,COB_REPORT_VERSION));
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 		return 0;
 	}
 	if(r->initiate_done) {
-		cob_runtime_error (COB_CTX_TODO, _("INITIATE %s was already done"),r->report_name);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("INITIATE %s was already done"),r->report_name);
 		DEBUG_LOG("rw",("REPORT was already INITIATEd\n"));
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_ACTIVE);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_ACTIVE);
 		return 0;
 	}
 	if (f)
@@ -1454,12 +1454,12 @@ static	int		k;
 	|| (r->def_footing > 0 && !(r->def_footing >= r->def_last_detail))
 	|| (r->def_lines > 0 && !(r->def_lines >= r->def_heading))
 	|| (r->def_lines > 0 && !(r->def_lines >= r->def_footing))) {
-		cob_runtime_error (COB_CTX_TODO, _("INITIATE %s PAGE LIMIT problem"),r->report_name);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("INITIATE %s PAGE LIMIT problem"),r->report_name);
 #if defined(COB_DEBUG_LOG) 
 		DEBUG_LOG("rw",("PAGE LIMITs is incorrect\n"));
 		reportDump(r,"INITIATE");
 #endif
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_PAGE_LIMIT);
 		return 0;
 	}
 	r->curr_page = 1;
@@ -1520,26 +1520,33 @@ static	int		k;
 	return 0;
 }
 
+/* compatibility: cob_report_initiate without context */
+int
+cob_report_initiate (cob_report *r)
+{
+	return cob_report_initiate_ctx (COB_CTX_COMPAT, r);
+}
+
 /*
  * TERMINATE report
  */
 int
-cob_report_terminate (cob_context *ctx, cob_report *r)
+cob_report_terminate_ctx (cob_context *ctx, cob_report *r)
 {
 static	cob_report_control	*rc;
 static	cob_report_control_ref	*rr;
 static	cob_report_line		*pl;
 
 	if (r->report_ver != COB_REPORT_VERSION) {
-		cob_runtime_error (COB_CTX_TODO, _("TERMINATE has invalid version; recompile"));
+		cob_runtime_error_ctx (COB_CTX_TODO, _("TERMINATE has invalid version; recompile"));
 		DEBUG_LOG("rw",("REPORT version %X instead of %X\n",r->report_ver,COB_REPORT_VERSION));
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 		return 0;
 	}
 	if (!r->initiate_done) {
 		DEBUG_LOG("rw",("INITIATE was never done!\n"));
-		cob_runtime_error (COB_CTX_TODO, _("TERMINATE %s but no INITIATE was done"),r->report_name);
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("TERMINATE %s but no INITIATE was done"),r->report_name);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 #if 0	/* TODO: if not enabled: ignore, if enabled and PROPAGATE ON (or TRY) active: handle */
 		return 0;
 #else
@@ -1650,11 +1657,18 @@ PrintReportFooting:
 	return 0;
 }
 
+/* compatibility: cob_report_terminate without context */
+int
+cob_report_terminate (cob_report *r)
+{
+	return cob_report_terminate_ctx (COB_CTX_COMPAT, r);
+}
+
 /*
  * GENERATE report-line
  */
 int
-cob_report_generate (cob_context *ctx, cob_report *r, cob_report_line *l)
+cob_report_generate_ctx (cob_context *ctx, cob_report *r, cob_report_line *l)
 {
 static	cob_report_control	*rc;
 static	cob_report_control_ref	*rr;
@@ -1665,14 +1679,14 @@ static	int		maxctl,ln,num,gengrp,last_use,ctlidx;
 #endif
 
 	if (r->report_ver != COB_REPORT_VERSION) {
-		cob_runtime_error (COB_CTX_TODO, _("GENERATE has invalid version; recompile"));
+		cob_runtime_error_ctx (COB_CTX_TODO, _("GENERATE has invalid version; recompile"));
 		DEBUG_LOG("rw",("REPORT version %X instead of %X\n",r->report_ver,COB_REPORT_VERSION));
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 		return 0;
 	}
 	if (!r->initiate_done) {
-		cob_runtime_error (COB_CTX_TODO, _("GENERATE %s but no INITIATE was done"),r->report_name);
-		cob_set_exception (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
+		cob_runtime_error_ctx (COB_CTX_TODO, _("GENERATE %s but no INITIATE was done"),r->report_name);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_REPORT_INACTIVE);
 #if 0	/* TODO: if not enabled: ignore, if enabled and PROPAGATE ON (or TRY) active: handle */
 		return 0;
 #else
@@ -1769,7 +1783,7 @@ PrintFirstHeading:
 						report_line_and(r,rr->ref_line,COB_REPORT_CONTROL_HEADING);
 					}
 				}
-				cob_move (COB_CTX_TODO, rc->f,rc->val);	/* Save current field data */
+				cob_move_ctx (COB_CTX_TODO, rc->f,rc->val);	/* Save current field data */
 				rc->data_change = FALSE;
 			}
 		}
@@ -1800,7 +1814,7 @@ PrintFirstHeading:
 		 */
 		maxctl = 0;
 		for(rc = r->controls; rc; rc = rc->next) {
-			rc->data_change = (cob_cmp(COB_CTX_TODO, rc->f,rc->val) != 0);
+			rc->data_change = (cob_cmp_ctx(COB_CTX_TODO, rc->f,rc->val) != 0);
 			if(rc->data_change) {	/* Data change, implies control break at lower levels */
 #if defined(COB_DEBUG_LOG)
 				DEBUG_LOG("rw",(" Control Break %s order %d changed from ",
@@ -1810,8 +1824,8 @@ PrintFirstHeading:
 				(void)cob_field_to_string (rc->f, wrk, sizeof(wrk)-1, CCM_NONE);
 				DEBUG_LOG("rw",("'%s'\n",wrk));
 #endif
-				cob_move(COB_CTX_TODO, rc->f, rc->sf);	/* Save new CONTROL value */
-				cob_move(COB_CTX_TODO, rc->val,rc->f);	/* Prev value for FOOTING */
+				cob_move_ctx(COB_CTX_TODO, rc->f, rc->sf);	/* Save new CONTROL value */
+				cob_move_ctx(COB_CTX_TODO, rc->val,rc->f);	/* Prev value for FOOTING */
 				if(rc->sequence > maxctl)
 					maxctl = rc->sequence;
 			}
@@ -1829,8 +1843,8 @@ PrintFirstHeading:
 					cob_field_to_string(rc->f, wrk, sizeof(wrk)-1, CCM_NONE);
 					DEBUG_LOG("rw",("'%s'\n",wrk));
 #endif
-					cob_move(COB_CTX_TODO, rc->f, rc->sf); /* Save CONTROL value */
-					cob_move(COB_CTX_TODO, rc->val,rc->f); /* Prev value for FOOTING */
+					cob_move_ctx(COB_CTX_TODO, rc->f, rc->sf); /* Save CONTROL value */
+					cob_move_ctx(COB_CTX_TODO, rc->val,rc->f); /* Prev value for FOOTING */
 				}
 			}
 		}
@@ -1882,7 +1896,7 @@ PrintFooting:
 						}
 					}
 				}
-				cob_move(COB_CTX_TODO, rc->sf,rc->f);	/* Put new CONTROL value back */
+				cob_move_ctx(COB_CTX_TODO, rc->sf,rc->f);	/* Put new CONTROL value back */
 			}
 		}
 		if(r->foot_next_page) {
@@ -1929,7 +1943,7 @@ PrintHeading:
 						rr->ref_line->suppress = FALSE;
 					}
 				}
-				cob_move (COB_CTX_TODO, rc->f,rc->val);	/* Save current field data */
+				cob_move_ctx (COB_CTX_TODO, rc->f,rc->val);	/* Save current field data */
 				rc->data_change = FALSE;
 			}
 		}
@@ -2033,11 +2047,18 @@ PrintDetail:	;
 	return 0;
 }
 
+/* compatibility: cob_report_generate without context */
+int
+cob_report_generate (cob_report *r, cob_report_line *l)
+{
+	return cob_report_generate_ctx (COB_CTX_COMPAT, r, l);
+}
+
 /*
  * SUPPRESS printing of this CONTROL level
  */
 void
-cob_report_suppress(cob_context *ctx, cob_report *r, cob_report_line *l)
+cob_report_suppress_ctx(cob_context *ctx, cob_report *r, cob_report_line *l)
 {
 	cob_report_control	*rc;
 	cob_report_control_ref	*rr;
@@ -2056,5 +2077,12 @@ cob_report_suppress(cob_context *ctx, cob_report *r, cob_report_line *l)
 			}
 		}
 	}
-	cob_runtime_error (COB_CTX_TODO, _("could not find line to SUPPRESS in report %s"),r->report_name);
+	cob_runtime_error_ctx (COB_CTX_TODO, _("could not find line to SUPPRESS in report %s"),r->report_name);
+}
+
+/* compatibility: cob_report_suppress without context */
+void
+cob_report_suppress (cob_report *r, cob_report_line *l)
+{
+	cob_report_suppress_ctx (COB_CTX_COMPAT, r, l);
 }

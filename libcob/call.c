@@ -278,9 +278,9 @@ set_resolve_error (int module_type)
 {
 	resolve_error = resolve_error_buff;
 	if (module_type == COB_MODULE_TYPE_PROGRAM) {
-		cob_set_exception (COB_CTX_TODO, COB_EC_PROGRAM_NOT_FOUND);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_PROGRAM_NOT_FOUND);
 	} else {
-		cob_set_exception (COB_CTX_TODO, COB_EC_FUNCTION_NOT_FOUND);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_FUNCTION_NOT_FOUND);
 	}
 }
 
@@ -626,7 +626,7 @@ cache_preload (const char *path)
 
 	libhandle = lt_dlopen (path);
 	if (!libhandle) {
-		cob_runtime_warning (COB_CTX_TODO, 
+		cob_runtime_warning_ctx (COB_CTX_TODO, 
 			_("preloading from existing path '%s' failed; %s"), path, lt_dlerror());
 		return 0;
 	}
@@ -663,7 +663,7 @@ insert (const char *name, void *func, lt_dlhandle handle,
 	p->module = module;
 
 	if (path) {
-		p->path = cob_path_to_absolute (COB_CTX_TODO, path);
+		p->path = cob_path_to_absolute_ctx (COB_CTX_TODO, path);
 	}
 	p->no_phys_cancel = nocanc;
 	val = hash ((const unsigned char *)name);
@@ -929,7 +929,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 			  "entry point '%s' not found", (const char *)s);
 		set_resolve_error (module_type);
 		/* lt_dlerror will now give either the message from lt_dlopen or lt_dlym */
-		cob_runtime_warning (COB_CTX_TODO, 
+		cob_runtime_warning_ctx (COB_CTX_TODO, 
 			_("loading from existing path '%s' failed; %s"),
 			call_filename_buff, lt_dlerror ());
 		return NULL;
@@ -962,7 +962,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 				  "entry point '%s' not found", (const char *)s);
 			set_resolve_error (module_type);
 			/* lt_dlerror will now give either the message from lt_dlopen or lt_dlym */
-			cob_runtime_warning (COB_CTX_TODO, 
+			cob_runtime_warning_ctx (COB_CTX_TODO, 
 				_("loading from existing path '%s' failed; %s"),
 				call_filename_buff, lt_dlerror ());
 			return NULL;
@@ -1029,7 +1029,7 @@ cob_chk_call_path (const char *name, char **dirent)
 /* Global functions */
 
 const char *
-cob_resolve_error (cob_context *ctx)
+cob_resolve_error_ctx (cob_context *ctx)
 {
 	const char	*p;
 
@@ -1042,15 +1042,29 @@ cob_resolve_error (cob_context *ctx)
 	return p;
 }
 
-void
-cob_call_error (cob_context *ctx)
+/* compatibility: cob_resolve_error without context */
+const char *
+cob_resolve_error (void)
 {
-	cob_runtime_error (ctx, "%s", cob_resolve_error (ctx));
-	cob_hard_failure ();
+	return cob_resolve_error_ctx (COB_CTX_COMPAT);
 }
 
 void
-cob_set_cancel (cob_context *ctx, cob_module *m)
+cob_call_error_ctx (cob_context *ctx)
+{
+	cob_runtime_error_ctx (ctx, "%s", cob_resolve_error_ctx (ctx));
+	cob_hard_failure ();
+}
+
+/* compatibility: cob_call_error without context */
+void
+cob_call_error (void)
+{
+	cob_call_error_ctx (COB_CTX_COMPAT);
+}
+
+void
+cob_set_cancel_ctx (cob_context *ctx, cob_module *m)
 {
 	struct call_hash	*p;
 
@@ -1068,8 +1082,15 @@ cob_set_cancel (cob_context *ctx, cob_module *m)
 	insert (m->module_name, m->module_entry.funcvoid, NULL, m, NULL, 1);
 }
 
+/* compatibility: cob_set_cancel without context */
+void
+cob_set_cancel (cob_module *m)
+{
+	cob_set_cancel_ctx (COB_CTX_COMPAT, m);
+}
+
 void *
-cob_resolve (cob_context *ctx, const char *name)
+cob_resolve_ctx (cob_context *ctx, const char *name)
 {
 	void	*p;
 	char	*entry;
@@ -1077,7 +1098,7 @@ cob_resolve (cob_context *ctx, const char *name)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -1089,8 +1110,15 @@ cob_resolve (cob_context *ctx, const char *name)
 	return p;
 }
 
+/* compatibility: cob_resolve without context */
 void *
-cob_resolve_cobol (cob_context *ctx, const char *name, const int fold_case, const int errind)
+cob_resolve (const char *name)
+{
+	return cob_resolve_ctx (COB_CTX_COMPAT, name);
+}
+
+void *
+cob_resolve_cobol_ctx (cob_context *ctx, const char *name, const int fold_case, const int errind)
 {
 	void	*p;
 	char	*entry;
@@ -1098,7 +1126,7 @@ cob_resolve_cobol (cob_context *ctx, const char *name, const int fold_case, cons
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -1111,39 +1139,53 @@ cob_resolve_cobol (cob_context *ctx, const char *name, const int fold_case, cons
 	}
 	if (!p) {
 		if (errind) {
-			cob_call_error (ctx);
+			cob_call_error_ctx (ctx);
 		}
-		cob_set_exception (ctx, COB_EC_PROGRAM_NOT_FOUND);
+		cob_set_exception_ctx (ctx, COB_EC_PROGRAM_NOT_FOUND);
 	}
 	cobglobptr->cob_call_name_hash = cob_get_name_hash (name);
 	return p;
 }
 
+/* compatibility: cob_resolve_cobol without context */
 void *
-cob_resolve_func (cob_context *ctx, const char *name)
+cob_resolve_cobol (const char *name, const int fold_case, const int errind)
+{
+	return cob_resolve_cobol_ctx (COB_CTX_COMPAT, name, fold_case, errind);
+}
+
+void *
+cob_resolve_func_ctx (cob_context *ctx, const char *name)
 {
 	void	*p;
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
 	p = cob_resolve_internal (name, NULL, 0, COB_MODULE_TYPE_FUNCTION, 1);
 	if (!p) {
 		/* Note: exception raised above */
-		cob_runtime_error (ctx, _("user-defined FUNCTION '%s' not found"), name);
+		cob_runtime_error_ctx (ctx, _("user-defined FUNCTION '%s' not found"), name);
 		cob_hard_failure ();
 	}
 	return p;
+}
+
+/* compatibility: cob_resolve_func without context */
+void *
+cob_resolve_func (const char *name)
+{
+	return cob_resolve_func_ctx (COB_CTX_COMPAT, name);
 }
 
 /*
  * Load library and return address of entry point
  */
 void *
-cob_load_lib (cob_context *ctx, const char *library, const char *entry, char *reason)
+cob_load_lib_ctx (cob_context *ctx, const char *library, const char *entry, char *reason)
 {
 	void	*p;
 #ifdef RTLD_MEMBER		/* Used on AIX due to shared code inside archive */
@@ -1183,8 +1225,15 @@ cob_load_lib (cob_context *ctx, const char *library, const char *entry, char *re
 	return p;
 }
 
+/* compatibility: cob_load_lib without context */
 void *
-cob_call_field (cob_context *ctx, const cob_field *f, const struct cob_call_struct *cs,
+cob_load_lib (const char *library, const char *entry, char *reason)
+{
+	return cob_load_lib_ctx (COB_CTX_COMPAT, library, entry, reason);
+}
+
+void *
+cob_call_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_struct *cs,
 		const unsigned int errind, const int fold_case)
 {
 	char		*name, *entry, *dirent;
@@ -1192,7 +1241,7 @@ cob_call_field (cob_context *ctx, const cob_field *f, const struct cob_call_stru
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -1203,7 +1252,7 @@ cob_call_field (cob_context *ctx, const cob_field *f, const struct cob_call_stru
 	if (*name == ' ') {
 		size_t				len;
 		/* same warning as in cobc/typeck.c */
-		cob_runtime_warning (ctx, 
+		cob_runtime_warning_ctx (ctx, 
 			_("'%s' literal includes leading spaces which are omitted"), name);
 		len = strlen (name);
 		while (*name == ' ') {
@@ -1258,13 +1307,20 @@ cob_call_field (cob_context *ctx, const cob_field *f, const struct cob_call_stru
 	}
 	if (!p) {
 		if (errind) {
-			cob_call_error (ctx);
+			cob_call_error_ctx (ctx);
 		} else {
-			cob_set_exception (ctx, COB_EC_PROGRAM_NOT_FOUND);
+			cob_set_exception_ctx (ctx, COB_EC_PROGRAM_NOT_FOUND);
 			return NULL;
 		}
 	}
 	return p;
+}
+
+/* compatibility: cob_call_field without context */
+void *
+cob_call_field (const cob_field *f, const struct cob_call_struct *cs, const unsigned int errind, const int fold_case)
+{
+	return cob_call_field_ctx (COB_CTX_COMPAT, f, cs, errind, fold_case);
 }
 
 void
@@ -1291,7 +1347,7 @@ cob_module_clean (cob_module *m)
 }
 
 void
-cob_cancel (cob_context *ctx, const char *name)
+cob_cancel_ctx (cob_context *ctx, const char *name)
 {
 	const char		*entry;
 	struct call_hash	*p;
@@ -1300,10 +1356,10 @@ cob_cancel (cob_context *ctx, const char *name)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!name) {
-		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_cancel");
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_cancel");
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -1332,8 +1388,15 @@ cob_cancel (cob_context *ctx, const char *name)
 	}
 }
 
+/* compatibility: cob_cancel without context */
 void
-cob_cancel_field (cob_context *ctx, const cob_field *f, const struct cob_call_struct *cs)
+cob_cancel (const char *name)
+{
+	cob_cancel_ctx (COB_CTX_COMPAT, name);
+}
+
+void
+cob_cancel_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_struct *cs)
 {
 	char				*name;
 	const char			*entry;
@@ -1343,7 +1406,7 @@ cob_cancel_field (cob_context *ctx, const cob_field *f, const struct cob_call_st
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 	if (!f || f->size == 0) {
@@ -1363,11 +1426,18 @@ cob_cancel_field (cob_context *ctx, const cob_field *f, const struct cob_call_st
 			return;
 		}
 	}
-	cob_cancel (ctx, entry);
+	cob_cancel_ctx (ctx, entry);
+}
+
+/* compatibility: cob_cancel_field without context */
+void
+cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
+{
+	cob_cancel_field_ctx (COB_CTX_COMPAT, f, cs);
 }
 
 int
-cob_call (cob_context *ctx, const char *name, const int argc, void **argv)
+cob_call_ctx (cob_context *ctx, const char *name, const int argc, void **argv)
 {
 	void			*pargv[MAX_CALL_FIELD_PARAMS] = { 0 };
 	cob_call_union		unifunc;
@@ -1462,18 +1532,18 @@ cob_call (cob_context *ctx, const char *name, const int argc, void **argv)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!name) {
-		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_call");
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_call");
 		cob_hard_failure ();
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (ctx, _("invalid number of arguments passed to '%s'"), "cob_call");
+		cob_runtime_error_ctx (ctx, _("invalid number of arguments passed to '%s'"), "cob_call");
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
-	unifunc.funcvoid = cob_resolve_cobol (ctx, name, 0, 1);
+	unifunc.funcvoid = cob_resolve_cobol_ctx (ctx, name, 0, 1);
 	/* Set number of parameters */
 	cobglobptr->cob_call_params = argc;
 	cobglobptr->cob_call_from_c = 1;
@@ -1634,18 +1704,32 @@ cob_call (cob_context *ctx, const char *name, const int argc, void **argv)
 	return i;
 }
 
+/* compatibility: cob_call without context */
 int
-cob_func (cob_context *ctx, const char *name, const int argc, void **argv)
+cob_call (const char *name, const int argc, void **argv)
 {
-	int	ret;
-
-	ret = cob_call (ctx, name, argc, argv);
-	cob_cancel (ctx, name);
-	return ret;
+	return cob_call_ctx (COB_CTX_COMPAT, name, argc, argv);
 }
 
 int
-cob_call_cobol (cob_context *ctx, const char *name, const int argc, ...)
+cob_func_ctx (cob_context *ctx, const char *name, const int argc, void **argv)
+{
+	int	ret;
+
+	ret = cob_call_ctx (ctx, name, argc, argv);
+	cob_cancel_ctx (ctx, name);
+	return ret;
+}
+
+/* compatibility: cob_func without context */
+int
+cob_func (const char *name, const int argc, void **argv)
+{
+	return cob_func_ctx (COB_CTX_COMPAT, name, argc, argv);
+}
+
+static int
+cob_call_cobol_va_ctx (cob_context *ctx, const char *name, const int argc, va_list cob_va_args)
 {
 	void			**pargv;
 	cob_call_union		unifunc;
@@ -1654,24 +1738,24 @@ cob_call_cobol (cob_context *ctx, const char *name, const int argc, ...)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (ctx, _("invalid number of arguments passed to '%s'"), "cob_call_cobol");
-		cob_stop_run (ctx, 1);
+		cob_runtime_error_ctx (ctx, _("invalid number of arguments passed to '%s'"), "cob_call_cobol");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	if (!name) {
-		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_call_cobol");
-		cob_stop_run (ctx, 1);
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_call_cobol");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	/* LCOV_EXCL_STOP */
-	unifunc.funcvoid = cob_resolve_cobol (ctx, name, 0, 1);
+	unifunc.funcvoid = cob_resolve_cobol_ctx (ctx, name, 0, 1);
 	pargv = cob_malloc (MAX_CALL_FIELD_PARAMS * sizeof(void *));
 	/* Set number of parameters */
 	cobglobptr->cob_call_params = argc;
 	cobglobptr->cob_call_from_c = 1;
 	cobglobptr->cob_call_name_hash = 0;
-	va_start (ap, argc);
+	va_copy (ap, cob_va_args);
 	for (i = 0; i < argc; ++i) {
 		pargv[i] = va_arg (ap, void *);
 	}
@@ -1754,7 +1838,32 @@ cob_call_cobol (cob_context *ctx, const char *name, const int argc, ...)
 }
 
 int
-cob_call_entry (cob_context *ctx, void *entry, const int argc, ...)
+cob_call_cobol_ctx (cob_context *ctx, const char *name, const int argc, ...)
+{
+	va_list		cob_va_args;
+	int	cob_va_ret;
+
+	va_start (cob_va_args, argc);
+	cob_va_ret = cob_call_cobol_va_ctx (ctx, name, argc, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_call_cobol without context */
+int
+cob_call_cobol (const char *name, const int argc, ...)
+{
+	va_list		cob_va_args;
+	int	cob_va_ret;
+
+	va_start (cob_va_args, argc);
+	cob_va_ret = cob_call_cobol_va_ctx (COB_CTX_COMPAT, name, argc, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static int
+cob_call_entry_va_ctx (cob_context *ctx, void *entry, const int argc, va_list cob_va_args)
 {
 	void			**pargv;
 	cob_call_union		unifunc;
@@ -1763,15 +1872,15 @@ cob_call_entry (cob_context *ctx, void *entry, const int argc, ...)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (ctx, _("invalid number of arguments passed to '%s'"), "cob_call_entry");
-		cob_stop_run (ctx, 1);
+		cob_runtime_error_ctx (ctx, _("invalid number of arguments passed to '%s'"), "cob_call_entry");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	if (!entry) {
-		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_call_entry");
-		cob_stop_run (ctx, 1);
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_call_entry");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	/* LCOV_EXCL_STOP */
 	unifunc.funcvoid = entry;
@@ -1780,7 +1889,7 @@ cob_call_entry (cob_context *ctx, void *entry, const int argc, ...)
 	cobglobptr->cob_call_params = argc;
 	cobglobptr->cob_call_from_c = 1;
 	cobglobptr->cob_call_name_hash = 0;
-	va_start (ap, argc);
+	va_copy (ap, cob_va_args);
 	for (i = 0; i < argc; ++i) {
 		pargv[i] = va_arg (ap, void *);
 	}
@@ -1862,22 +1971,47 @@ cob_call_entry (cob_context *ctx, void *entry, const int argc, ...)
 	return i;
 }
 
+int
+cob_call_entry_ctx (cob_context *ctx, void *entry, const int argc, ...)
+{
+	va_list		cob_va_args;
+	int	cob_va_ret;
+
+	va_start (cob_va_args, argc);
+	cob_va_ret = cob_call_entry_va_ctx (ctx, entry, argc, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_call_entry without context */
+int
+cob_call_entry (void *entry, const int argc, ...)
+{
+	va_list		cob_va_args;
+	int	cob_va_ret;
+
+	va_start (cob_va_args, argc);
+	cob_va_ret = cob_call_entry_va_ctx (COB_CTX_COMPAT, entry, argc, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
 
 #ifndef COB_WITHOUT_JMP
 /* save jump structure, normally called by cobsetjmp which wraps it into setjmp */
 void *
-cob_savenv (cob_context *ctx, struct cobjmp_buf *jbuf)
+cob_savenv_ctx (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!jbuf) {
-		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_savenv");
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_savenv");
 		cob_hard_failure ();
 	}
 	if (cob_jmp_primed) {
-		cob_runtime_error (ctx, _("multiple call to 'cob_setjmp'"));
+		cob_runtime_error_ctx (ctx, _("multiple call to 'cob_setjmp'"));
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -1885,31 +2019,52 @@ cob_savenv (cob_context *ctx, struct cobjmp_buf *jbuf)
 	return jbuf->cbj_jmp_buf;
 }
 
+/* compatibility: cob_savenv without context */
 void *
-cob_savenv2 (cob_context *ctx, struct cobjmp_buf *jbuf, const int jsize)
+cob_savenv (struct cobjmp_buf *jbuf)
+{
+	return cob_savenv_ctx (COB_CTX_COMPAT, jbuf);
+}
+
+void *
+cob_savenv2_ctx (cob_context *ctx, struct cobjmp_buf *jbuf, const int jsize)
 {
 	COB_UNUSED (jsize);
-	return cob_savenv (ctx, jbuf);
+	return cob_savenv_ctx (ctx, jbuf);
+}
+
+/* compatibility: cob_savenv2 without context */
+void *
+cob_savenv2 (struct cobjmp_buf *jbuf, const int jsize)
+{
+	return cob_savenv2_ctx (COB_CTX_COMPAT, jbuf, jsize);
 }
 
 void
-cob_longjmp (cob_context *ctx, struct cobjmp_buf *jbuf)
+cob_longjmp_ctx (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!jbuf) {
-		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_longjmp");
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_longjmp");
 		cob_hard_failure ();
 	}
 	if (!cob_jmp_primed) {
-		cob_runtime_error (ctx, _("call to 'cob_longjmp' with no prior 'cob_setjmp'"));
+		cob_runtime_error_ctx (ctx, _("call to 'cob_longjmp' with no prior 'cob_setjmp'"));
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
 	cob_jmp_primed = 0;
 	longjmp (jbuf->cbj_jmp_buf, 1);
+}
+
+/* compatibility: cob_longjmp without context */
+void
+cob_longjmp (struct cobjmp_buf *jbuf)
+{
+	cob_longjmp_ctx (COB_CTX_COMPAT, jbuf);
 }
 #endif
 
@@ -2033,7 +2188,7 @@ size_t cob_try_preload (const char* module_name)
 	ret = cache_preload (module_name);
 
 	if (ret == 0) {
-		cob_runtime_warning (COB_CTX_TODO, _("preloading of '%s' failed"), module_name);
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("preloading of '%s' failed"), module_name);
 	}
 	return ret;
 #endif

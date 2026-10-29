@@ -1933,22 +1933,32 @@ COB_EXPIMP void		print_info	(void);
 COB_EXPIMP void		print_info_detailed	(const int);
 COB_EXPIMP int		cob_load_config	(void);
 COB_EXPIMP void		print_runtime_conf	(void);
-COB_EXPIMP cob_field_attr *cob_alloc_attr(cob_context *, int type, int digits, int scale, int flags);
-COB_EXPIMP void		cob_sym_get_field (cob_context *, cob_field *f, cob_symbol *sym, int k);
-COB_EXPIMP int		cob_sym_get_occurs (cob_context *, cob_symbol *sym, int k);
+COB_EXPIMP cob_field_attr *cob_alloc_attr(int type, int digits, int scale, int flags);
+COB_EXPIMP cob_field_attr *cob_alloc_attr_ctx(cob_context *, int type, int digits, int scale, int flags);
+COB_EXPIMP void		cob_sym_get_field (cob_field *f, cob_symbol *sym, int k);
+COB_EXPIMP void		cob_sym_get_field_ctx (cob_context *, cob_field *f, cob_symbol *sym, int k);
+COB_EXPIMP int		cob_sym_get_occurs (cob_symbol *sym, int k);
+COB_EXPIMP int		cob_sym_get_occurs_ctx (cob_context *, cob_symbol *sym, int k);
 COB_EXPIMP void		cob_setup_env (const char *progname); 
 COB_EXPIMP char *	cob_getenv_value (const char *ename);
 COB_EXPIMP const char *	cob_relocate_string (const char *str);
 
-COB_EXPIMP void		cob_set_exception	(cob_context *, const int);
-COB_EXPIMP int		cob_last_exception_is	(cob_context *, const int);
+COB_EXPIMP void		cob_set_exception	(const int);
+COB_EXPIMP void		cob_set_exception_ctx	(cob_context *, const int);
+COB_EXPIMP int		cob_last_exception_is	(const int);
+COB_EXPIMP int		cob_last_exception_is_ctx	(cob_context *, const int);
 
-COB_EXPIMP int		cob_last_exit_code	(cob_context *);
-COB_EXPIMP const char*	cob_last_runtime_error	(cob_context *);
+COB_EXPIMP int		cob_last_exit_code	(void);
+COB_EXPIMP int		cob_last_exit_code_ctx	(cob_context *);
+COB_EXPIMP const char*	cob_last_runtime_error	(void);
+COB_EXPIMP const char*	cob_last_runtime_error_ctx	(cob_context *);
 
-COB_EXPIMP void		cob_runtime_hint	(cob_context *, const char *, ...) COB_A_FORMAT23;
-COB_EXPIMP void		cob_runtime_error	(cob_context *, const char *, ...) COB_A_FORMAT23;
-COB_EXPIMP void		cob_runtime_warning	(cob_context *, const char *, ...) COB_A_FORMAT23;
+COB_EXPIMP void		cob_runtime_hint	(const char *, ...) COB_A_FORMAT12;
+COB_EXPIMP void		cob_runtime_hint_ctx	(cob_context *, const char *, ...) COB_A_FORMAT23;
+COB_EXPIMP void		cob_runtime_error	(const char *, ...) COB_A_FORMAT12;
+COB_EXPIMP void		cob_runtime_error_ctx	(cob_context *, const char *, ...) COB_A_FORMAT23;
+COB_EXPIMP void		cob_runtime_warning	(const char *, ...) COB_A_FORMAT12;
+COB_EXPIMP void		cob_runtime_warning_ctx	(cob_context *, const char *, ...) COB_A_FORMAT23;
 
 COB_EXPIMP void		cob_cleanup_thread (void);
 
@@ -1965,18 +1975,27 @@ COB_EXPIMP cob_context	*cob_get_current_context	(void);
 COB_EXPIMP cob_context	*cob_context_enter	(cob_context *);
 COB_EXPIMP void		cob_context_leave	(cob_context *);
 
-COB_EXPIMP int	cob_module_global_enter	(cob_context **, cob_module **,
+COB_EXPIMP int	cob_module_global_enter	(cob_module **, cob_global **,
+						 const int, const int, const unsigned int *);
+COB_EXPIMP int	cob_module_global_enter_ctx	(cob_context **, cob_module **,
 						 cob_global **, const int, const int,
 						 const unsigned int *);
-COB_EXPIMP void	cob_module_enter		(cob_context **, cob_module **,
+COB_EXPIMP void	cob_module_enter		(cob_module **, cob_global **,
+						 const int);
+COB_EXPIMP void	cob_module_enter_ctx		(cob_context **, cob_module **,
 						 cob_global **, const int);
-COB_EXPIMP void	cob_module_leave		(cob_context *, cob_module *);
+COB_EXPIMP void	cob_module_leave		(cob_module *);
+COB_EXPIMP void	cob_module_leave_ctx		(cob_context *, cob_module *);
 
-COB_EXPIMP void	cob_module_free	(cob_context *, cob_module **);
+COB_EXPIMP void	cob_module_free	(cob_module **);
+COB_EXPIMP void	cob_module_free_ctx	(cob_context *, cob_module **);
 
-DECLNORET COB_EXPIMP void	cob_stop_run	(cob_context *, const int) COB_A_NORETURN;
-DECLNORET COB_EXPIMP void	cob_stop_error	(cob_context *) COB_A_NORETURN;
-DECLNORET COB_EXPIMP void	cob_fatal_error	(cob_context *, const enum cob_fatal_error) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_stop_run	(const int) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_stop_run_ctx	(cob_context *, const int) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_stop_error	(void) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_stop_error_ctx	(cob_context *) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_fatal_error	(const enum cob_fatal_error) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_fatal_error_ctx	(cob_context *, const enum cob_fatal_error) COB_A_NORETURN;
 DECLNORET COB_EXPIMP void	cob_hard_failure_internal (const char *) COB_A_NORETURN;
 DECLNORET COB_EXPIMP void	cob_hard_failure (void) COB_A_NORETURN;
 
@@ -1985,57 +2004,96 @@ COB_EXPIMP void	*cob_realloc			(void *, const size_t, const size_t) COB_A_MALLOC
 COB_EXPIMP char	*cob_strdup				(const char *);
 COB_EXPIMP void	cob_free			(void *);
 COB_EXPIMP void	*cob_fast_malloc		(const size_t) COB_A_MALLOC;
-COB_EXPIMP void	*cob_cache_malloc		(cob_context *, const size_t) COB_A_MALLOC;
-COB_EXPIMP void	*cob_cache_realloc		(cob_context *, void *, const size_t);
-COB_EXPIMP void	cob_cache_free			(cob_context *, void *);
+COB_EXPIMP void	*cob_cache_malloc		(const size_t) COB_A_MALLOC;
+COB_EXPIMP void	*cob_cache_malloc_ctx		(cob_context *, const size_t) COB_A_MALLOC;
+COB_EXPIMP void	*cob_cache_realloc		(void *, const size_t);
+COB_EXPIMP void	*cob_cache_realloc_ctx		(cob_context *, void *, const size_t);
+COB_EXPIMP void	cob_cache_free			(void *);
+COB_EXPIMP void	cob_cache_free_ctx			(cob_context *, void *);
 
-COB_EXPIMP void	cob_set_locale			(cob_context *, cob_field *, const int);
+COB_EXPIMP void	cob_set_locale			(cob_field *, const int);
+COB_EXPIMP void	cob_set_locale_ctx			(cob_context *, cob_field *, const int);
 
 COB_EXPIMP int 	cob_setenv		(const char *, const char *, int);
-COB_EXPIMP int 	cob_unsetenv		(cob_context *, const char *);
+COB_EXPIMP int 	cob_unsetenv		(const char *);
+COB_EXPIMP int 	cob_unsetenv_ctx		(cob_context *, const char *);
 COB_EXPIMP char	*cob_getenv_direct		(const char *);
 COB_EXPIMP char *cob_expand_env_string	(const char *);
 COB_EXPIMP char	*cob_getenv			(const char *);
-COB_EXPIMP int	cob_putenv			(cob_context *, char *);
-COB_EXPIMP cob_field	*cob_function_return (cob_context *, cob_field *);
+COB_EXPIMP int	cob_putenv			(char *);
+COB_EXPIMP int	cob_putenv_ctx			(cob_context *, char *);
+COB_EXPIMP cob_field	*cob_function_return (cob_field *);
+COB_EXPIMP cob_field	*cob_function_return_ctx (cob_context *, cob_field *);
 
 COB_EXPIMP void	cob_check_version		(const char *, const char *,
 						 const int);
 
-COB_EXPIMP struct cob_func_loc *cob_save_func	(cob_context *, cob_field **,
+COB_EXPIMP struct cob_func_loc *cob_save_func	(cob_field **,
 									const int, const int, ...);
-COB_EXPIMP void	cob_restore_func		(cob_context *, struct cob_func_loc *);
+COB_EXPIMP struct cob_func_loc *cob_save_func_ctx	(cob_context *, cob_field **,
+									const int, const int, ...);
+COB_EXPIMP void	cob_restore_func		(struct cob_func_loc *);
+COB_EXPIMP void	cob_restore_func_ctx		(cob_context *, struct cob_func_loc *);
 
-COB_EXPIMP void	cob_accept_arg_number		(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_arg_value		(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_command_line		(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_date			(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_date_yyyymmdd	(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_day			(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_day_yyyyddd		(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_day_of_week		(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_environment		(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_exception_status	(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_time			(cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_microsecond_time (cob_context *, cob_field *);
-COB_EXPIMP void	cob_accept_user_name		(cob_context *, cob_field *);
-COB_EXPIMP void	cob_display_command_line	(cob_context *, cob_field *);
-COB_EXPIMP void	cob_display_environment		(cob_context *, const cob_field *);
-COB_EXPIMP void	cob_display_env_value		(cob_context *, const cob_field *);
-COB_EXPIMP void	cob_display_arg_number		(cob_context *, cob_field *);
-COB_EXPIMP char *cob_get_env (cob_context *, const char *envname, char *envused);
-COB_EXPIMP void	cob_get_environment		(cob_context *, const cob_field *, cob_field *);
-COB_EXPIMP void	cob_set_environment		(cob_context *, const cob_field *,
+COB_EXPIMP void	cob_accept_arg_number		(cob_field *);
+COB_EXPIMP void	cob_accept_arg_number_ctx		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_arg_value		(cob_field *);
+COB_EXPIMP void	cob_accept_arg_value_ctx		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_command_line		(cob_field *);
+COB_EXPIMP void	cob_accept_command_line_ctx		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_date			(cob_field *);
+COB_EXPIMP void	cob_accept_date_ctx			(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_date_yyyymmdd	(cob_field *);
+COB_EXPIMP void	cob_accept_date_yyyymmdd_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_day			(cob_field *);
+COB_EXPIMP void	cob_accept_day_ctx			(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_day_yyyyddd		(cob_field *);
+COB_EXPIMP void	cob_accept_day_yyyyddd_ctx		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_day_of_week		(cob_field *);
+COB_EXPIMP void	cob_accept_day_of_week_ctx		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_environment		(cob_field *);
+COB_EXPIMP void	cob_accept_environment_ctx		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_exception_status	(cob_field *);
+COB_EXPIMP void	cob_accept_exception_status_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_time			(cob_field *);
+COB_EXPIMP void	cob_accept_time_ctx			(cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_microsecond_time (cob_field *);
+COB_EXPIMP void	cob_accept_microsecond_time_ctx (cob_context *, cob_field *);
+COB_EXPIMP void	cob_accept_user_name		(cob_field *);
+COB_EXPIMP void	cob_accept_user_name_ctx		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_display_command_line	(cob_field *);
+COB_EXPIMP void	cob_display_command_line_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_display_environment		(const cob_field *);
+COB_EXPIMP void	cob_display_environment_ctx		(cob_context *, const cob_field *);
+COB_EXPIMP void	cob_display_env_value		(const cob_field *);
+COB_EXPIMP void	cob_display_env_value_ctx		(cob_context *, const cob_field *);
+COB_EXPIMP void	cob_display_arg_number		(cob_field *);
+COB_EXPIMP void	cob_display_arg_number_ctx		(cob_context *, cob_field *);
+COB_EXPIMP char *cob_get_env (const char *envname, char *envused);
+COB_EXPIMP char *cob_get_env_ctx (cob_context *, const char *envname, char *envused);
+COB_EXPIMP void	cob_get_environment		(const cob_field *, cob_field *);
+COB_EXPIMP void	cob_get_environment_ctx		(cob_context *, const cob_field *, cob_field *);
+COB_EXPIMP void	cob_set_environment		(const cob_field *,
 						 const cob_field *);
-COB_EXPIMP void	cob_chain_setup			(cob_context *, void *, const size_t,
+COB_EXPIMP void	cob_set_environment_ctx		(cob_context *, const cob_field *,
+						 const cob_field *);
+COB_EXPIMP void	cob_chain_setup			(void *, const size_t,
 						 const size_t);
-COB_EXPIMP void	cob_allocate			(cob_context *, unsigned char **, cob_field *,
+COB_EXPIMP void	cob_chain_setup_ctx			(cob_context *, void *, const size_t,
+						 const size_t);
+COB_EXPIMP void	cob_allocate			(unsigned char **, cob_field *,
 						 cob_field *, cob_field *);
-COB_EXPIMP void	cob_free_alloc			(cob_context *, unsigned char **, unsigned char *);
-COB_EXPIMP void	cob_continue_after		(cob_context *, cob_field *);
+COB_EXPIMP void	cob_allocate_ctx			(cob_context *, unsigned char **, cob_field *,
+						 cob_field *, cob_field *);
+COB_EXPIMP void	cob_free_alloc			(unsigned char **, unsigned char *);
+COB_EXPIMP void	cob_free_alloc_ctx			(cob_context *, unsigned char **, unsigned char *);
+COB_EXPIMP void	cob_continue_after		(cob_field *);
+COB_EXPIMP void	cob_continue_after_ctx		(cob_context *, cob_field *);
 COB_EXPIMP int	cob_extern_init			(void);
 COB_EXPIMP int	cob_tidy			(void);
-COB_EXPIMP char	*cob_command_line		(cob_context *, int, int *, char ***,
+COB_EXPIMP char	*cob_command_line		(int, int *, char ***,
+						 char ***, char **);
+COB_EXPIMP char	*cob_command_line_ctx		(cob_context *, int, int *, char ***,
 						 char ***, char **);
 
 COB_EXPIMP void	cob_incr_temp_iteration 	(void);
@@ -2088,17 +2146,27 @@ COB_EXPIMP int	cob_sys_extfh		(const void *, void *);
 
 /* Utilities */
 
-COB_EXPIMP void	cob_trace_sect		(cob_context *, const char *);
-COB_EXPIMP void	cob_trace_para		(cob_context *, const char *);
-COB_EXPIMP void	cob_trace_entry		(cob_context *, const char *);
-COB_EXPIMP void	cob_trace_exit		(cob_context *, const char *);
-COB_EXPIMP void	cob_trace_statement		(cob_context *, const enum cob_statement);
+COB_EXPIMP void	cob_trace_sect		(const char *);
+COB_EXPIMP void	cob_trace_sect_ctx		(cob_context *, const char *);
+COB_EXPIMP void	cob_trace_para		(const char *);
+COB_EXPIMP void	cob_trace_para_ctx		(cob_context *, const char *);
+COB_EXPIMP void	cob_trace_entry		(const char *);
+COB_EXPIMP void	cob_trace_entry_ctx		(cob_context *, const char *);
+COB_EXPIMP void	cob_trace_exit		(const char *);
+COB_EXPIMP void	cob_trace_exit_ctx		(cob_context *, const char *);
+COB_EXPIMP void	cob_trace_statement		(const enum cob_statement);
+COB_EXPIMP void	cob_trace_statement_ctx		(cob_context *, const enum cob_statement);
 
-COB_EXPIMP void			*cob_external_addr	(cob_context *, const char *, const int);
-COB_EXPIMP unsigned char	*cob_get_pointer	(cob_context *, const void *);
-COB_EXPIMP void			cob_ready_trace		(cob_context *);
-COB_EXPIMP void			cob_reset_trace		(cob_context *);
-COB_EXPIMP void			cob_nop (cob_context *);
+COB_EXPIMP void			*cob_external_addr	(const char *, const int);
+COB_EXPIMP void			*cob_external_addr_ctx	(cob_context *, const char *, const int);
+COB_EXPIMP unsigned char	*cob_get_pointer	(const void *);
+COB_EXPIMP unsigned char	*cob_get_pointer_ctx	(cob_context *, const void *);
+COB_EXPIMP void			cob_ready_trace		(void);
+COB_EXPIMP void			cob_ready_trace_ctx		(cob_context *);
+COB_EXPIMP void			cob_reset_trace		(void);
+COB_EXPIMP void			cob_reset_trace_ctx		(cob_context *);
+COB_EXPIMP void			cob_nop (void);
+COB_EXPIMP void			cob_nop_ctx (cob_context *);
 
 /* Call from outside to set/read/re-evaluate libcob options */
 enum cob_runtime_option_switch {
@@ -2108,11 +2176,15 @@ enum cob_runtime_option_switch {
 	COB_SET_RUNTIME_DISPLAY_PUNCH_FILE = 3,	/* 'p' is  FILE *  */
 	COB_SET_RUNTIME_DUMP_FILE = 4	/* 'p' is  FILE *  */
 };
-COB_EXPIMP void			cob_set_runtime_option		(cob_context *, enum cob_runtime_option_switch opt, void *p);
-COB_EXPIMP void			*cob_get_runtime_option		(cob_context *, enum cob_runtime_option_switch opt);
+COB_EXPIMP void			cob_set_runtime_option		(enum cob_runtime_option_switch opt, void *p);
+COB_EXPIMP void			cob_set_runtime_option_ctx		(cob_context *, enum cob_runtime_option_switch opt, void *p);
+COB_EXPIMP void			*cob_get_runtime_option		(enum cob_runtime_option_switch opt);
+COB_EXPIMP void			*cob_get_runtime_option_ctx		(cob_context *, enum cob_runtime_option_switch opt);
 
-COB_EXPIMP void			cob_stack_trace (cob_context *, void *target);		/* 'target' is FILE *  */
-COB_EXPIMP void			cob_backtrace	(cob_context *, void *target, int count);		/* 'target' is FILE *  */
+COB_EXPIMP void			cob_stack_trace (void *target);		/* 'target' is FILE *  */
+COB_EXPIMP void			cob_stack_trace_ctx (cob_context *, void *target);		/* 'target' is FILE *  */
+COB_EXPIMP void			cob_backtrace	(void *target, int count);		/* 'target' is FILE *  */
+COB_EXPIMP void			cob_backtrace_ctx	(cob_context *, void *target, int count);		/* 'target' is FILE *  */
 
 #define COB_GET_LINE_NUM(n) ( n & 0xFFFFF )
 #define COB_GET_FILE_NUM(n) ( (n >> 20) & 0xFFF)
@@ -2149,81 +2221,135 @@ COB_EXPIMP void	cob_raise		(int);
 
 /* Switch */
 
-COB_EXPIMP int	cob_get_switch		(cob_context *, const int);
-COB_EXPIMP void	cob_set_switch		(cob_context *, const int, const int);
+COB_EXPIMP int	cob_get_switch		(const int);
+COB_EXPIMP int	cob_get_switch_ctx		(cob_context *, const int);
+COB_EXPIMP void	cob_set_switch		(const int, const int);
+COB_EXPIMP void	cob_set_switch_ctx		(cob_context *, const int, const int);
 
 /* Comparison */
 
-COB_EXPIMP int	cob_cmp			(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP int	cob_cmp			(cob_field *, cob_field *);
+COB_EXPIMP int	cob_cmp_ctx			(cob_context *, cob_field *, cob_field *);
 
 /* Class check */
 
-COB_EXPIMP int	cob_is_omitted		(cob_context *, const cob_field *);
-COB_EXPIMP int	cob_is_numeric		(cob_context *, const cob_field *);
-COB_EXPIMP int	cob_is_alpha		(cob_context *, const cob_field *);
-COB_EXPIMP int	cob_is_upper		(cob_context *, const cob_field *);
-COB_EXPIMP int	cob_is_lower		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_omitted		(const cob_field *);
+COB_EXPIMP int	cob_is_omitted_ctx		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_numeric		(const cob_field *);
+COB_EXPIMP int	cob_is_numeric_ctx		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_alpha		(const cob_field *);
+COB_EXPIMP int	cob_is_alpha_ctx		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_upper		(const cob_field *);
+COB_EXPIMP int	cob_is_upper_ctx		(cob_context *, const cob_field *);
+COB_EXPIMP int	cob_is_lower		(const cob_field *);
+COB_EXPIMP int	cob_is_lower_ctx		(cob_context *, const cob_field *);
 
 /* Table sort */
 
-COB_EXPIMP void	cob_table_sort_init	(cob_context *, const size_t, const unsigned char *);
-COB_EXPIMP void	cob_table_sort_init_key	(cob_context *, cob_field *, const int,
+COB_EXPIMP void	cob_table_sort_init	(const size_t, const unsigned char *);
+COB_EXPIMP void	cob_table_sort_init_ctx	(cob_context *, const size_t, const unsigned char *);
+COB_EXPIMP void	cob_table_sort_init_key	(cob_field *, const int,
 					 const unsigned int);
-COB_EXPIMP void	cob_table_sort		(cob_context *, cob_field *, const int);
+COB_EXPIMP void	cob_table_sort_init_key_ctx	(cob_context *, cob_field *, const int,
+					 const unsigned int);
+COB_EXPIMP void	cob_table_sort		(cob_field *, const int);
+COB_EXPIMP void	cob_table_sort_ctx		(cob_context *, cob_field *, const int);
 
 /* Run-time error checking */
 
-COB_EXPIMP void	cob_check_numeric	(cob_context *, const cob_field *, const char *);
-COB_EXPIMP void	cob_correct_numeric	(cob_context *, cob_field *);
-COB_EXPIMP void	cob_check_based		(cob_context *, const unsigned char *, const char *);
-COB_EXPIMP void	cob_check_linkage	(cob_context *, const unsigned char *, const char *);
-COB_EXPIMP void	cob_check_odo		(cob_context *, const int, const int, const int,
+COB_EXPIMP void	cob_check_numeric	(const cob_field *, const char *);
+COB_EXPIMP void	cob_check_numeric_ctx	(cob_context *, const cob_field *, const char *);
+COB_EXPIMP void	cob_correct_numeric	(cob_field *);
+COB_EXPIMP void	cob_correct_numeric_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_check_based		(const unsigned char *, const char *);
+COB_EXPIMP void	cob_check_based_ctx		(cob_context *, const unsigned char *, const char *);
+COB_EXPIMP void	cob_check_linkage	(const unsigned char *, const char *);
+COB_EXPIMP void	cob_check_linkage_ctx	(cob_context *, const unsigned char *, const char *);
+COB_EXPIMP void	cob_check_odo		(const int, const int, const int,
 					 const char *, const char *);
-COB_EXPIMP void	cob_check_subscript	(cob_context *, const int, const int,
+COB_EXPIMP void	cob_check_odo_ctx		(cob_context *, const int, const int, const int,
+					 const char *, const char *);
+COB_EXPIMP void	cob_check_subscript	(const int, const int,
 					 const char *, const int);
-COB_EXPIMP void	cob_check_ref_mod_detailed	(cob_context *, const char *, const int, const int,
+COB_EXPIMP void	cob_check_subscript_ctx	(cob_context *, const int, const int,
+					 const char *, const int);
+COB_EXPIMP void	cob_check_ref_mod_detailed	(const char *, const int, const int,
 					 const int, const int, const int);
-COB_EXPIMP void	cob_check_ref_mod_minimal	(cob_context *, const char *,
+COB_EXPIMP void	cob_check_ref_mod_detailed_ctx	(cob_context *, const char *, const int, const int,
+					 const int, const int, const int);
+COB_EXPIMP void	cob_check_ref_mod_minimal	(const char *,
 					 const int, const int);
-COB_EXPIMP void	cob_check_beyond_exit (cob_context *, const char *);
-COB_EXPIMP void	cob_check_fence 	(cob_context *, const char *, const char *,
+COB_EXPIMP void	cob_check_ref_mod_minimal_ctx	(cob_context *, const char *,
+					 const int, const int);
+COB_EXPIMP void	cob_check_beyond_exit (const char *);
+COB_EXPIMP void	cob_check_beyond_exit_ctx (cob_context *, const char *);
+COB_EXPIMP void	cob_check_fence 	(const char *, const char *,
+					 const enum cob_statement, const char *);
+COB_EXPIMP void	cob_check_fence_ctx 	(cob_context *, const char *, const char *,
 					 const enum cob_statement, const char *);
 
 
 /* Comparison functions */
-COB_EXPIMP int	cob_numeric_cmp		(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP int	cob_bcd_cmp		(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP int	cob_numeric_display_cmp		(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP int	cob_numeric_display_cmp_zero	(cob_context *, cob_field *);
-COB_EXPIMP int	cob_bcd_cmp_zero	(cob_context *, cob_field *);
+COB_EXPIMP int	cob_numeric_cmp		(cob_field *, cob_field *);
+COB_EXPIMP int	cob_numeric_cmp_ctx		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP int	cob_bcd_cmp		(cob_field *, cob_field *);
+COB_EXPIMP int	cob_bcd_cmp_ctx		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP int	cob_numeric_display_cmp		(cob_field *, cob_field *);
+COB_EXPIMP int	cob_numeric_display_cmp_ctx		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP int	cob_numeric_display_cmp_zero	(cob_field *);
+COB_EXPIMP int	cob_numeric_display_cmp_zero_ctx	(cob_context *, cob_field *);
+COB_EXPIMP int	cob_bcd_cmp_zero	(cob_field *);
+COB_EXPIMP int	cob_bcd_cmp_zero_ctx	(cob_context *, cob_field *);
 
 /*******************************/
 /* Functions in strings.c */
 
-COB_EXPIMP void cob_inspect_init	(cob_context *, cob_field *, const cob_u32_t);
-COB_EXPIMP void cob_inspect_init_converting	(cob_context *, cob_field *);
-COB_EXPIMP void cob_inspect_start	(cob_context *);
-COB_EXPIMP void cob_inspect_before	(cob_context *, const cob_field *);
-COB_EXPIMP void cob_inspect_after	(cob_context *, const cob_field *);
-COB_EXPIMP void cob_inspect_characters	(cob_context *, cob_field *);
-COB_EXPIMP void cob_inspect_all		(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP void cob_inspect_leading	(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP void cob_inspect_first	(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP void cob_inspect_trailing	(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP void cob_inspect_converting	(cob_context *, const cob_field *, const cob_field *);
-COB_EXPIMP void cob_inspect_translating (cob_context *, const unsigned char *);
-COB_EXPIMP void cob_inspect_finish	(cob_context *);
+COB_EXPIMP void cob_inspect_init	(cob_field *, const cob_u32_t);
+COB_EXPIMP void cob_inspect_init_ctx	(cob_context *, cob_field *, const cob_u32_t);
+COB_EXPIMP void cob_inspect_init_converting	(cob_field *);
+COB_EXPIMP void cob_inspect_init_converting_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void cob_inspect_start	(void);
+COB_EXPIMP void cob_inspect_start_ctx	(cob_context *);
+COB_EXPIMP void cob_inspect_before	(const cob_field *);
+COB_EXPIMP void cob_inspect_before_ctx	(cob_context *, const cob_field *);
+COB_EXPIMP void cob_inspect_after	(const cob_field *);
+COB_EXPIMP void cob_inspect_after_ctx	(cob_context *, const cob_field *);
+COB_EXPIMP void cob_inspect_characters	(cob_field *);
+COB_EXPIMP void cob_inspect_characters_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void cob_inspect_all		(cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_all_ctx		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_leading	(cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_leading_ctx	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_first	(cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_first_ctx	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_trailing	(cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_trailing_ctx	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_inspect_converting	(const cob_field *, const cob_field *);
+COB_EXPIMP void cob_inspect_converting_ctx	(cob_context *, const cob_field *, const cob_field *);
+COB_EXPIMP void cob_inspect_translating (const unsigned char *);
+COB_EXPIMP void cob_inspect_translating_ctx (cob_context *, const unsigned char *);
+COB_EXPIMP void cob_inspect_finish	(void);
+COB_EXPIMP void cob_inspect_finish_ctx	(cob_context *);
 
-COB_EXPIMP void cob_string_init		(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP void cob_string_delimited	(cob_context *, cob_field *);
-COB_EXPIMP void cob_string_append	(cob_context *, cob_field *);
-COB_EXPIMP void cob_string_finish	(cob_context *);
+COB_EXPIMP void cob_string_init		(cob_field *, cob_field *);
+COB_EXPIMP void cob_string_init_ctx		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void cob_string_delimited	(cob_field *);
+COB_EXPIMP void cob_string_delimited_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void cob_string_append	(cob_field *);
+COB_EXPIMP void cob_string_append_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void cob_string_finish	(void);
+COB_EXPIMP void cob_string_finish_ctx	(cob_context *);
 
-COB_EXPIMP void cob_unstring_init	(cob_context *, cob_field *, cob_field *, const size_t);
-COB_EXPIMP void cob_unstring_delimited	(cob_context *, cob_field *, const cob_u32_t);
-COB_EXPIMP void cob_unstring_into	(cob_context *, cob_field *, cob_field *, cob_field *);
-COB_EXPIMP void cob_unstring_tallying	(cob_context *, cob_field *);
-COB_EXPIMP void cob_unstring_finish	(cob_context *);
+COB_EXPIMP void cob_unstring_init	(cob_field *, cob_field *, const size_t);
+COB_EXPIMP void cob_unstring_init_ctx	(cob_context *, cob_field *, cob_field *, const size_t);
+COB_EXPIMP void cob_unstring_delimited	(cob_field *, const cob_u32_t);
+COB_EXPIMP void cob_unstring_delimited_ctx	(cob_context *, cob_field *, const cob_u32_t);
+COB_EXPIMP void cob_unstring_into	(cob_field *, cob_field *, cob_field *);
+COB_EXPIMP void cob_unstring_into_ctx	(cob_context *, cob_field *, cob_field *, cob_field *);
+COB_EXPIMP void cob_unstring_tallying	(cob_field *);
+COB_EXPIMP void cob_unstring_tallying_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void cob_unstring_finish	(void);
+COB_EXPIMP void cob_unstring_finish_ctx	(cob_context *);
 
 COB_EXPIMP const char *COB_SPACES_ALPHABETIC;	/* PIC X/A/U SPACES */
 #define COB_SPACES_ALPHABETIC_BYTE_LENGTH 1024
@@ -2235,102 +2361,183 @@ COB_EXPIMP const char *COB_ZEROES_ALPHABETIC;	/* PIC X/A/U ZEROES */
 /*   Functions in move.c       */
 /*******************************/
 
-COB_EXPIMP void		cob_move	(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP void		cob_move_ibm	(cob_context *, void *, void *, const int);
-COB_EXPIMP void		cob_init_table	(cob_context *, void *, const size_t, const size_t);
-COB_EXPIMP void		cob_set_int	(cob_context *, cob_field *, const int);
-COB_EXPIMP int		cob_get_int	(cob_context *, cob_field *);
-COB_EXPIMP void		cob_set_llint   (cob_context *, cob_field *, cob_s64_t, const cob_s64_t);
-COB_EXPIMP void		cob_set_llcon   (cob_context *, cob_field *, const cob_s64_t);
-COB_EXPIMP void		cob_set_compx   (cob_context *, cob_field *, const cob_s64_t);
-COB_EXPIMP cob_s64_t	cob_get_llint	(cob_context *, cob_field *);
-COB_EXPIMP void		cob_alloc_move(cob_context *, cob_field *, cob_field *, const int);
+COB_EXPIMP void		cob_move	(cob_field *, cob_field *);
+COB_EXPIMP void		cob_move_ctx	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void		cob_move_ibm	(void *, void *, const int);
+COB_EXPIMP void		cob_move_ibm_ctx	(cob_context *, void *, void *, const int);
+COB_EXPIMP void		cob_init_table	(void *, const size_t, const size_t);
+COB_EXPIMP void		cob_init_table_ctx	(cob_context *, void *, const size_t, const size_t);
+COB_EXPIMP void		cob_set_int	(cob_field *, const int);
+COB_EXPIMP void		cob_set_int_ctx	(cob_context *, cob_field *, const int);
+COB_EXPIMP int		cob_get_int	(cob_field *);
+COB_EXPIMP int		cob_get_int_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void		cob_set_llint   (cob_field *, cob_s64_t, const cob_s64_t);
+COB_EXPIMP void		cob_set_llint_ctx   (cob_context *, cob_field *, cob_s64_t, const cob_s64_t);
+COB_EXPIMP void		cob_set_llcon   (cob_field *, const cob_s64_t);
+COB_EXPIMP void		cob_set_llcon_ctx   (cob_context *, cob_field *, const cob_s64_t);
+COB_EXPIMP void		cob_set_compx   (cob_field *, const cob_s64_t);
+COB_EXPIMP void		cob_set_compx_ctx   (cob_context *, cob_field *, const cob_s64_t);
+COB_EXPIMP cob_s64_t	cob_get_llint	(cob_field *);
+COB_EXPIMP cob_s64_t	cob_get_llint_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void		cob_alloc_move(cob_field *, cob_field *, const int);
+COB_EXPIMP void		cob_alloc_move_ctx(cob_context *, cob_field *, cob_field *, const int);
 /*************************************************************************/
 /* Functions in move.c for C access to COBOL data - GnuCOBOL COBOL-C-API */
 /*************************************************************************/
-COB_EXPIMP char *	cob_get_picx(cob_context *,  void *cbldata, size_t len, void *charfld, size_t charlen);
-COB_EXPIMP cob_s64_t	cob_get_s64_comp3(cob_context *, void *cbldata, int len);
-COB_EXPIMP cob_s64_t	cob_get_s64_comp5(cob_context *, void *cbldata, int len);
-COB_EXPIMP cob_s64_t	cob_get_s64_compx(cob_context *, void *cbldata, int len);
-COB_EXPIMP cob_s64_t	cob_get_s64_pic9 (cob_context *, void *cbldata, int len);
-COB_EXPIMP cob_u64_t	cob_get_u64_comp3(cob_context *, void *cbldata, int len);
-COB_EXPIMP cob_u64_t	cob_get_u64_comp5(cob_context *, void *cbldata, int len);
-COB_EXPIMP cob_u64_t	cob_get_u64_comp6(cob_context *, void *cbldata, int len);
-COB_EXPIMP cob_u64_t	cob_get_u64_compx(cob_context *, void *cbldata, int len);
-COB_EXPIMP cob_u64_t	cob_get_u64_pic9 (cob_context *, void *cbldata, int len);
-COB_EXPIMP float 	cob_get_comp1(cob_context *, void *cbldata);
-COB_EXPIMP double	cob_get_comp2(cob_context *, void *cbldata);
-COB_EXPIMP void		cob_put_comp1(cob_context *, float val, void *cbldata);
-COB_EXPIMP void		cob_put_comp2(cob_context *, double val, void *cbldata);
-COB_EXPIMP void 	cob_put_picx(cob_context *,  void *cbldata, size_t len, void *string);
-COB_EXPIMP void		cob_put_s64_comp3(cob_context *, cob_s64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_s64_comp5(cob_context *, cob_s64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_s64_compx(cob_context *, cob_s64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_s64_pic9 (cob_context *, cob_s64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_u64_comp3(cob_context *, cob_u64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_u64_comp5(cob_context *, cob_u64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_u64_comp6(cob_context *, cob_u64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_u64_compx(cob_context *, cob_u64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_u64_pic9 (cob_context *, cob_u64_t val, void *cbldata, int len);
-COB_EXPIMP void		cob_put_pointer(cob_context *, void *val, void *cbldata);
+COB_EXPIMP char *	cob_get_picx(void *cbldata, size_t len, void *charfld, size_t charlen);
+COB_EXPIMP char *	cob_get_picx_ctx(cob_context *,  void *cbldata, size_t len, void *charfld, size_t charlen);
+COB_EXPIMP cob_s64_t	cob_get_s64_comp3(void *cbldata, int len);
+COB_EXPIMP cob_s64_t	cob_get_s64_comp3_ctx(cob_context *, void *cbldata, int len);
+COB_EXPIMP cob_s64_t	cob_get_s64_comp5(void *cbldata, int len);
+COB_EXPIMP cob_s64_t	cob_get_s64_comp5_ctx(cob_context *, void *cbldata, int len);
+COB_EXPIMP cob_s64_t	cob_get_s64_compx(void *cbldata, int len);
+COB_EXPIMP cob_s64_t	cob_get_s64_compx_ctx(cob_context *, void *cbldata, int len);
+COB_EXPIMP cob_s64_t	cob_get_s64_pic9 (void *cbldata, int len);
+COB_EXPIMP cob_s64_t	cob_get_s64_pic9_ctx (cob_context *, void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_comp3(void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_comp3_ctx(cob_context *, void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_comp5(void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_comp5_ctx(cob_context *, void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_comp6(void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_comp6_ctx(cob_context *, void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_compx(void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_compx_ctx(cob_context *, void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_pic9 (void *cbldata, int len);
+COB_EXPIMP cob_u64_t	cob_get_u64_pic9_ctx (cob_context *, void *cbldata, int len);
+COB_EXPIMP float 	cob_get_comp1(void *cbldata);
+COB_EXPIMP float 	cob_get_comp1_ctx(cob_context *, void *cbldata);
+COB_EXPIMP double	cob_get_comp2(void *cbldata);
+COB_EXPIMP double	cob_get_comp2_ctx(cob_context *, void *cbldata);
+COB_EXPIMP void		cob_put_comp1(float val, void *cbldata);
+COB_EXPIMP void		cob_put_comp1_ctx(cob_context *, float val, void *cbldata);
+COB_EXPIMP void		cob_put_comp2(double val, void *cbldata);
+COB_EXPIMP void		cob_put_comp2_ctx(cob_context *, double val, void *cbldata);
+COB_EXPIMP void 	cob_put_picx(void *cbldata, size_t len, void *string);
+COB_EXPIMP void 	cob_put_picx_ctx(cob_context *,  void *cbldata, size_t len, void *string);
+COB_EXPIMP void		cob_put_s64_comp3(cob_s64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_s64_comp3_ctx(cob_context *, cob_s64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_s64_comp5(cob_s64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_s64_comp5_ctx(cob_context *, cob_s64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_s64_compx(cob_s64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_s64_compx_ctx(cob_context *, cob_s64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_s64_pic9 (cob_s64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_s64_pic9_ctx (cob_context *, cob_s64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_comp3(cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_comp3_ctx(cob_context *, cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_comp5(cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_comp5_ctx(cob_context *, cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_comp6(cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_comp6_ctx(cob_context *, cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_compx(cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_compx_ctx(cob_context *, cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_pic9 (cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_u64_pic9_ctx (cob_context *, cob_u64_t val, void *cbldata, int len);
+COB_EXPIMP void		cob_put_pointer(void *val, void *cbldata);
+COB_EXPIMP void		cob_put_pointer_ctx(cob_context *, void *val, void *cbldata);
 
 
 /**************************/
 /* Functions in numeric.c */
 
 #ifndef COB_WITHOUT_DECIMAL
-COB_EXPIMP void	cob_decimal_init	(cob_context *, cob_decimal *);
-COB_EXPIMP void	cob_decimal_clear	(cob_context *, cob_decimal *);
-COB_EXPIMP void cob_decimal_set_llint	(cob_context *, cob_decimal *, const cob_s64_t);
-COB_EXPIMP void cob_decimal_set_ullint	(cob_context *, cob_decimal *, const cob_u64_t);
-COB_EXPIMP void	cob_decimal_set_field	(cob_context *, cob_decimal *, cob_field *);
-COB_EXPIMP int	cob_decimal_get_field	(cob_context *, cob_decimal *, cob_field *, const int);
-COB_EXPIMP void	cob_decimal_set		(cob_context *, cob_decimal *, cob_decimal *);	/* to be removed in 4.x */
-COB_EXPIMP void	cob_decimal_add		(cob_context *, cob_decimal *, cob_decimal *);
-COB_EXPIMP void	cob_decimal_sub		(cob_context *, cob_decimal *, cob_decimal *);
-COB_EXPIMP void	cob_decimal_mul		(cob_context *, cob_decimal *, cob_decimal *);
-COB_EXPIMP void	cob_decimal_div		(cob_context *, cob_decimal *, cob_decimal *);
-COB_EXPIMP void	cob_decimal_pow		(cob_context *, cob_decimal *, cob_decimal *);
-COB_EXPIMP int	cob_decimal_cmp		(cob_context *, cob_decimal *, cob_decimal *);
-COB_EXPIMP void	cob_decimal_align(cob_context *, cob_decimal *, const int);
-COB_EXPIMP void cob_logical_not (cob_context *, cob_decimal *d0, cob_decimal *d1);
-COB_EXPIMP void cob_logical_and (cob_context *, cob_decimal *d0, cob_decimal *d1);
-COB_EXPIMP void cob_logical_xor (cob_context *, cob_decimal *d0, cob_decimal *d1);
-COB_EXPIMP void cob_logical_or  (cob_context *, cob_decimal *d0, cob_decimal *d1);
-COB_EXPIMP void cob_logical_left  (cob_context *, cob_decimal *d0, cob_decimal *d1);
-COB_EXPIMP void cob_logical_right (cob_context *, cob_decimal *d0, cob_decimal *d1);
-COB_EXPIMP void cob_logical_left_c  (cob_context *, cob_decimal *d0, cob_decimal *d1, int sz);
-COB_EXPIMP void cob_logical_right_c (cob_context *, cob_decimal *d0, cob_decimal *d1, int sz);
+COB_EXPIMP void	cob_decimal_init	(cob_decimal *);
+COB_EXPIMP void	cob_decimal_init_ctx	(cob_context *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_clear	(cob_decimal *);
+COB_EXPIMP void	cob_decimal_clear_ctx	(cob_context *, cob_decimal *);
+COB_EXPIMP void cob_decimal_set_llint	(cob_decimal *, const cob_s64_t);
+COB_EXPIMP void cob_decimal_set_llint_ctx	(cob_context *, cob_decimal *, const cob_s64_t);
+COB_EXPIMP void cob_decimal_set_ullint	(cob_decimal *, const cob_u64_t);
+COB_EXPIMP void cob_decimal_set_ullint_ctx	(cob_context *, cob_decimal *, const cob_u64_t);
+COB_EXPIMP void	cob_decimal_set_field	(cob_decimal *, cob_field *);
+COB_EXPIMP void	cob_decimal_set_field_ctx	(cob_context *, cob_decimal *, cob_field *);
+COB_EXPIMP int	cob_decimal_get_field	(cob_decimal *, cob_field *, const int);
+COB_EXPIMP int	cob_decimal_get_field_ctx	(cob_context *, cob_decimal *, cob_field *, const int);
+COB_EXPIMP void	cob_decimal_set		(cob_decimal *, cob_decimal *);	/* to be removed in 4.x */
+COB_EXPIMP void	cob_decimal_set_ctx		(cob_context *, cob_decimal *, cob_decimal *);	/* to be removed in 4.x */
+COB_EXPIMP void	cob_decimal_add		(cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_add_ctx		(cob_context *, cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_sub		(cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_sub_ctx		(cob_context *, cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_mul		(cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_mul_ctx		(cob_context *, cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_div		(cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_div_ctx		(cob_context *, cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_pow		(cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_pow_ctx		(cob_context *, cob_decimal *, cob_decimal *);
+COB_EXPIMP int	cob_decimal_cmp		(cob_decimal *, cob_decimal *);
+COB_EXPIMP int	cob_decimal_cmp_ctx		(cob_context *, cob_decimal *, cob_decimal *);
+COB_EXPIMP void	cob_decimal_align(cob_decimal *, const int);
+COB_EXPIMP void	cob_decimal_align_ctx(cob_context *, cob_decimal *, const int);
+COB_EXPIMP void cob_logical_not (cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_not_ctx (cob_context *, cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_and (cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_and_ctx (cob_context *, cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_xor (cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_xor_ctx (cob_context *, cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_or  (cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_or_ctx  (cob_context *, cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_left  (cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_left_ctx  (cob_context *, cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_right (cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_right_ctx (cob_context *, cob_decimal *d0, cob_decimal *d1);
+COB_EXPIMP void cob_logical_left_c  (cob_decimal *d0, cob_decimal *d1, int sz);
+COB_EXPIMP void cob_logical_left_c_ctx  (cob_context *, cob_decimal *d0, cob_decimal *d1, int sz);
+COB_EXPIMP void cob_logical_right_c (cob_decimal *d0, cob_decimal *d1, int sz);
+COB_EXPIMP void cob_logical_right_c_ctx (cob_context *, cob_decimal *d0, cob_decimal *d1, int sz);
 #endif
 
-COB_EXPIMP void	cob_add			(cob_context *, cob_field *, cob_field *, const int);
-COB_EXPIMP void	cob_sub			(cob_context *, cob_field *, cob_field *, const int);
-COB_EXPIMP void	cob_mul			(cob_context *, cob_field *, cob_field *, const int);
-COB_EXPIMP void	cob_div			(cob_context *, cob_field *, cob_field *, const int);
-COB_EXPIMP int	cob_add_int		(cob_context *, cob_field *, const int, const int);
-COB_EXPIMP int	cob_sub_int		(cob_context *, cob_field *, const int, const int);
-COB_EXPIMP void	cob_div_quotient	(cob_context *, cob_field *, cob_field *,
+COB_EXPIMP void	cob_add			(cob_field *, cob_field *, const int);
+COB_EXPIMP void	cob_add_ctx			(cob_context *, cob_field *, cob_field *, const int);
+COB_EXPIMP void	cob_sub			(cob_field *, cob_field *, const int);
+COB_EXPIMP void	cob_sub_ctx			(cob_context *, cob_field *, cob_field *, const int);
+COB_EXPIMP void	cob_mul			(cob_field *, cob_field *, const int);
+COB_EXPIMP void	cob_mul_ctx			(cob_context *, cob_field *, cob_field *, const int);
+COB_EXPIMP void	cob_div			(cob_field *, cob_field *, const int);
+COB_EXPIMP void	cob_div_ctx			(cob_context *, cob_field *, cob_field *, const int);
+COB_EXPIMP int	cob_add_int		(cob_field *, const int, const int);
+COB_EXPIMP int	cob_add_int_ctx		(cob_context *, cob_field *, const int, const int);
+COB_EXPIMP int	cob_sub_int		(cob_field *, const int, const int);
+COB_EXPIMP int	cob_sub_int_ctx		(cob_context *, cob_field *, const int, const int);
+COB_EXPIMP void	cob_div_quotient	(cob_field *, cob_field *,
 					 cob_field *, const int);
-COB_EXPIMP void	cob_div_remainder	(cob_context *, cob_field *, const int);
+COB_EXPIMP void	cob_div_quotient_ctx	(cob_context *, cob_field *, cob_field *,
+					 cob_field *, const int);
+COB_EXPIMP void	cob_div_remainder	(cob_field *, const int);
+COB_EXPIMP void	cob_div_remainder_ctx	(cob_context *, cob_field *, const int);
 
-COB_EXPIMP int	cob_cmp_int		(cob_context *, cob_field *, const int);
-COB_EXPIMP int	cob_cmp_uint		(cob_context *, cob_field *, const unsigned int);
-COB_EXPIMP int	cob_cmp_llint		(cob_context *, cob_field *, const cob_s64_t);
-COB_EXPIMP int	cob_cmp_packed		(cob_context *, cob_field *, const cob_s64_t);
-COB_EXPIMP int	cob_cmp_numdisp		(cob_context *, const unsigned char *,
+COB_EXPIMP int	cob_cmp_int		(cob_field *, const int);
+COB_EXPIMP int	cob_cmp_int_ctx		(cob_context *, cob_field *, const int);
+COB_EXPIMP int	cob_cmp_uint		(cob_field *, const unsigned int);
+COB_EXPIMP int	cob_cmp_uint_ctx		(cob_context *, cob_field *, const unsigned int);
+COB_EXPIMP int	cob_cmp_llint		(cob_field *, const cob_s64_t);
+COB_EXPIMP int	cob_cmp_llint_ctx		(cob_context *, cob_field *, const cob_s64_t);
+COB_EXPIMP int	cob_cmp_packed		(cob_field *, const cob_s64_t);
+COB_EXPIMP int	cob_cmp_packed_ctx		(cob_context *, cob_field *, const cob_s64_t);
+COB_EXPIMP int	cob_cmp_numdisp		(const unsigned char *,
 					 const size_t, const cob_s64_t,
 					 const cob_u32_t);
-COB_EXPIMP int	cob_cmp_float		(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP void	cob_set_packed_zero	(cob_context *, cob_field *);
-COB_EXPIMP void	cob_set_packed_int	(cob_context *, cob_field *, const int);
+COB_EXPIMP int	cob_cmp_numdisp_ctx		(cob_context *, const unsigned char *,
+					 const size_t, const cob_s64_t,
+					 const cob_u32_t);
+COB_EXPIMP int	cob_cmp_float		(cob_field *, cob_field *);
+COB_EXPIMP int	cob_cmp_float_ctx		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void	cob_set_packed_zero	(cob_field *);
+COB_EXPIMP void	cob_set_packed_zero_ctx	(cob_context *, cob_field *);
+COB_EXPIMP void	cob_set_packed_int	(cob_field *, const int);
+COB_EXPIMP void	cob_set_packed_int_ctx	(cob_context *, cob_field *, const int);
 
-COB_EXPIMP void	cob_move_bcd		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP void	cob_move_bcd		(cob_field *, cob_field *);
+COB_EXPIMP void	cob_move_bcd_ctx		(cob_context *, cob_field *, cob_field *);
 
-COB_EXPIMP void	cob_decimal_alloc	(cob_context *, const cob_u32_t, ...);
-COB_EXPIMP void	cob_decimal_push	(cob_context *, const cob_u32_t, ...);
-COB_EXPIMP void	cob_decimal_pop		(cob_context *, const cob_u32_t, ...);
+COB_EXPIMP void	cob_decimal_alloc	(const cob_u32_t, ...);
+COB_EXPIMP void	cob_decimal_alloc_ctx	(cob_context *, const cob_u32_t, ...);
+COB_EXPIMP void	cob_decimal_push	(const cob_u32_t, ...);
+COB_EXPIMP void	cob_decimal_push_ctx	(cob_context *, const cob_u32_t, ...);
+COB_EXPIMP void	cob_decimal_pop		(const cob_u32_t, ...);
+COB_EXPIMP void	cob_decimal_pop_ctx		(cob_context *, const cob_u32_t, ...);
 
-COB_EXPIMP void	cob_gmp_free		(cob_context *, void *);
+COB_EXPIMP void	cob_gmp_free		(void *);
+COB_EXPIMP void	cob_gmp_free_ctx		(cob_context *, void *);
 
 COB_EXPIMP cob_s32_t	cob_s32_pow	(cob_s32_t, cob_s32_t);
 COB_EXPIMP cob_s64_t	cob_s64_pow (cob_s64_t, cob_s64_t);
@@ -2339,60 +2546,101 @@ COB_EXPIMP cob_s64_t	cob_s64_pow (cob_s64_t, cob_s64_t);
 /*******************************/
 /* Functions in call.c */
 
-DECLNORET COB_EXPIMP void	cob_call_error		(cob_context *) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_call_error		(void) COB_A_NORETURN;
+DECLNORET COB_EXPIMP void	cob_call_error_ctx		(cob_context *) COB_A_NORETURN;
 COB_EXPIMP void		cob_field_constant (cob_field *f, cob_field *t, cob_field_attr *a, void *d);
 COB_EXPIMP void		cob_field_value (cob_field *f, cob_field *t, cob_field_attr *a, void *d);
 COB_EXPIMP void		cob_field_content (cob_field *f, cob_field *t, cob_field_attr *a, void *d);
 COB_EXPIMP unsigned int	cob_get_name_hash (const char *name);
 
-COB_EXPIMP void		cob_set_cancel		(cob_context *, cob_module *);
-COB_EXPIMP void *	cob_load_lib (cob_context *, const char *library, const char *entry, char *reason);
+COB_EXPIMP void		cob_set_cancel		(cob_module *);
+COB_EXPIMP void		cob_set_cancel_ctx		(cob_context *, cob_module *);
+COB_EXPIMP void *	cob_load_lib (const char *library, const char *entry, char *reason);
+COB_EXPIMP void *	cob_load_lib_ctx (cob_context *, const char *library, const char *entry, char *reason);
 COB_EXPIMP int		cob_encode_program_id (const unsigned char * const, unsigned char * const,
 						 const int, const int);
-COB_EXPIMP void		*cob_resolve		(cob_context *, const char *);
-COB_EXPIMP void		*cob_resolve_cobol	(cob_context *, const char *, const int,
+COB_EXPIMP void		*cob_resolve		(const char *);
+COB_EXPIMP void		*cob_resolve_ctx		(cob_context *, const char *);
+COB_EXPIMP void		*cob_resolve_cobol	(const char *, const int,
 						 const int);
-COB_EXPIMP void		*cob_resolve_func	(cob_context *, const char *);
-COB_EXPIMP const char	*cob_resolve_error	(cob_context *);
-COB_EXPIMP void		*cob_call_field		(cob_context *, const cob_field *,
+COB_EXPIMP void		*cob_resolve_cobol_ctx	(cob_context *, const char *, const int,
+						 const int);
+COB_EXPIMP void		*cob_resolve_func	(const char *);
+COB_EXPIMP void		*cob_resolve_func_ctx	(cob_context *, const char *);
+COB_EXPIMP const char	*cob_resolve_error	(void);
+COB_EXPIMP const char	*cob_resolve_error_ctx	(cob_context *);
+COB_EXPIMP void		*cob_call_field		(const cob_field *,
 						 const struct cob_call_struct *,
 						 const unsigned int,
 						 const int);
-COB_EXPIMP void		cob_cancel_field	(cob_context *, const cob_field *,
+COB_EXPIMP void		*cob_call_field_ctx		(cob_context *, const cob_field *,
+						 const struct cob_call_struct *,
+						 const unsigned int,
+						 const int);
+COB_EXPIMP void		cob_cancel_field	(const cob_field *,
 						 const struct cob_call_struct *);
-COB_EXPIMP void		cob_cancel		(cob_context *, const char *);
-COB_EXPIMP int		cob_call_with_exception_check (cob_context *, const char*, const int, void **);
-COB_EXPIMP int		cob_call		(cob_context *, const char *, const int, void **);
-COB_EXPIMP int		cob_func		(cob_context *, const char *, const int, void **);
+COB_EXPIMP void		cob_cancel_field_ctx	(cob_context *, const cob_field *,
+						 const struct cob_call_struct *);
+COB_EXPIMP void		cob_cancel		(const char *);
+COB_EXPIMP void		cob_cancel_ctx		(cob_context *, const char *);
+COB_EXPIMP int		cob_call_with_exception_check (const char*, const int, void **);
+COB_EXPIMP int		cob_call_with_exception_check_ctx (cob_context *, const char*, const int, void **);
+COB_EXPIMP int		cob_call		(const char *, const int, void **);
+COB_EXPIMP int		cob_call_ctx		(cob_context *, const char *, const int, void **);
+COB_EXPIMP int		cob_func		(const char *, const int, void **);
+COB_EXPIMP int		cob_func_ctx		(cob_context *, const char *, const int, void **);
 
 #ifndef COB_WITHOUT_JMP
-COB_EXPIMP void		*cob_savenv		(cob_context *, struct cobjmp_buf *);
-COB_EXPIMP void		*cob_savenv2		(cob_context *, struct cobjmp_buf *, const int);
-COB_EXPIMP void		cob_longjmp		(cob_context *, struct cobjmp_buf *);
+COB_EXPIMP void		*cob_savenv		(struct cobjmp_buf *);
+COB_EXPIMP void		*cob_savenv_ctx		(cob_context *, struct cobjmp_buf *);
+COB_EXPIMP void		*cob_savenv2		(struct cobjmp_buf *, const int);
+COB_EXPIMP void		*cob_savenv2_ctx		(cob_context *, struct cobjmp_buf *, const int);
+COB_EXPIMP void		cob_longjmp		(struct cobjmp_buf *);
+COB_EXPIMP void		cob_longjmp_ctx		(cob_context *, struct cobjmp_buf *);
 #endif
 
-COB_EXPIMP int		cob_call_cobol	(cob_context *, const char *, const int, ...);
-COB_EXPIMP int		cob_call_entry	(cob_context *, void *, const int, ...);
-COB_EXPIMP int		cob_get_name_line (cob_context *,  char *prog, int *line );
+COB_EXPIMP int		cob_call_cobol	(const char *, const int, ...);
+COB_EXPIMP int		cob_call_cobol_ctx	(cob_context *, const char *, const int, ...);
+COB_EXPIMP int		cob_call_entry	(void *, const int, ...);
+COB_EXPIMP int		cob_call_entry_ctx	(cob_context *, void *, const int, ...);
+COB_EXPIMP int		cob_get_name_line (char *prog, int *line );
+COB_EXPIMP int		cob_get_name_line_ctx (cob_context *,  char *prog, int *line );
 
-COB_EXPIMP void		cob_runtime_warning_external	(cob_context *, const char *, const int,
+COB_EXPIMP void		cob_runtime_warning_external	(const char *, const int,
+						const char *, ...) COB_A_FORMAT34;
+COB_EXPIMP void		cob_runtime_warning_external_ctx	(cob_context *, const char *, const int,
 						const char *, ...) COB_A_FORMAT45;
 
 /*******************************/
 /* Functions in screenio.c */
 
-COB_EXPIMP void		cob_screen_line_col	(cob_context *, cob_field *, const int);
-COB_EXPIMP void		cob_screen_display	(cob_context *, cob_screen *, cob_field *,
+COB_EXPIMP void		cob_screen_line_col	(cob_field *, const int);
+COB_EXPIMP void		cob_screen_line_col_ctx	(cob_context *, cob_field *, const int);
+COB_EXPIMP void		cob_screen_display	(cob_screen *, cob_field *,
 					 cob_field *, const int);
-COB_EXPIMP void		cob_screen_accept	(cob_context *, cob_screen *, cob_field *,
+COB_EXPIMP void		cob_screen_display_ctx	(cob_context *, cob_screen *, cob_field *,
+					 cob_field *, const int);
+COB_EXPIMP void		cob_screen_accept	(cob_screen *, cob_field *,
 					 cob_field *, cob_field *,
 					 const int);
-COB_EXPIMP void		cob_accept_field	(cob_context *, cob_field *, const cob_flags_t, const char *, ...);
-COB_EXPIMP void		cob_display_field	(cob_context *, cob_field *, const cob_flags_t, const char *, ...);
-COB_EXPIMP void		cob_field_display	(cob_context *, cob_field *, cob_field *, cob_field *,
+COB_EXPIMP void		cob_screen_accept_ctx	(cob_context *, cob_screen *, cob_field *,
+					 cob_field *, cob_field *,
+					 const int);
+COB_EXPIMP void		cob_accept_field	(cob_field *, const cob_flags_t, const char *, ...);
+COB_EXPIMP void		cob_accept_field_ctx	(cob_context *, cob_field *, const cob_flags_t, const char *, ...);
+COB_EXPIMP void		cob_display_field	(cob_field *, const cob_flags_t, const char *, ...);
+COB_EXPIMP void		cob_display_field_ctx	(cob_context *, cob_field *, const cob_flags_t, const char *, ...);
+COB_EXPIMP void		cob_field_display	(cob_field *, cob_field *, cob_field *,
 					 cob_field *, cob_field *, cob_field *,
 					 cob_field *, const cob_flags_t);
-COB_EXPIMP void		cob_field_accept	(cob_context *, cob_field *, cob_field *, cob_field *,
+COB_EXPIMP void		cob_field_display_ctx	(cob_context *, cob_field *, cob_field *, cob_field *,
+					 cob_field *, cob_field *, cob_field *,
+					 cob_field *, const cob_flags_t);
+COB_EXPIMP void		cob_field_accept	(cob_field *, cob_field *, cob_field *,
+					 cob_field *, cob_field *, cob_field *,
+					 cob_field *, cob_field *, cob_field *,
+					 const cob_flags_t);
+COB_EXPIMP void		cob_field_accept_ctx	(cob_context *, cob_field *, cob_field *, cob_field *,
 					 cob_field *, cob_field *, cob_field *,
 					 cob_field *, cob_field *, cob_field *,
 					 const cob_flags_t);
@@ -2400,7 +2648,8 @@ COB_EXPIMP int		cob_display_text (const char *);
 COB_EXPIMP int		cob_display_formatted_text (const char *, ...);
 COB_EXPIMP int		cob_get_char	(void);
 COB_EXPIMP void		cob_set_cursor_pos	(int, int);
-COB_EXPIMP void		cob_accept_escape_key	(cob_context *, cob_field *);
+COB_EXPIMP void		cob_accept_escape_key	(cob_field *);
+COB_EXPIMP void		cob_accept_escape_key_ctx	(cob_context *, cob_field *);
 COB_EXPIMP int		cob_sys_clear_screen	(void);
 COB_EXPIMP int		cob_sys_sound_bell	(void);
 COB_EXPIMP int		cob_sys_get_scr_size	(unsigned char *, unsigned char *);
@@ -2409,7 +2658,8 @@ COB_EXPIMP int		cob_sys_scr_dump	(unsigned char *);
 COB_EXPIMP int		cob_sys_scr_restore	(unsigned char *);
 COB_EXPIMP int		cob_sys_window		(unsigned char*, unsigned char *);
 COB_EXPIMP int		cob_sys_get_char	(unsigned char *);
-COB_EXPIMP int		cob_get_text		(cob_context *, char *, int);
+COB_EXPIMP int		cob_get_text		(char *, int);
+COB_EXPIMP int		cob_get_text_ctx		(cob_context *, char *, int);
 COB_EXPIMP int		cob_get_scr_cols	(void);
 COB_EXPIMP int		cob_get_scr_lines	(void);
 COB_EXPIMP int		cob_sys_get_csr_pos	(unsigned char *);
@@ -2826,62 +3076,109 @@ typedef struct __fcd2 {
 /*******************************/
 /* Functions in termio.c */
 
-COB_EXPIMP void cob_display	(cob_context *, const int, const int, const int, ...);
-COB_EXPIMP void cob_dump_output (cob_context *, const char *);
-COB_EXPIMP void cob_dump_file (cob_context *, const char *, cob_file *);
-COB_EXPIMP void cob_dump_field	(cob_context *, const int, const char *, cob_field *, const cob_uli_t, const cob_u32_t, ...);
-COB_EXPIMP void cob_accept	(cob_context *, cob_field *);
+COB_EXPIMP void cob_display	(const int, const int, const int, ...);
+COB_EXPIMP void cob_display_ctx	(cob_context *, const int, const int, const int, ...);
+COB_EXPIMP void cob_dump_output (const char *);
+COB_EXPIMP void cob_dump_output_ctx (cob_context *, const char *);
+COB_EXPIMP void cob_dump_file (const char *, cob_file *);
+COB_EXPIMP void cob_dump_file_ctx (cob_context *, const char *, cob_file *);
+COB_EXPIMP void cob_dump_field	(const int, const char *, cob_field *, const cob_uli_t, const cob_u32_t, ...);
+COB_EXPIMP void cob_dump_field_ctx	(cob_context *, const int, const char *, cob_field *, const cob_uli_t, const cob_u32_t, ...);
+COB_EXPIMP void cob_accept	(cob_field *);
+COB_EXPIMP void cob_accept_ctx	(cob_context *, cob_field *);
 
 /*******************************/
 /* Functions in fileio.c */
 
-COB_EXPIMP void	cob_file_external_addr (cob_context *, const char *,
+COB_EXPIMP void	cob_file_external_addr (const char *,
 				 cob_file **, cob_file_key **,
 				 const int nkeys, const int linage);
-COB_EXPIMP void	cob_file_malloc (cob_context *, cob_file **, cob_file_key **,
+COB_EXPIMP void	cob_file_external_addr_ctx (cob_context *, const char *,
+				 cob_file **, cob_file_key **,
 				 const int nkeys, const int linage);
-COB_EXPIMP void	cob_file_xfdname (cob_context *, cob_file *, const char *);
-COB_EXPIMP void	cob_file_free   (cob_context *, cob_file **, cob_file_key **);
-COB_EXPIMP void cob_commit		(cob_context *);
-COB_EXPIMP void cob_rollback	(cob_context *);
-COB_EXPIMP void cob_pre_open	(cob_context *, cob_file *f);
-COB_EXPIMP void cob_pre_open_def (cob_context *, cob_file *f, char *setdef, char *isdef, int checkit);
-COB_EXPIMP int	cob_findkey (cob_context *, cob_file *, cob_field *, int *, int *);
-COB_EXPIMP void cob_file_create (cob_context *, cob_file ** pfl, const char *exname, const char *select_name,
+COB_EXPIMP void	cob_file_malloc (cob_file **, cob_file_key **,
+				 const int nkeys, const int linage);
+COB_EXPIMP void	cob_file_malloc_ctx (cob_context *, cob_file **, cob_file_key **,
+				 const int nkeys, const int linage);
+COB_EXPIMP void	cob_file_xfdname (cob_file *, const char *);
+COB_EXPIMP void	cob_file_xfdname_ctx (cob_context *, cob_file *, const char *);
+COB_EXPIMP void	cob_file_free   (cob_file **, cob_file_key **);
+COB_EXPIMP void	cob_file_free_ctx   (cob_context *, cob_file **, cob_file_key **);
+COB_EXPIMP void cob_commit		(void);
+COB_EXPIMP void cob_commit_ctx		(cob_context *);
+COB_EXPIMP void cob_rollback	(void);
+COB_EXPIMP void cob_rollback_ctx	(cob_context *);
+COB_EXPIMP void cob_pre_open	(cob_file *f);
+COB_EXPIMP void cob_pre_open_ctx	(cob_context *, cob_file *f);
+COB_EXPIMP void cob_pre_open_def (cob_file *f, char *setdef, char *isdef, int checkit);
+COB_EXPIMP void cob_pre_open_def_ctx (cob_context *, cob_file *f, char *setdef, char *isdef, int checkit);
+COB_EXPIMP int	cob_findkey (cob_file *, cob_field *, int *, int *);
+COB_EXPIMP int	cob_findkey_ctx (cob_context *, cob_file *, cob_field *, int *, int *);
+COB_EXPIMP void cob_file_create (cob_file ** pfl, const char *exname, const char *select_name,
 					const enum cob_file_org fileorg, const enum cob_file_access accessmode, const int optional,
 					const int format, const int select_features, const int nkeys, 
 					const int minrcsz, const int maxrcsz, cob_field * assign, cob_field * record);
-COB_EXPIMP void cob_file_destroy (cob_context *, cob_file ** pfl);
-COB_EXPIMP void cob_file_set_attr (cob_context *, cob_file * fl, cob_field * varsize,
+COB_EXPIMP void cob_file_create_ctx (cob_context *, cob_file ** pfl, const char *exname, const char *select_name,
+					const enum cob_file_org fileorg, const enum cob_file_access accessmode, const int optional,
+					const int format, const int select_features, const int nkeys, 
+					const int minrcsz, const int maxrcsz, cob_field * assign, cob_field * record);
+COB_EXPIMP void cob_file_destroy (cob_file ** pfl);
+COB_EXPIMP void cob_file_destroy_ctx (cob_context *, cob_file ** pfl);
+COB_EXPIMP void cob_file_set_attr (cob_file * fl, cob_field * varsize,
 					const int lineadv, const int features,
 					const unsigned char *codeset, cob_field * password, cob_field * cryptkey);
-COB_EXPIMP void cob_file_set_key (cob_context *, cob_file * fl, const int keyn, cob_field * key,
+COB_EXPIMP void cob_file_set_attr_ctx (cob_context *, cob_file * fl, cob_field * varsize,
+					const int lineadv, const int features,
+					const unsigned char *codeset, cob_field * password, cob_field * cryptkey);
+COB_EXPIMP void cob_file_set_key (cob_file * fl, const int keyn, cob_field * key,
 					const int dups, const int ascdesc, const int len_suppress,
 					const unsigned char *suppress, const int parts, ...);
-COB_EXPIMP void cob_file_set_key_extra (cob_context *, cob_file * fl, const int keyn, const int compress,
+COB_EXPIMP void cob_file_set_key_ctx (cob_context *, cob_file * fl, const int keyn, cob_field * key,
+					const int dups, const int ascdesc, const int len_suppress,
+					const unsigned char *suppress, const int parts, ...);
+COB_EXPIMP void cob_file_set_key_extra (cob_file * fl, const int keyn, const int compress,
 					const int encrypt, cob_field * password, const unsigned char *collate);
-COB_EXPIMP void cob_file_set_linage (cob_context *, cob_file * fl, cob_field *linage, cob_field *linage_ctr,
+COB_EXPIMP void cob_file_set_key_extra_ctx (cob_context *, cob_file * fl, const int keyn, const int compress,
+					const int encrypt, cob_field * password, const unsigned char *collate);
+COB_EXPIMP void cob_file_set_linage (cob_file * fl, cob_field *linage, cob_field *linage_ctr,
 					cob_field *latfoot, cob_field *lattop, cob_field *latbot);
-COB_EXPIMP void cob_file_set_retry (cob_context *, cob_file * fl, const int mode, const int value);
-COB_EXPIMP void cob_file_set_lock  (cob_context *, cob_file * fl, const int mode);
-COB_EXPIMP void cob_file_complete (cob_context *, cob_file * fl);
+COB_EXPIMP void cob_file_set_linage_ctx (cob_context *, cob_file * fl, cob_field *linage, cob_field *linage_ctr,
+					cob_field *latfoot, cob_field *lattop, cob_field *latbot);
+COB_EXPIMP void cob_file_set_retry (cob_file * fl, const int mode, const int value);
+COB_EXPIMP void cob_file_set_retry_ctx (cob_context *, cob_file * fl, const int mode, const int value);
+COB_EXPIMP void cob_file_set_lock  (cob_file * fl, const int mode);
+COB_EXPIMP void cob_file_set_lock_ctx  (cob_context *, cob_file * fl, const int mode);
+COB_EXPIMP void cob_file_complete (cob_file * fl);
+COB_EXPIMP void cob_file_complete_ctx (cob_context *, cob_file * fl);
 
 /******************************************/
 /* Functions in fileio.c  API for codegen */
 /******************************************/
-COB_EXPIMP void cob_open	(cob_context *, cob_file *, const enum cob_open_mode, const int, cob_field *);
-COB_EXPIMP void cob_close	(cob_context *, cob_file *, cob_field *, const int, const int);
-COB_EXPIMP void cob_read	(cob_context *, cob_file *, cob_field *, cob_field *, const int);
-COB_EXPIMP void cob_read_next	(cob_context *, cob_file *, cob_field *, const int);
-COB_EXPIMP void cob_rewrite	(cob_context *, cob_file *, cob_field *, const int, cob_field *);
-COB_EXPIMP void cob_delete	(cob_context *, cob_file *, cob_field *);
-COB_EXPIMP void cob_start	(cob_context *, cob_file *, const int, cob_field *,
+COB_EXPIMP void cob_open	(cob_file *, const enum cob_open_mode, const int, cob_field *);
+COB_EXPIMP void cob_open_ctx	(cob_context *, cob_file *, const enum cob_open_mode, const int, cob_field *);
+COB_EXPIMP void cob_close	(cob_file *, cob_field *, const int, const int);
+COB_EXPIMP void cob_close_ctx	(cob_context *, cob_file *, cob_field *, const int, const int);
+COB_EXPIMP void cob_read	(cob_file *, cob_field *, cob_field *, const int);
+COB_EXPIMP void cob_read_ctx	(cob_context *, cob_file *, cob_field *, cob_field *, const int);
+COB_EXPIMP void cob_read_next	(cob_file *, cob_field *, const int);
+COB_EXPIMP void cob_read_next_ctx	(cob_context *, cob_file *, cob_field *, const int);
+COB_EXPIMP void cob_rewrite	(cob_file *, cob_field *, const int, cob_field *);
+COB_EXPIMP void cob_rewrite_ctx	(cob_context *, cob_file *, cob_field *, const int, cob_field *);
+COB_EXPIMP void cob_delete	(cob_file *, cob_field *);
+COB_EXPIMP void cob_delete_ctx	(cob_context *, cob_file *, cob_field *);
+COB_EXPIMP void cob_start	(cob_file *, const int, cob_field *,
 				 cob_field *, cob_field *);
-COB_EXPIMP void cob_write	(cob_context *, cob_file *, cob_field *, const int,
+COB_EXPIMP void cob_start_ctx	(cob_context *, cob_file *, const int, cob_field *,
+				 cob_field *, cob_field *);
+COB_EXPIMP void cob_write	(cob_file *, cob_field *, const int,
+				 cob_field *, const unsigned int);
+COB_EXPIMP void cob_write_ctx	(cob_context *, cob_file *, cob_field *, const int,
 				 cob_field *, const unsigned int);
 
-COB_EXPIMP void cob_delete_file	(cob_context *, cob_file *, cob_field *, const int);
-COB_EXPIMP void cob_unlock_file	(cob_context *, cob_file *, cob_field *);
+COB_EXPIMP void cob_delete_file	(cob_file *, cob_field *, const int);
+COB_EXPIMP void cob_delete_file_ctx	(cob_context *, cob_file *, cob_field *, const int);
+COB_EXPIMP void cob_unlock_file	(cob_file *, cob_field *);
+COB_EXPIMP void cob_unlock_file_ctx	(cob_context *, cob_file *, cob_field *);
 
 /***************************************************************/
 /* functions in fextfh.c which is the MF style EXTFH interface */
@@ -2890,27 +3187,47 @@ COB_EXPIMP int	EXTFH		(unsigned char *, FCD3 *);
 
 typedef int (*EXTFH_FUNC)(unsigned char *opcode, FCD3 *fcd);
 
-COB_EXPIMP void cob_extfh_open		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_open		(EXTFH_FUNC callfh, cob_file *,
 					const enum cob_open_mode, const int, cob_field *);
-COB_EXPIMP void cob_extfh_close		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_open_ctx		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+					const enum cob_open_mode, const int, cob_field *);
+COB_EXPIMP void cob_extfh_close		(EXTFH_FUNC callfh, cob_file *,
 					cob_field *, const int, const int);
-COB_EXPIMP void cob_extfh_read		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_close_ctx		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+					cob_field *, const int, const int);
+COB_EXPIMP void cob_extfh_read		(EXTFH_FUNC callfh, cob_file *,
 					cob_field *, cob_field *, const int);
-COB_EXPIMP void cob_extfh_read_next	(cob_context *, EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_read_ctx		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+					cob_field *, cob_field *, const int);
+COB_EXPIMP void cob_extfh_read_next	(EXTFH_FUNC callfh, cob_file *,
 					cob_field *, const int);
-COB_EXPIMP void cob_extfh_rewrite	(cob_context *, EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_read_next_ctx	(cob_context *, EXTFH_FUNC callfh, cob_file *,
+					cob_field *, const int);
+COB_EXPIMP void cob_extfh_rewrite	(EXTFH_FUNC callfh, cob_file *,
 					cob_field *, const int, cob_field *);
-COB_EXPIMP void cob_extfh_delete	(cob_context *, EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_rewrite_ctx	(cob_context *, EXTFH_FUNC callfh, cob_file *,
+					cob_field *, const int, cob_field *);
+COB_EXPIMP void cob_extfh_delete	(EXTFH_FUNC callfh, cob_file *,
 					cob_field *);
-COB_EXPIMP void cob_extfh_start		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_delete_ctx	(cob_context *, EXTFH_FUNC callfh, cob_file *,
+					cob_field *);
+COB_EXPIMP void cob_extfh_start		(EXTFH_FUNC callfh, cob_file *,
 					const int, cob_field *,
 					cob_field *, cob_field *);
-COB_EXPIMP void cob_extfh_write		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+COB_EXPIMP void cob_extfh_start_ctx		(cob_context *, EXTFH_FUNC callfh, cob_file *,
+					const int, cob_field *,
+					cob_field *, cob_field *);
+COB_EXPIMP void cob_extfh_write		(EXTFH_FUNC callfh, cob_file *,
+					cob_field *, const int,
+				 	cob_field *, const unsigned int);
+COB_EXPIMP void cob_extfh_write_ctx		(cob_context *, EXTFH_FUNC callfh, cob_file *,
 					cob_field *, const int,
 				 	cob_field *, const unsigned int);
 
-COB_EXPIMP void cob_file_fcd_adrs		(cob_context *, cob_file *, void *);
-COB_EXPIMP void cob_file_fcdkey_adrs	(cob_context *, cob_file *, void *);
+COB_EXPIMP void cob_file_fcd_adrs		(cob_file *, void *);
+COB_EXPIMP void cob_file_fcd_adrs_ctx		(cob_context *, cob_file *, void *);
+COB_EXPIMP void cob_file_fcdkey_adrs	(cob_file *, void *);
+COB_EXPIMP void cob_file_fcdkey_adrs_ctx	(cob_context *, cob_file *, void *);
 
 /* File system routines */
 COB_EXPIMP int cob_sys_open_file	(unsigned char *, unsigned char *,
@@ -2943,30 +3260,49 @@ COB_EXPIMP int cob_sys_file_info	(unsigned char *, unsigned char *);
 COB_EXPIMP int cob_sys_file_delete	(unsigned char *, unsigned char *);
 
 /* SORT routines */
-COB_EXPIMP void	cob_file_sort_init	(cob_context *, cob_file *, const unsigned int,
+COB_EXPIMP void	cob_file_sort_init	(cob_file *, const unsigned int,
 					 const unsigned char *,
 					 void *, cob_field *);
-COB_EXPIMP void	cob_file_sort_options (cob_context *, cob_file *, const char *, ...);
-COB_EXPIMP void	cob_file_sort_init_key	(cob_context *, cob_file *, cob_field *,
+COB_EXPIMP void	cob_file_sort_init_ctx	(cob_context *, cob_file *, const unsigned int,
+					 const unsigned char *,
+					 void *, cob_field *);
+COB_EXPIMP void	cob_file_sort_options (cob_file *, const char *, ...);
+COB_EXPIMP void	cob_file_sort_options_ctx (cob_context *, cob_file *, const char *, ...);
+COB_EXPIMP void	cob_file_sort_init_key	(cob_file *, cob_field *,
 					 const int, const unsigned int);
-COB_EXPIMP void	cob_file_sort_close	(cob_context *, cob_file *);
-COB_EXPIMP void	cob_file_sort_using	(cob_context *, cob_file *, cob_file *);
-COB_EXPIMP void	cob_file_sort_using_extfh	(cob_context *, cob_file *, cob_file *,
+COB_EXPIMP void	cob_file_sort_init_key_ctx	(cob_context *, cob_file *, cob_field *,
+					 const int, const unsigned int);
+COB_EXPIMP void	cob_file_sort_close	(cob_file *);
+COB_EXPIMP void	cob_file_sort_close_ctx	(cob_context *, cob_file *);
+COB_EXPIMP void	cob_file_sort_using	(cob_file *, cob_file *);
+COB_EXPIMP void	cob_file_sort_using_ctx	(cob_context *, cob_file *, cob_file *);
+COB_EXPIMP void	cob_file_sort_using_extfh	(cob_file *, cob_file *,
 					 int (*callfh)(unsigned char *opcode, FCD3 *fcd));
-COB_EXPIMP void	cob_file_sort_giving	(cob_context *, cob_file *, const size_t, ...);
-COB_EXPIMP void	cob_file_sort_giving_extfh	(cob_context *, cob_file *, const size_t, ...);
-COB_EXPIMP void	cob_file_release	(cob_context *, cob_file *);
-COB_EXPIMP void	cob_file_return		(cob_context *, cob_file *);
+COB_EXPIMP void	cob_file_sort_using_extfh_ctx	(cob_context *, cob_file *, cob_file *,
+					 int (*callfh)(unsigned char *opcode, FCD3 *fcd));
+COB_EXPIMP void	cob_file_sort_giving	(cob_file *, const size_t, ...);
+COB_EXPIMP void	cob_file_sort_giving_ctx	(cob_context *, cob_file *, const size_t, ...);
+COB_EXPIMP void	cob_file_sort_giving_extfh	(cob_file *, const size_t, ...);
+COB_EXPIMP void	cob_file_sort_giving_extfh_ctx	(cob_context *, cob_file *, const size_t, ...);
+COB_EXPIMP void	cob_file_release	(cob_file *);
+COB_EXPIMP void	cob_file_release_ctx	(cob_context *, cob_file *);
+COB_EXPIMP void	cob_file_return		(cob_file *);
+COB_EXPIMP void	cob_file_return_ctx		(cob_context *, cob_file *);
 
-COB_EXPIMP char * cob_path_to_absolute (cob_context *, const char *path);
+COB_EXPIMP char * cob_path_to_absolute (const char *path);
+COB_EXPIMP char * cob_path_to_absolute_ctx (cob_context *, const char *path);
 
 /***************************/
 /* Functions in reportio.c */
 /***************************/
-COB_EXPIMP int  cob_report_initiate	(cob_context *, cob_report *);
-COB_EXPIMP int  cob_report_terminate(cob_context *, cob_report *);
-COB_EXPIMP int  cob_report_generate	(cob_context *, cob_report *, cob_report_line *);
-COB_EXPIMP void cob_report_suppress	(cob_context *, cob_report *, cob_report_line *);
+COB_EXPIMP int  cob_report_initiate	(cob_report *);
+COB_EXPIMP int  cob_report_initiate_ctx	(cob_context *, cob_report *);
+COB_EXPIMP int  cob_report_terminate(cob_report *);
+COB_EXPIMP int  cob_report_terminate_ctx(cob_context *, cob_report *);
+COB_EXPIMP int  cob_report_generate	(cob_report *, cob_report_line *);
+COB_EXPIMP int  cob_report_generate_ctx	(cob_context *, cob_report *, cob_report_line *);
+COB_EXPIMP void cob_report_suppress	(cob_report *, cob_report_line *);
+COB_EXPIMP void cob_report_suppress_ctx	(cob_context *, cob_report *, cob_report_line *);
 
 /**********************/
 /* Functions in mlio.c */
@@ -2975,25 +3311,40 @@ COB_EXPIMP void cob_report_suppress	(cob_context *, cob_report *, cob_report_lin
 COB_EXPIMP int	cob_is_valid_uri	(const char *);
 COB_EXPIMP int	cob_is_xml_namestartchar	(const int);
 COB_EXPIMP int	cob_is_xml_namechar	(const int);
-COB_EXPIMP void	cob_xml_generate	(cob_context *, cob_field *, cob_ml_tree *,
+COB_EXPIMP void	cob_xml_generate	(cob_field *, cob_ml_tree *,
 					 cob_field *, const int, cob_field *,
 					 cob_field *, const char);
-COB_EXPIMP void cob_json_generate	(cob_context *, cob_field *, cob_ml_tree *,
+COB_EXPIMP void	cob_xml_generate_ctx	(cob_context *, cob_field *, cob_ml_tree *,
+					 cob_field *, const int, cob_field *,
 					 cob_field *, const char);
-COB_EXPIMP int	cob_xml_parse	(cob_context *, cob_field *, cob_field *,
+COB_EXPIMP void cob_json_generate	(cob_field *, cob_ml_tree *,
+					 cob_field *, const char);
+COB_EXPIMP void cob_json_generate_ctx	(cob_context *, cob_field *, cob_ml_tree *,
+					 cob_field *, const char);
+COB_EXPIMP int	cob_xml_parse	(cob_field *, cob_field *,
+					 cob_field *, const int, void **);
+COB_EXPIMP int	cob_xml_parse_ctx	(cob_context *, cob_field *, cob_field *,
 					 cob_field *, const int, void **);
 
 
 /****************************/
 /* Functions in intrinsic.c */
 /****************************/
-COB_EXPIMP void		cob_put_indirect_field		(cob_context *, cob_field *);
-COB_EXPIMP void		cob_get_indirect_field		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_switch_value			(cob_context *, const int);
-COB_EXPIMP cob_field *cob_intr_binop			(cob_context *, cob_field *, const int,
+COB_EXPIMP void		cob_put_indirect_field		(cob_field *);
+COB_EXPIMP void		cob_put_indirect_field_ctx		(cob_context *, cob_field *);
+COB_EXPIMP void		cob_get_indirect_field		(cob_field *);
+COB_EXPIMP void		cob_get_indirect_field_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_switch_value			(const int);
+COB_EXPIMP cob_field *cob_switch_value_ctx			(cob_context *, const int);
+COB_EXPIMP cob_field *cob_intr_binop			(cob_field *, const int,
+							 cob_field *);
+COB_EXPIMP cob_field *cob_intr_binop_ctx			(cob_context *, cob_field *, const int,
 							 cob_field *);
 
-COB_EXPIMP int cob_check_numval				(cob_context *, const cob_field *,
+COB_EXPIMP int cob_check_numval				(const cob_field *,
+							 const cob_field *,
+							 const int, const int);
+COB_EXPIMP int cob_check_numval_ctx				(cob_context *, const cob_field *,
 							 const cob_field *,
 							 const int, const int);
 
@@ -3001,141 +3352,270 @@ COB_EXPIMP int cob_valid_date_format			(const char *);
 COB_EXPIMP int cob_valid_datetime_format		(const char *, const char);
 COB_EXPIMP int cob_valid_time_format			(const char *, const char);
 
-COB_EXPIMP cob_field *cob_intr_current_date		(cob_context *, const int, const int);
-COB_EXPIMP cob_field *cob_intr_when_compiled		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_current_date		(const int, const int);
+COB_EXPIMP cob_field *cob_intr_current_date_ctx		(cob_context *, const int, const int);
+COB_EXPIMP cob_field *cob_intr_when_compiled		(const int, const int,
 							 cob_field *);
-COB_EXPIMP cob_field *cob_intr_module_date		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_module_time		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_module_id		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_module_caller_id		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_module_source		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_module_formatted_date	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_module_path		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_exception_file		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_exception_location	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_exception_status		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_exception_statement	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_mon_decimal_point	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_num_decimal_point	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_mon_thousands_sep	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_num_thousands_sep	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_currency_symbol		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_char			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_ord			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_stored_char_length	(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_combined_datetime	(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_date_of_integer		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_day_of_integer		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_integer_of_date		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_integer_of_day		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_test_date_yyyymmdd	(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_test_day_yyyyddd		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_test_numval		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_test_numval_c		(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_test_numval_f		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_factorial		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_when_compiled_ctx		(cob_context *, const int, const int,
+							 cob_field *);
+COB_EXPIMP cob_field *cob_intr_module_date		(void);
+COB_EXPIMP cob_field *cob_intr_module_date_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_module_time		(void);
+COB_EXPIMP cob_field *cob_intr_module_time_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_module_id		(void);
+COB_EXPIMP cob_field *cob_intr_module_id_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_module_caller_id		(void);
+COB_EXPIMP cob_field *cob_intr_module_caller_id_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_module_source		(void);
+COB_EXPIMP cob_field *cob_intr_module_source_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_module_formatted_date	(void);
+COB_EXPIMP cob_field *cob_intr_module_formatted_date_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_module_path		(void);
+COB_EXPIMP cob_field *cob_intr_module_path_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_exception_file		(void);
+COB_EXPIMP cob_field *cob_intr_exception_file_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_exception_location	(void);
+COB_EXPIMP cob_field *cob_intr_exception_location_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_exception_status		(void);
+COB_EXPIMP cob_field *cob_intr_exception_status_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_exception_statement	(void);
+COB_EXPIMP cob_field *cob_intr_exception_statement_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_mon_decimal_point	(void);
+COB_EXPIMP cob_field *cob_intr_mon_decimal_point_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_num_decimal_point	(void);
+COB_EXPIMP cob_field *cob_intr_num_decimal_point_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_mon_thousands_sep	(void);
+COB_EXPIMP cob_field *cob_intr_mon_thousands_sep_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_num_thousands_sep	(void);
+COB_EXPIMP cob_field *cob_intr_num_thousands_sep_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_currency_symbol		(void);
+COB_EXPIMP cob_field *cob_intr_currency_symbol_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_char			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_char_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_ord			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_ord_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_stored_char_length	(cob_field *);
+COB_EXPIMP cob_field *cob_intr_stored_char_length_ctx	(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_combined_datetime	(cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_combined_datetime_ctx	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_date_of_integer		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_date_of_integer_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_day_of_integer		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_day_of_integer_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer_of_date		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer_of_date_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer_of_day		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer_of_day_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_date_yyyymmdd	(cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_date_yyyymmdd_ctx	(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_day_yyyyddd		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_day_yyyyddd_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_numval		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_numval_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_numval_c		(cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_numval_c_ctx		(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_numval_f		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_numval_f_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_factorial		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_factorial_ctx		(cob_context *, cob_field *);
 
-COB_EXPIMP cob_field *cob_intr_pi			(cob_context *);
-COB_EXPIMP cob_field *cob_intr_e			(cob_context *);
-COB_EXPIMP cob_field *cob_intr_exp			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_exp10			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_abs			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_acos			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_asin			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_atan			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_cos			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_log			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_log10			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_sin			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_sqrt			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_tan			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_pi			(void);
+COB_EXPIMP cob_field *cob_intr_pi_ctx			(cob_context *);
+COB_EXPIMP cob_field *cob_intr_e			(void);
+COB_EXPIMP cob_field *cob_intr_e_ctx			(cob_context *);
+COB_EXPIMP cob_field *cob_intr_exp			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_exp_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_exp10			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_exp10_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_abs			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_abs_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_acos			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_acos_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_asin			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_asin_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_atan			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_atan_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_cos			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_cos_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_log			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_log_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_log10			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_log10_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_sin			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_sin_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_sqrt			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_sqrt_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_tan			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_tan_ctx			(cob_context *, cob_field *);
 
-COB_EXPIMP cob_field *cob_intr_upper_case		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_upper_case		(const int, const int,
 							 cob_field *);
-COB_EXPIMP cob_field *cob_intr_lower_case		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_upper_case_ctx		(cob_context *, const int, const int,
 							 cob_field *);
-COB_EXPIMP cob_field *cob_intr_reverse			(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_lower_case		(const int, const int,
 							 cob_field *);
-COB_EXPIMP cob_field *cob_intr_concatenate		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_lower_case_ctx		(cob_context *, const int, const int,
+							 cob_field *);
+COB_EXPIMP cob_field *cob_intr_reverse			(const int, const int,
+							 cob_field *);
+COB_EXPIMP cob_field *cob_intr_reverse_ctx			(cob_context *, const int, const int,
+							 cob_field *);
+COB_EXPIMP cob_field *cob_intr_concatenate		(const int, const int,
 							 const int, ...);
-COB_EXPIMP cob_field *cob_intr_substitute		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_concatenate_ctx		(cob_context *, const int, const int,
 							 const int, ...);
-COB_EXPIMP cob_field *cob_intr_substitute_case		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_substitute		(const int, const int,
 							 const int, ...);
-COB_EXPIMP cob_field *cob_intr_trim			(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_substitute_ctx		(cob_context *, const int, const int,
+							 const int, ...);
+COB_EXPIMP cob_field *cob_intr_substitute_case		(const int, const int,
+							 const int, ...);
+COB_EXPIMP cob_field *cob_intr_substitute_case_ctx		(cob_context *, const int, const int,
+							 const int, ...);
+COB_EXPIMP cob_field *cob_intr_trim			(const int, const int,
 							 cob_field *, const int);
-COB_EXPIMP cob_field *cob_intr_length			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_byte_length		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_integer			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_integer_part		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_fraction_part		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_sign			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_lowest_algebraic		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_highest_algebraic	(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_numval			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_numval_c			(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_numval_f			(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_annuity			(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_mod			(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_rem			(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_sum			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_ord_min			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_ord_max			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_min			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_max			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_midrange			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_median			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_mean			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_range			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_random			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_variance			(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_standard_deviation	(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_present_value		(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_year_to_yyyy		(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_date_to_yyyymmdd		(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_day_to_yyyyddd		(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_locale_compare		(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_locale_date		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_trim_ctx			(cob_context *, const int, const int,
+							 cob_field *, const int);
+COB_EXPIMP cob_field *cob_intr_length			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_length_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_byte_length		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_byte_length_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer_part		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer_part_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_fraction_part		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_fraction_part_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_sign			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_sign_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_lowest_algebraic		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_lowest_algebraic_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_highest_algebraic	(cob_field *);
+COB_EXPIMP cob_field *cob_intr_highest_algebraic_ctx	(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_numval			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_numval_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_numval_c			(cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_numval_c_ctx			(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_numval_f			(cob_field *);
+COB_EXPIMP cob_field *cob_intr_numval_f_ctx			(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_annuity			(cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_annuity_ctx			(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_mod			(cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_mod_ctx			(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_rem			(cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_rem_ctx			(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_sum			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_sum_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_ord_min			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_ord_min_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_ord_max			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_ord_max_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_min			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_min_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_max			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_max_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_midrange			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_midrange_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_median			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_median_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_mean			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_mean_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_range			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_range_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_random			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_random_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_variance			(const int, ...);
+COB_EXPIMP cob_field *cob_intr_variance_ctx			(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_standard_deviation	(const int, ...);
+COB_EXPIMP cob_field *cob_intr_standard_deviation_ctx	(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_present_value		(const int, ...);
+COB_EXPIMP cob_field *cob_intr_present_value_ctx		(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_year_to_yyyy		(const int, ...);
+COB_EXPIMP cob_field *cob_intr_year_to_yyyy_ctx		(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_date_to_yyyymmdd		(const int, ...);
+COB_EXPIMP cob_field *cob_intr_date_to_yyyymmdd_ctx		(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_day_to_yyyyddd		(const int, ...);
+COB_EXPIMP cob_field *cob_intr_day_to_yyyyddd_ctx		(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_locale_compare		(const int, ...);
+COB_EXPIMP cob_field *cob_intr_locale_compare_ctx		(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_locale_date		(const int, const int,
 							 cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_locale_time		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_locale_date_ctx		(cob_context *, const int, const int,
+							 cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_locale_time		(const int, const int,
+							 cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_locale_time_ctx		(cob_context *, const int, const int,
 							 cob_field *, cob_field *);
 
-COB_EXPIMP cob_field *cob_intr_seconds_past_midnight	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_lcl_time_from_secs	(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_seconds_past_midnight	(void);
+COB_EXPIMP cob_field *cob_intr_seconds_past_midnight_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_lcl_time_from_secs	(const int, const int,
+							 cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_lcl_time_from_secs_ctx	(cob_context *, const int, const int,
 							 cob_field *, cob_field *);
 
-COB_EXPIMP cob_field *cob_intr_seconds_from_formatted_time	(cob_context *, cob_field *,
+COB_EXPIMP cob_field *cob_intr_seconds_from_formatted_time	(cob_field *,
+								 cob_field *);
+COB_EXPIMP cob_field *cob_intr_seconds_from_formatted_time_ctx	(cob_context *, cob_field *,
 								 cob_field *);
 
-COB_EXPIMP cob_field *cob_intr_boolean_of_integer	(cob_context *, cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_char_national		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_display_of		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_boolean_of_integer	(cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_boolean_of_integer_ctx	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_char_national		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_char_national_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_display_of		(const int, const int,
 							 const int, ...);
-COB_EXPIMP cob_field *cob_intr_exception_file_n		(cob_context *);
-COB_EXPIMP cob_field *cob_intr_exception_location_n	(cob_context *);
-COB_EXPIMP cob_field *cob_intr_formatted_current_date	(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_display_of_ctx		(cob_context *, const int, const int,
+							 const int, ...);
+COB_EXPIMP cob_field *cob_intr_exception_file_n		(void);
+COB_EXPIMP cob_field *cob_intr_exception_file_n_ctx		(cob_context *);
+COB_EXPIMP cob_field *cob_intr_exception_location_n	(void);
+COB_EXPIMP cob_field *cob_intr_exception_location_n_ctx	(cob_context *);
+COB_EXPIMP cob_field *cob_intr_formatted_current_date	(const int, const int,
 							 cob_field *);
-COB_EXPIMP cob_field *cob_intr_formatted_date		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_formatted_current_date_ctx	(cob_context *, const int, const int,
+							 cob_field *);
+COB_EXPIMP cob_field *cob_intr_formatted_date		(const int, const int,
 							 cob_field *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_formatted_datetime	(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_formatted_date_ctx		(cob_context *, const int, const int,
+							 cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_formatted_datetime	(const int, const int,
 							 const int, ...);
-COB_EXPIMP cob_field *cob_intr_formatted_time		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_formatted_datetime_ctx	(cob_context *, const int, const int,
 							 const int, ...);
-COB_EXPIMP cob_field *cob_intr_integer_of_boolean	(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_national_of		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_formatted_time		(const int, const int,
 							 const int, ...);
-COB_EXPIMP cob_field *cob_intr_standard_compare		(cob_context *, const int, ...);
-COB_EXPIMP cob_field *cob_intr_test_formatted_datetime	(cob_context *, cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_formatted_time_ctx		(cob_context *, const int, const int,
+							 const int, ...);
+COB_EXPIMP cob_field *cob_intr_integer_of_boolean	(cob_field *);
+COB_EXPIMP cob_field *cob_intr_integer_of_boolean_ctx	(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_national_of		(const int, const int,
+							 const int, ...);
+COB_EXPIMP cob_field *cob_intr_national_of_ctx		(cob_context *, const int, const int,
+							 const int, ...);
+COB_EXPIMP cob_field *cob_intr_standard_compare		(const int, ...);
+COB_EXPIMP cob_field *cob_intr_standard_compare_ctx		(cob_context *, const int, ...);
+COB_EXPIMP cob_field *cob_intr_test_formatted_datetime	(cob_field *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_test_formatted_datetime_ctx	(cob_context *, cob_field *, cob_field *);
 
-COB_EXPIMP cob_field *cob_intr_integer_of_formatted_date	(cob_context *, cob_field *,
+COB_EXPIMP cob_field *cob_intr_integer_of_formatted_date	(cob_field *,
 								 cob_field *);
-COB_EXPIMP cob_field *cob_intr_content_length		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_content_of		(cob_context *, const int, const int,
+COB_EXPIMP cob_field *cob_intr_integer_of_formatted_date_ctx	(cob_context *, cob_field *,
+								 cob_field *);
+COB_EXPIMP cob_field *cob_intr_content_length		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_content_length_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_content_of		(const int, const int,
 							 const int, ...);
-COB_EXPIMP cob_field *cob_intr_bit_of		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_bit_to_char		(cob_context *, cob_field *);
-COB_EXPIMP cob_field *cob_intr_hex_of (cob_context *, cob_field*);
-COB_EXPIMP cob_field *cob_intr_hex_to_char (cob_context *, cob_field*);
+COB_EXPIMP cob_field *cob_intr_content_of_ctx		(cob_context *, const int, const int,
+							 const int, ...);
+COB_EXPIMP cob_field *cob_intr_bit_of		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_bit_of_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_bit_to_char		(cob_field *);
+COB_EXPIMP cob_field *cob_intr_bit_to_char_ctx		(cob_context *, cob_field *);
+COB_EXPIMP cob_field *cob_intr_hex_of (cob_field*);
+COB_EXPIMP cob_field *cob_intr_hex_of_ctx (cob_context *, cob_field*);
+COB_EXPIMP cob_field *cob_intr_hex_to_char (cob_field*);
+COB_EXPIMP cob_field *cob_intr_hex_to_char_ctx (cob_context *, cob_field*);
 
 /************************/
 /* Functions in cconv.c */
@@ -3193,21 +3673,30 @@ struct cob_prof_module {
 /* Function called to start profiling a COBOL module. Allocates the
    cob_prof_module structure that will be used to store the counters and
    times. */
-COB_EXPIMP struct cob_prof_module *cob_prof_init_module (cob_context *,
+COB_EXPIMP struct cob_prof_module *cob_prof_init_module (cob_module *module,
+	struct cob_prof_procedure	*procedure_names,
+	size_t		procedure_count);
+COB_EXPIMP struct cob_prof_module *cob_prof_init_module_ctx (cob_context *,
 	cob_module *module,
 	struct cob_prof_procedure	*procedure_names,
 	size_t		procedure_count);
 
 /* Functions used to instrument the generated C code and measure
  * counters and times */
-COB_EXPIMP void cob_prof_enter_procedure	(cob_context *, struct cob_prof_module *, int);
-COB_EXPIMP void cob_prof_exit_procedure 	(cob_context *, struct cob_prof_module *, int);
-COB_EXPIMP void cob_prof_enter_section  	(cob_context *, struct cob_prof_module *, int);
-COB_EXPIMP void cob_prof_exit_section   	(cob_context *, struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_enter_procedure	(struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_enter_procedure_ctx	(cob_context *, struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_exit_procedure 	(struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_exit_procedure_ctx 	(cob_context *, struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_enter_section  	(struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_enter_section_ctx  	(cob_context *, struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_exit_section   	(struct cob_prof_module *, int);
+COB_EXPIMP void cob_prof_exit_section_ctx   	(cob_context *, struct cob_prof_module *, int);
 
 /* Enter a paragraph in the middle, using an ENTRY statement */
-COB_EXPIMP void cob_prof_use_paragraph_entry	(cob_context *, struct cob_prof_module *, int, int);
+COB_EXPIMP void cob_prof_use_paragraph_entry	(struct cob_prof_module *, int, int);
+COB_EXPIMP void cob_prof_use_paragraph_entry_ctx	(cob_context *, struct cob_prof_module *, int, int);
 /* Exit a paragraph using a GO TO */
-COB_EXPIMP void cob_prof_goto			(cob_context *, struct cob_prof_module *);
+COB_EXPIMP void cob_prof_goto			(struct cob_prof_module *);
+COB_EXPIMP void cob_prof_goto_ctx			(cob_context *, struct cob_prof_module *);
 
 #endif	/* COB_COMMON_H */

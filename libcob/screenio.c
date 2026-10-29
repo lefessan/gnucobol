@@ -323,7 +323,7 @@ static COB_INLINE COB_A_INLINE void
 init_cob_screen_if_needed (void)
 {
 	if (!cobglobptr) {
-		cob_fatal_error (COB_CTX_TODO, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_INITIALIZED);
 	}
 	if (!cobglobptr->cob_screen_initialized) {
 		int ret = cob_screen_init ();
@@ -391,7 +391,7 @@ static void
 handle_status (const int fret, const enum screen_statement stmt)
 {
 	if (fret) {
-		cob_set_exception (COB_CTX_TODO, stmt == ACCEPT_STATEMENT ?
+		cob_set_exception_ctx (COB_CTX_TODO, stmt == ACCEPT_STATEMENT ?
 			COB_EC_IMP_ACCEPT : COB_EC_IMP_DISPLAY);
 	}
 	COB_ACCEPT_STATUS = fret;
@@ -399,7 +399,7 @@ handle_status (const int fret, const enum screen_statement stmt)
 	if (COB_MODULE_PTR && COB_MODULE_PTR->crt_status) {
 		cob_field	*status_field = COB_MODULE_PTR->crt_status;
 		if (COB_FIELD_IS_NUMERIC (status_field)) {
-			cob_set_int (COB_CTX_TODO, status_field, fret);
+			cob_set_int_ctx (COB_CTX_TODO, status_field, fret);
 		} else if (status_field->size == 3) {
 			cob_set_crt3_status (status_field, fret);
 		} else {
@@ -454,10 +454,10 @@ raise_ec_on_invalid_line_or_col (const int line, const int column)
 
 	getmaxyx (mywin, max_y, max_x);
 	if (line < 0 || line >= max_y) {
-		cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
 	}
 	if (column < 0 || column >= max_x) {
-		cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
 	}
 }
 
@@ -615,7 +615,7 @@ static void
 adjust_attr_from_color_field (cob_flags_t *attr, cob_field *color,
 	short *fg_color, short *bg_color)
 {
-	int col_attr = cob_get_int (COB_CTX_TODO, color);	/* added numeric value */
+	int col_attr = cob_get_int_ctx (COB_CTX_TODO, color);	/* added numeric value */
 
 	if (col_attr >= 131072) {
 		col_attr -= 131072;
@@ -1024,8 +1024,8 @@ cob_screen_attr (cob_field *fgc, cob_field *bgc, cob_flags_t attr,
 {
 	int		line;
 	int		column;
-	const int	cob_fg_color = fgc ? cob_get_int (COB_CTX_TODO, fgc) : -1;
-	const int	cob_bg_color = bgc ? cob_get_int (COB_CTX_TODO, bgc) : -1;
+	const int	cob_fg_color = fgc ? cob_get_int_ctx (COB_CTX_TODO, fgc) : -1;
+	const int	cob_bg_color = bgc ? cob_get_int_ctx (COB_CTX_TODO, bgc) : -1;
 	short		fg_color = -1;
 	short		bg_color = -1;
 	chtype		styles = A_NORMAL;
@@ -1179,7 +1179,7 @@ cob_screen_init (void)
 #endif
 
 	if (!initscr ()) {
-		cob_runtime_error (COB_CTX_TODO, _("failed to initialize curses"));
+		cob_runtime_error_ctx (COB_CTX_TODO, _("failed to initialize curses"));
 		return 1;
 	}
 
@@ -1461,7 +1461,7 @@ pass_cursor_to_program (void)
 			COB_FIELD_TYPE (cursor_field) != COB_TYPE_NUMERIC_DISPLAY) {
 			sline *= 1000;
 			sline += scolumn;
-			cob_set_int (COB_CTX_TODO, cursor_field, sline);
+			cob_set_int_ctx (COB_CTX_TODO, cursor_field, sline);
 		} else {
 			char	buff[23]; /* 10: make the compiler happy as "int" *could*
 								 have more digits than we "assume" */
@@ -1480,7 +1480,7 @@ pass_cursor_to_program (void)
 				break;
 			/* LCOV_EXCL_START */
 			default:
-				cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+				cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 			/* LCOV_EXCL_STOP */
 			}
 		}
@@ -1503,19 +1503,19 @@ get_line_and_col_from_field (cob_field* pos, int* line, int* column)
 	}
 
 	if (COB_FIELD_IS_NUMERIC (pos)) {
-		pos_val = cob_get_int (COB_CTX_TODO, pos);
+		pos_val = cob_get_int_ctx (COB_CTX_TODO, pos);
 	} else {
 		char	buff[23]; /* 7: make the compiler happy as "int" *could*
 							 have more digits than we "assume" */
 		/* LCOV_EXCL_START */
 		if (max_line_column == 1) {
-			cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 		}
 		/* LCOV_EXCL_STOP */
 		memcpy (buff, pos->data, maxsize);
 		buff[maxsize + 1] = 0;
 		if (!sscanf (buff, "%d", &pos_val)) {
-			cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 		}
 	}
 
@@ -1535,7 +1535,7 @@ get_cursor_from_program (int *line, int *column)
 			(COB_MODULE_PTR->cursor_pos, line, column);
 		/* LCOV_EXCL_START */
 		if (ret == 1) {
-			cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 		}
 		/* LCOV_EXCL_STOP */
 		*line = *line - 1;
@@ -1557,7 +1557,7 @@ raise_ec_on_truncation (const int item_size)
 	getmaxyx (mywin, max_y, max_x);
 
 	if (x + item_size - 1 > max_x) {
-		cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_ITEM_TRUNCATED);
+		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SCREEN_ITEM_TRUNCATED);
 	}
 
 	COB_UNUSED (y);
@@ -1839,11 +1839,11 @@ get_prev_screen_item (cob_screen * const s)
 				    int * const found_clause)		\
 	{								\
 		if (s->attr & COB_SCREEN_##clause_name_upper##_PLUS) {	\
-			*count += cob_get_int (COB_CTX_TODO, s->clause_name_lower);	\
+			*count += cob_get_int_ctx (COB_CTX_TODO, s->clause_name_lower);	\
 		} else if (s->attr & COB_SCREEN_##clause_name_upper##_MINUS) { \
-			*count -= cob_get_int (COB_CTX_TODO, s->clause_name_lower);	\
+			*count -= cob_get_int_ctx (COB_CTX_TODO, s->clause_name_lower);	\
 		} else {						\
-			*count += cob_get_int (COB_CTX_TODO, s->clause_name_lower) - 1; \
+			*count += cob_get_int_ctx (COB_CTX_TODO, s->clause_name_lower) - 1; \
 			*found_clause = 1;				\
 		}							\
 	}
@@ -2142,16 +2142,16 @@ valid_field_data (cob_field *field)
 	int num_check;
 
 	if (COB_FIELD_IS_NUMERIC (field)) {
-		return cob_check_numval (COB_CTX_TODO, field, NULL, 0, 0) == 0;
+		return cob_check_numval_ctx (COB_CTX_TODO, field, NULL, 0, 0) == 0;
 	} else if (field->attr->type == COB_TYPE_NUMERIC_EDITED) {
-		num_check = cob_check_numval (COB_CTX_TODO, field, NULL, 1, 0);
+		num_check = cob_check_numval_ctx (COB_CTX_TODO, field, NULL, 1, 0);
 		/* test for all spaces which is valid in this case
 		   and change to a one zero instead */
 		if (num_check == (int)field->size + 1) {
 			field->data[0] = '0';
 			return 1;
 		}
-		return cob_check_numval (COB_CTX_TODO, field, NULL, 1, 0) == 0;
+		return cob_check_numval_ctx (COB_CTX_TODO, field, NULL, 1, 0) == 0;
 	} else {
 		return 1;
 	}
@@ -2185,9 +2185,9 @@ format_field (cob_screen *s)
 	COB_FIELD_INIT (size, data, s->field->attr);
 
 	if (COB_FIELD_IS_NUMERIC (s->field)) {
-		cob_move (COB_CTX_TODO, cob_intr_numval (COB_CTX_TODO, &field), s->field);
+		cob_move_ctx (COB_CTX_TODO, cob_intr_numval_ctx (COB_CTX_TODO, &field), s->field);
 	} else if (field.attr->type == COB_TYPE_NUMERIC_EDITED) {
-		cob_move (COB_CTX_TODO, cob_intr_numval_c (COB_CTX_TODO, &field, NULL), s->field);
+		cob_move_ctx (COB_CTX_TODO, cob_intr_numval_c_ctx (COB_CTX_TODO, &field, NULL), s->field);
 	}
 
 	cob_free (data);
@@ -3086,7 +3086,7 @@ cob_screen_moveyx (cob_screen *s)
 		getyx (mywin, y, x);
 		if (x < 0 || y < 0) {
 			/* not translated as "testing only" (should not happen) */
-			cob_runtime_warning (COB_CTX_TODO, "negative values from getyx");
+			cob_runtime_warning_ctx (COB_CTX_TODO, "negative values from getyx");
 			x = y = 0;
 		}
 		/* Column adjust */
@@ -3096,7 +3096,7 @@ cob_screen_moveyx (cob_screen *s)
 		if (!s->line) {
 			line = y;
 		} else {
-			line = origin_y + cob_get_int (COB_CTX_TODO, s->line);
+			line = origin_y + cob_get_int_ctx (COB_CTX_TODO, s->line);
 			if (line < 0) {
 				line = y;
 			}
@@ -3104,7 +3104,7 @@ cob_screen_moveyx (cob_screen *s)
 		if (!s->column) {
 			column = x;
 		} else {
-			column = origin_x + cob_get_int (COB_CTX_TODO, s->column);
+			column = origin_x + cob_get_int_ctx (COB_CTX_TODO, s->column);
 			if (column < 0) {
 				column = x;
 			}
@@ -3213,13 +3213,13 @@ get_line_column (cob_field *fline, cob_field *fcol, int *line, int *col)
 	if (fline == NULL) {
 		*line = 1;
 	} else {
-		*line = cob_get_int (COB_CTX_TODO, fline);
+		*line = cob_get_int_ctx (COB_CTX_TODO, fline);
 	}
 
 	if (fcol == NULL) {
 		*col = 1;
 	} else {
-		*col = cob_get_int (COB_CTX_TODO, fcol);
+		*col = cob_get_int_ctx (COB_CTX_TODO, fcol);
 	}
 }
 
@@ -3255,7 +3255,7 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 		if (line->size < 4) {
 			/* this is used when only a LINE clause is specified,
 			   not an AT clause */
-			cobol_line = cob_get_int (COB_CTX_TODO, line);
+			cobol_line = cob_get_int_ctx (COB_CTX_TODO, line);
 			cobol_col = 1;
 		} else {
 			/* common case: line actually contains both the
@@ -3265,9 +3265,9 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 			/* LCOV_EXCL_START */
 			if (ret == 1) {
 #if 0			/* Throw an exception? EC-SCREEN-IMP-LINE-VAR-LENGTH? */
-				cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_IMP);
+				cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SCREEN_IMP);
 #else
-				cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
+				cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_CODEGEN);
 #endif
 			}
 			/* LCOV_EXCL_STOP */
@@ -3282,8 +3282,8 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 				*sline = line_where_last_stmt_ended (stmt);
 				*scolumn = col_where_last_stmt_ended (stmt);
 			} else {
-				cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
-				cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
+				cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
+				cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
 				*sline = 0;
 				*scolumn = 0;
 			}
@@ -3291,7 +3291,7 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 			if (zero_line_col_allowed) {
 				*sline = line_where_last_stmt_ended (stmt) + 1;
 			} else {
-				cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
+				cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SCREEN_LINE_NUMBER);
 				*sline = 0;
 			}
 			*scolumn = cobol_col - 1;
@@ -3301,7 +3301,7 @@ extract_line_and_col_vals (cob_field *line, cob_field *column,
 		if (zero_line_col_allowed) {
 			*scolumn = col_where_last_stmt_ended (stmt);
 		} else {
-			cob_set_exception (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
+			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_SCREEN_STARTING_COLUMN);
 			*scolumn = 0;
 		}
 	} else {
@@ -3334,7 +3334,7 @@ get_accept_timeout (cob_field *ftimeout)
 	if (ftimeout) {
 		/* FIXME: the scale should come primarily from the module,
 		   TODO:  add scale field to module_ptr */
-		return cob_get_int (COB_CTX_TODO, ftimeout) * COB_TIMEOUT_SCALE;
+		return cob_get_int_ctx (COB_CTX_TODO, ftimeout) * COB_TIMEOUT_SCALE;
 	} else {
 		return -1;
 	}
@@ -3464,7 +3464,7 @@ field_display (cob_field *f, cob_flags_t fattr, const int line, const int column
 	origin_x = 0;
 
 	if (size_is) {
-		size_display = (unsigned int)cob_get_int (COB_CTX_TODO, size_is);
+		size_display = (unsigned int)cob_get_int_ctx (COB_CTX_TODO, size_is);
 		/* SIZE ZERO is ignored */
 		if (size_display == 0) {
 			size_display = fsize;
@@ -3476,7 +3476,7 @@ field_display (cob_field *f, cob_flags_t fattr, const int line, const int column
 	}
 
 	if (fscroll) {
-		sline = cob_get_int (COB_CTX_TODO, fscroll);
+		sline = cob_get_int_ctx (COB_CTX_TODO, fscroll);
 		if (fattr & COB_SCREEN_SCROLL_DOWN) {
 			sline = -sline;
 		}
@@ -3588,7 +3588,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 
 
 	if (fscroll) {
-		keyp = cob_get_int (COB_CTX_TODO, fscroll);
+		keyp = cob_get_int_ctx (COB_CTX_TODO, fscroll);
 		if (fattr & COB_SCREEN_SCROLL_DOWN) {
 			keyp = -keyp;
 		}
@@ -3608,7 +3608,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 
 	if (f) {
 		if (size_is) {
-			size_accept = cob_get_int (COB_CTX_TODO, size_is);
+			size_accept = cob_get_int_ctx (COB_CTX_TODO, size_is);
 			/* SIZE ZERO is ignored */
 			if (size_accept < 1) {
 				size_accept = (int)f->size;
@@ -3622,7 +3622,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 		temp_field.attr = &const_alpha_attr;
 		temp_field.size = size_accept;
 		if (fattr & COB_SCREEN_UPDATE) {
-			cob_move (COB_CTX_TODO, f, &temp_field);	/* updates COB_TERM_BUFF */
+			cob_move_ctx (COB_CTX_TODO, f, &temp_field);	/* updates COB_TERM_BUFF */
 		} else {
 			memset (COB_TERM_BUFF, ' ', size_accept);
 		}
@@ -3658,7 +3658,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 				int cursor_off = 1;
 				if (cursor) {
 					/* position according to CURSOR clause */
-					cursor_off = cob_get_int (COB_CTX_TODO, cursor);
+					cursor_off = cob_get_int_ctx (COB_CTX_TODO, cursor);
 					if (cursor_off >= 1) {
 						/* max: last_position with data */
 						int last_data = p_set - COB_TERM_BUFF + 1;
@@ -3686,9 +3686,9 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 #if	0	/* RXWRXW - Screen update */
 		if (!(fattr & COB_SCREEN_UPDATE)) {
 			if (cob_field_is_numeric_or_numeric_edited (f)) {
-				cob_set_int (COB_CTX_TODO, f, 0);
+				cob_set_int_ctx (COB_CTX_TODO, f, 0);
 			} else {
-				cob_move (COB_CTX_TODO, &char_temp, f);
+				cob_move_ctx (COB_CTX_TODO, &char_temp, f);
 			}
 		}
 #endif
@@ -4246,7 +4246,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 		if (!COB_FIELD_CONSTANT (cursor)) {
 			getyx (mywin, cline, ccolumn);
 			if (cline == sline) {
-				cob_set_int (COB_CTX_TODO, cursor, ccolumn + 1 - scolumn);
+				cob_set_int_ctx (COB_CTX_TODO, cursor, ccolumn + 1 - scolumn);
 			}
 		}
 	} else {
@@ -4255,7 +4255,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 	}
 	handle_status (fret, ACCEPT_STATEMENT);
 	if (f) {
-		cob_move (COB_CTX_TODO, &temp_field, f);
+		cob_move_ctx (COB_CTX_TODO, &temp_field, f);
 		cob_move_cursor (sline, right_pos + 1);
 #if 0	/* possible cleanup to not "leak" input data */
 		memset (COB_TERM_BUFF, ' ', size_accept);
@@ -4299,7 +4299,7 @@ field_display_at_curpos (cob_field *f,
 
 /* DISPLAY scr-name */
 void
-cob_screen_display (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
+cob_screen_display_ctx (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
 		    const int zero_line_col_allowed)
 {
 	int	sline;
@@ -4311,9 +4311,16 @@ cob_screen_display (cob_context *ctx, cob_screen *s, cob_field *line, cob_field 
 	screen_display (s, sline, scolumn);
 }
 
+/* compatibility: cob_screen_display without context */
+void
+cob_screen_display (cob_screen *s, cob_field *line, cob_field *column, const int zero_line_col_allowed)
+{
+	cob_screen_display_ctx (COB_CTX_COMPAT, s, line, column, zero_line_col_allowed);
+}
+
 /* ACCEPT scr-name */
 void
-cob_screen_accept (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
+cob_screen_accept_ctx (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
 		   cob_field *ftimeout, const int zero_line_col_allowed)
 {
 	int	sline;
@@ -4324,9 +4331,16 @@ cob_screen_accept (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *
 	screen_accept (s, sline, scolumn, ftimeout);
 }
 
-/* DISPLAY scr-item WITH/AT */
+/* compatibility: cob_screen_accept without context */
 void
-cob_display_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+cob_screen_accept (cob_screen *s, cob_field *line, cob_field *column, cob_field *ftimeout, const int zero_line_col_allowed)
+{
+	cob_screen_accept_ctx (COB_CTX_COMPAT, s, line, column, ftimeout, zero_line_col_allowed);
+}
+
+/* DISPLAY scr-item WITH/AT */
+static void
+cob_display_field_va_ctx (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, va_list cob_va_args)
 {
 	cob_field *line = NULL;
 	cob_field *column = NULL;
@@ -4352,7 +4366,7 @@ cob_display_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, cons
 		va_list 	args;
 		const char *p = parms;
 
-		va_start (args, parms);
+		va_copy (args, cob_va_args);
 		for (;;) {
 			char type = *p++;
 			if (type == 0) {
@@ -4401,9 +4415,30 @@ cob_display_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, cons
 			fscroll, size_is, control, color);
 }
 
-/* ACCEPT scr-item WITH/AT */
 void
-cob_accept_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+cob_display_field_ctx (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_display_field_va_ctx (ctx, f, fattr, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_display_field without context */
+void
+cob_display_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_display_field_va_ctx (COB_CTX_COMPAT, f, fattr, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* ACCEPT scr-item WITH/AT */
+static void
+cob_accept_field_va_ctx (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, va_list cob_va_args)
 {
 	cob_field *line = NULL;
 	cob_field *column = NULL;
@@ -4426,7 +4461,7 @@ cob_accept_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const
 		va_list 	args;
 		const char	*p = parms;
 
-		va_start (args, parms);
+		va_copy (args, cob_va_args);
 		for (;;) {
 			char type = *p++;
 			if (type == 0) {
@@ -4482,9 +4517,30 @@ cob_accept_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const
 			fscroll, ftimeout, prompt, size_is, cursor, control, color);
 }
 
+void
+cob_accept_field_ctx (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_accept_field_va_ctx (ctx, f, fattr, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_accept_field without context */
+void
+cob_accept_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_accept_field_va_ctx (COB_CTX_COMPAT, f, fattr, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
 /* DISPLAY scr-item WITH/AT - compat-function for < 3.2 */
 void
-cob_field_display (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
+cob_field_display_ctx (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
 		  cob_field *fgc, cob_field *bgc, cob_field *fscroll,
 		  cob_field *size_is, const cob_flags_t fattr)
 {
@@ -4500,9 +4556,16 @@ cob_field_display (cob_context *ctx, cob_field *f, cob_field *line, cob_field *c
 			fscroll, size_is, NULL, NULL);
 }
 
+/* compatibility: cob_field_display without context */
+void
+cob_field_display (cob_field *f, cob_field *line, cob_field *column, cob_field *fgc, cob_field *bgc, cob_field *fscroll, cob_field *size_is, const cob_flags_t fattr)
+{
+	cob_field_display_ctx (COB_CTX_COMPAT, f, line, column, fgc, bgc, fscroll, size_is, fattr);
+}
+
 /* ACCEPT scr-item WITH/AT - compat-function for < 3.2 */
 void
-cob_field_accept (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
+cob_field_accept_ctx (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
 		  cob_field *fgc, cob_field *bgc, cob_field *fscroll,
 		  cob_field *ftimeout, cob_field *prompt, cob_field *size_is,
 		  const cob_flags_t fattr)
@@ -4516,6 +4579,13 @@ cob_field_accept (cob_context *ctx, cob_field *f, cob_field *line, cob_field *co
 			zero_line_col_allowed, &sline, &scolumn);
 	field_accept (f, (cob_flags_t)fattr, sline, scolumn, fgc, bgc,
 			fscroll, ftimeout, prompt, size_is, NULL, NULL, NULL);
+}
+
+/* compatibility: cob_field_accept without context */
+void
+cob_field_accept (cob_field *f, cob_field *line, cob_field *column, cob_field *fgc, cob_field *bgc, cob_field *fscroll, cob_field *ftimeout, cob_field *prompt, cob_field *size_is, const cob_flags_t fattr)
+{
+	cob_field_accept_ctx (COB_CTX_COMPAT, f, line, column, fgc, bgc, fscroll, ftimeout, prompt, size_is, fattr);
 }
 
 /* x'E4' system call - clear screen */
@@ -4605,7 +4675,7 @@ cob_get_char (void)
 
 /* get a C string with given max-length - returns keyboard status */
 int
-cob_get_text (cob_context *ctx, char *text, int size)
+cob_get_text_ctx (cob_context *ctx, char *text, int size)
 {
 	cob_field	field;
 	cob_field_attr	attr;
@@ -4621,6 +4691,13 @@ cob_get_text (cob_context *ctx, char *text, int size)
 	}
 
 	return COB_ACCEPT_STATUS;
+}
+
+/* compatibility: cob_get_text without context */
+int
+cob_get_text (char *text, int size)
+{
+	return cob_get_text_ctx (COB_CTX_COMPAT, text, size);
 }
 
 /* display a formatted C string without auto-newline */
@@ -4771,7 +4848,7 @@ cob_exit_screen_from_signal (int signal_safe_only)
 
 /* DISPLAY scr-name */
 void
-cob_screen_display (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
+cob_screen_display_ctx (cob_context *ctx, cob_screen *s, cob_field *line, cob_field *column,
 		   const int zero_line_col_allowed)
 {
 	COB_UNUSED (s);
@@ -4781,9 +4858,16 @@ cob_screen_display (cob_context *ctx, cob_screen *s, cob_field *line, cob_field 
 	handle_status (9000, DISPLAY_STATEMENT);
 }
 
+/* compatibility: cob_screen_display without context */
+void
+cob_screen_display (cob_screen *s, cob_field *line, cob_field *column, const int zero_line_col_allowed)
+{
+	cob_screen_display_ctx (COB_CTX_COMPAT, s, line, column, zero_line_col_allowed);
+}
+
 /* ACCEPT scr-name */
 void
-cob_screen_accept (cob_context *ctx, cob_screen *s, cob_field *line,
+cob_screen_accept_ctx (cob_context *ctx, cob_screen *s, cob_field *line,
 		   cob_field *column, cob_field *ftimeout,
 		   const int zero_line_col_allowed)
 {
@@ -4795,15 +4879,22 @@ cob_screen_accept (cob_context *ctx, cob_screen *s, cob_field *line,
 	COB_UNUSED (zero_line_col_allowed);
 	if (first_accept) {
 		first_accept = 0;
-		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"screenio ACCEPT");
 	}
 	handle_status (9000, ACCEPT_STATEMENT);
 }
 
-/* DISPLAY scr-item WITH/AT */
+/* compatibility: cob_screen_accept without context */
 void
-cob_display_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char * parms, ...)
+cob_screen_accept (cob_screen *s, cob_field *line, cob_field *column, cob_field *ftimeout, const int zero_line_col_allowed)
+{
+	cob_screen_accept_ctx (COB_CTX_COMPAT, s, line, column, ftimeout, zero_line_col_allowed);
+}
+
+/* DISPLAY scr-item WITH/AT */
+static void
+cob_display_field_va_ctx (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char * parms, va_list cob_va_args)
 {
 	COB_UNUSED (f);
 	COB_UNUSED (fattr);
@@ -4811,9 +4902,30 @@ cob_display_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, cons
 	handle_status (9000, DISPLAY_STATEMENT);
 }
 
-/* ACCEPT scr-item WITH/AT */
 void
-cob_accept_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+cob_display_field_ctx (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char * parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_display_field_va_ctx (ctx, f, fattr, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_display_field without context */
+void
+cob_display_field (cob_field *f, const cob_flags_t fattr, const char * parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_display_field_va_ctx (COB_CTX_COMPAT, f, fattr, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* ACCEPT scr-item WITH/AT */
+static void
+cob_accept_field_va_ctx (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, va_list cob_va_args)
 {
 	static int first_accept = 1;
 	COB_UNUSED (f);
@@ -4821,15 +4933,36 @@ cob_accept_field (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const
 	COB_UNUSED (parms);
 	if (first_accept) {
 		first_accept = 0;
-		cob_runtime_warning (COB_CTX_TODO, _("runtime is not configured to support %s"),
+		cob_runtime_warning_ctx (COB_CTX_TODO, _("runtime is not configured to support %s"),
 			"screenio ACCEPT");
 	}
 	handle_status (9000, ACCEPT_STATEMENT);
 }
 
+void
+cob_accept_field_ctx (cob_context *ctx, cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_accept_field_va_ctx (ctx, f, fattr, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_accept_field without context */
+void
+cob_accept_field (cob_field *f, const cob_flags_t fattr, const char *parms, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, parms);
+	cob_accept_field_va_ctx (COB_CTX_COMPAT, f, fattr, parms, cob_va_args);
+	va_end (cob_va_args);
+}
+
 /* DISPLAY scr-item WITH/AT - compat-function for < 3.2 */
 void
-cob_field_display (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
+cob_field_display_ctx (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
 		  cob_field *fgc, cob_field *bgc, cob_field *fscroll,
 		  cob_field *size_is, const cob_flags_t fattr)
 {
@@ -4839,12 +4972,19 @@ cob_field_display (cob_context *ctx, cob_field *f, cob_field *line, cob_field *c
 	COB_UNUSED (bgc);
 	COB_UNUSED (fscroll);
 	COB_UNUSED (size_is);
-	cob_display_field (ctx, f, fattr, "");
+	cob_display_field_ctx (ctx, f, fattr, "");
+}
+
+/* compatibility: cob_field_display without context */
+void
+cob_field_display (cob_field *f, cob_field *line, cob_field *column, cob_field *fgc, cob_field *bgc, cob_field *fscroll, cob_field *size_is, const cob_flags_t fattr)
+{
+	cob_field_display_ctx (COB_CTX_COMPAT, f, line, column, fgc, bgc, fscroll, size_is, fattr);
 }
 
 /* ACCEPT scr-item WITH/AT - compat-function for < 3.2 */
 void
-cob_field_accept (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
+cob_field_accept_ctx (cob_context *ctx, cob_field *f, cob_field *line, cob_field *column,
 		  cob_field *fgc, cob_field *bgc, cob_field *fscroll,
 		  cob_field *ftimeout, cob_field *prompt,
 		  cob_field *size_is, const cob_flags_t fattr)
@@ -4857,7 +4997,14 @@ cob_field_accept (cob_context *ctx, cob_field *f, cob_field *line, cob_field *co
 	COB_UNUSED (ftimeout);
 	COB_UNUSED (prompt);
 	COB_UNUSED (size_is);
-	cob_accept_field (ctx, f, fattr, "");
+	cob_accept_field_ctx (ctx, f, fattr, "");
+}
+
+/* compatibility: cob_field_accept without context */
+void
+cob_field_accept (cob_field *f, cob_field *line, cob_field *column, cob_field *fgc, cob_field *bgc, cob_field *fscroll, cob_field *ftimeout, cob_field *prompt, cob_field *size_is, const cob_flags_t fattr)
+{
+	cob_field_accept_ctx (COB_CTX_COMPAT, f, line, column, fgc, bgc, fscroll, ftimeout, prompt, size_is, fattr);
 }
 
 /* internal function to temporarily set "extended screen mode"
@@ -4881,23 +5028,30 @@ cob_sys_clear_screen (void)
 #endif	/* WITH_EXTENDED_SCREENIO */
 
 void
-cob_screen_line_col (cob_context *ctx, cob_field *f, const int get_columns)
+cob_screen_line_col_ctx (cob_context *ctx, cob_field *f, const int get_columns)
 {
 	init_cob_screen_if_needed ();
 #ifdef	WITH_EXTENDED_SCREENIO
 	if (get_columns) {
-		cob_set_int (COB_CTX_TODO, f, (int)COLS);
+		cob_set_int_ctx (COB_CTX_TODO, f, (int)COLS);
 	} else {
-		cob_set_int (COB_CTX_TODO, f, (int)LINES);
+		cob_set_int_ctx (COB_CTX_TODO, f, (int)LINES);
 	}
 #else
 	if (get_columns) {
-		cob_set_int (COB_CTX_TODO, f, 80);
+		cob_set_int_ctx (COB_CTX_TODO, f, 80);
 	} else {
-		cob_set_int (COB_CTX_TODO, f, 24);
+		cob_set_int_ctx (COB_CTX_TODO, f, 24);
 	}
 	/* TODO: _possibly_ raise exception */
 #endif
+}
+
+/* compatibility: cob_screen_line_col without context */
+void
+cob_screen_line_col (cob_field *f, const int get_columns)
+{
+	cob_screen_line_col_ctx (COB_CTX_COMPAT, f, get_columns);
 }
 
 int
@@ -4923,7 +5077,7 @@ cob_sys_sound_bell (void)
 }
 
 void
-cob_accept_escape_key (cob_context *ctx, cob_field *f)
+cob_accept_escape_key_ctx (cob_context *ctx, cob_field *f)
 {
 	int status = COB_ACCEPT_STATUS;
 	/* Note: MF + ACU set this to a 9(2) item, we do a translation here
@@ -4935,8 +5089,15 @@ cob_accept_escape_key (cob_context *ctx, cob_field *f)
 		f->data[0] = crtstat[0];
 		f->data[1] = crtstat[1];
 	} else {
-		cob_set_int (COB_CTX_TODO, f, status);
+		cob_set_int_ctx (COB_CTX_TODO, f, status);
 	}
+}
+
+/* compatibility: cob_accept_escape_key without context */
+void
+cob_accept_escape_key (cob_field *f)
+{
+	cob_accept_escape_key_ctx (COB_CTX_COMPAT, f);
 }
 
 /* get CurSoR position on screen */
@@ -5075,7 +5236,7 @@ cob_sys_get_scr_size (unsigned char *line, unsigned char *col)
 #else
 	*line = 24U;
 	*col = 80U;
-	cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_DISABLED);
+	cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_DISABLED);
 	return -1;
 #endif
 }
@@ -5090,7 +5251,7 @@ cob_sys_set_scr_size (unsigned char *line, unsigned char *col)
 #if !defined (WITH_EXTENDED_SCREENIO) || !defined (HAVE_RESIZE_TERM)
 	COB_UNUSED (line);
 	COB_UNUSED (col);
-	cob_set_exception (COB_CTX_TODO, COB_EC_IMP_FEATURE_DISABLED);
+	cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_DISABLED);
 	return -1;
 #else
 	{

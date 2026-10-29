@@ -419,7 +419,7 @@ main (int argc, char **argv)
 		if (print_runtime_wanted) {
 			cob_init_nomain (0, &argv[0]);
 			print_runtime_conf ();
-			cob_stop_run (cob_get_current_context (), EXIT_SUCCESS);
+			cob_stop_run (EXIT_SUCCESS);
 		}
 		fprintf (stderr, _("%s: missing PROGRAM name"), argv[0]);
 		putc ('\n', stderr);
@@ -441,11 +441,11 @@ main (int argc, char **argv)
 	/* Note: cob_resolve_cobol takes care for call errors,
 	   because of the last parameter; no need to check here afterwards;
 	   another program may use "0" and check for function pointer != NULL */
-	unifunc.funcvoid = cob_resolve_cobol (cob_get_current_context (), argv[arg_shift], 0, 1);
+	unifunc.funcvoid = cob_resolve_cobol (argv[arg_shift], 0, 1);
 	
 	/* ... then invoke, wrapped in a STOP RUN */
 	/* Note:  we requested a program exit if resolving had issues,
 	          so are only still running if we have a a valid, _likely_ COBOL
 	          function to execute */
-	cob_stop_run (cob_get_current_context (), unifunc.funcint());
+	cob_stop_run (unifunc.funcint());
 }
