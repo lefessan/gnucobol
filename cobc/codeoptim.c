@@ -211,14 +211,14 @@ cob_gen_optim (const enum cb_optim val)
 
 	case COB_POINTER_MANIP:
 		output_storage ("static void COB_NOINLINE");
-		output_storage ("cob_pointer_manip (void *f1, cob_field *f2, const unsigned int addsub)");
+		output_storage ("cob_pointer_manip (cob_context *ctx, void *f1, cob_field *f2, const unsigned int addsub)");
 		output_storage ("{");
 		output_storage ("	unsigned char   *tmptr;");
 		output_storage ("	memcpy (&tmptr, f1, sizeof(unsigned char *));");
 		output_storage ("	if (addsub) {");
-		output_storage ("		tmptr -= cob_get_int (f2);");
+		output_storage ("		tmptr -= cob_get_int (ctx, f2);");
 		output_storage ("	} else {");
-		output_storage ("		tmptr += cob_get_int (f2);");
+		output_storage ("		tmptr += cob_get_int (ctx, f2);");
 		output_storage ("	}");
 		output_storage ("	memcpy (f1, &tmptr, sizeof(unsigned char *));");
 		output_storage ("}");
@@ -394,7 +394,7 @@ cob_gen_optim (const enum cb_optim val)
 
 	case COB_ADD_PACKED_INT:
 		output_storage ("static int COB_NOINLINE");
-		output_storage ("cob_add_packed_int (cob_field *f, const int val)");
+		output_storage ("cob_add_packed_int (cob_context *ctx, cob_field *f, const int val)");
 		output_storage ("{");
 		output_storage ("	register unsigned char	*p;");
 		output_storage ("	size_t		size;");
@@ -408,12 +408,12 @@ cob_gen_optim (const enum cb_optim val)
 		output_storage ("	p = f->data + f->size - 1;");
 		output_storage ("	if ((*p & 0x0f) == 0x0d) {");
 		output_storage ("		if (val > 0) {");
-		output_storage ("			return cob_add_int (f, val, 0);");
+		output_storage ("			return cob_add_int (ctx, f, val, 0);");
 		output_storage ("		}");
 		output_storage ("		n = -val;");
 		output_storage ("	} else {");
 		output_storage ("		if (val < 0) {");
-		output_storage ("			return cob_add_int (f, val, 0);");
+		output_storage ("			return cob_add_int (ctx, f, val, 0);");
 		output_storage ("		}");
 		output_storage ("		n = val;");
 		output_storage ("	}");
@@ -439,7 +439,7 @@ cob_gen_optim (const enum cb_optim val)
 
 	case COB_ADD_PACKED_INT64:
 		output_storage ("static int COB_NOINLINE");
-		output_storage ("cob_add_packed_int64 (cob_field *f, const cob_s64_t val)");
+		output_storage ("cob_add_packed_int64 (cob_context *ctx, cob_field *f, const cob_s64_t val)");
 		output_storage ("{");
 		output_storage ("	register unsigned char	*p;");
 		output_storage ("	size_t		size;");
@@ -453,12 +453,12 @@ cob_gen_optim (const enum cb_optim val)
 		output_storage ("	p = f->data + f->size - 1;");
 		output_storage ("	if ((*p & 0x0f) == 0x0d) {");
 		output_storage ("		if (val > 0) {");
-		output_storage ("			return cob_add_int (f, val, 0);");
+		output_storage ("			return cob_add_int (ctx, f, val, 0);");
 		output_storage ("		}");
 		output_storage ("		n = -val;");
 		output_storage ("	} else {");
 		output_storage ("		if (val < 0) {");
-		output_storage ("			return cob_add_int (f, val, 0);");
+		output_storage ("			return cob_add_int (ctx, f, val, 0);");
 		output_storage ("		}");
 		output_storage ("		n = val;");
 		output_storage ("	}");

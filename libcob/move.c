@@ -1541,13 +1541,13 @@ indirect_move (void (*func) (cob_field *src, cob_field *dst),
 		COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, (unsigned short) size, (short) scale,
 			       COB_FLAG_HAVE_SIGN, NULL);
 		func (src, &field);
-		cob_move (&field, dst);
+		cob_move (COB_CTX_TODO, &field, dst);
 	} else {
 		COB_FIELD_INIT (size, cob_malloc (size), &attr);
 		COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, (unsigned short) size, (short) scale,
 			       COB_FLAG_HAVE_SIGN, NULL);
 		func (src, &field);
-		cob_move (&field, dst);
+		cob_move (COB_CTX_TODO, &field, dst);
 		cob_free (field.data);
 	}
 }
@@ -1578,7 +1578,7 @@ cob_move_all (cob_field *src, cob_field *dst)
 		digcount = dst->size;
 	} else if (src->size == 1) {
 		memset (all_numeric_data, src->data[0], COB_MAX_DIGITS);
-		cob_move ((cob_field *)&all_numeric_field, dst);
+		cob_move (COB_CTX_TODO, (cob_field *)&all_numeric_field, dst);
 		return;
 	} else {
 		temp.attr = &all_numeric_display_attr;
@@ -1599,7 +1599,7 @@ cob_move_all (cob_field *src, cob_field *dst)
 		}
 	}
 
-	cob_move (&temp, dst);
+	cob_move (COB_CTX_TODO, &temp, dst);
 	cob_free (p);
 }
 
@@ -1608,7 +1608,7 @@ cob_move_all (cob_field *src, cob_field *dst)
  * left to right, byte by byte
  */
 void
-cob_move_ibm (void *dst, void *src, const int len)
+cob_move_ibm (cob_context *ctx, void *dst, void *src, const int len)
 {
 	register char	*dest = dst;
 	register char	*srce = src;
@@ -1623,7 +1623,7 @@ cob_move_ibm (void *dst, void *src, const int len)
  * (used by INITIALIZE)
  */
 void
-cob_init_table (void *tbl, const size_t len, const size_t occ)
+cob_init_table (cob_context *ctx, void *tbl, const size_t len, const size_t occ)
 {
 	char	*m = (char*)tbl + len;
 	size_t	i = len;
@@ -1642,7 +1642,7 @@ cob_init_table (void *tbl, const size_t len, const size_t occ)
 }
 
 void
-cob_move (cob_field *src, cob_field *dst)
+cob_move (cob_context *ctx, cob_field *src, cob_field *dst)
 {
 	int		opt;
 	cob_field	temp;
@@ -1758,7 +1758,7 @@ cob_move (cob_field *src, cob_field *dst)
 			/* TODO: add handling of negative scales to cob_move_bcd */
 			if (COB_FIELD_SCALE (src) >= 0
 			 && COB_FIELD_SCALE (dst) >= 0) {
-				cob_move_bcd (src, dst);
+				cob_move_bcd (ctx, src, dst);
 				return;
 			}
 		case COB_TYPE_NUMERIC_DOUBLE:
@@ -1850,7 +1850,7 @@ cob_move (cob_field *src, cob_field *dst)
 							val /= cob_exp10_ll[diff_scale];
 						}
 						if (val >= INT_MIN && val <= INT_MAX) {
-							cob_set_packed_int (dst, (int)val);
+							cob_set_packed_int (ctx, dst, (int)val);
 							return;
 						}
 					}
@@ -2079,7 +2079,7 @@ cob_move (cob_field *src, cob_field *dst)
  * cob_module_free will release the memory 
  */
 void
-cob_alloc_move (cob_field *src, cob_field *dst, const int nsize)
+cob_alloc_move (cob_context *ctx, cob_field *src, cob_field *dst, const int nsize)
 {
 	unsigned int	size;
 	int		i, j, k, use, pos, npos;
@@ -2173,7 +2173,7 @@ cob_alloc_move (cob_field *src, cob_field *dst, const int nsize)
 		mod->param_buf_used += size;
 	}
 
-	cob_move (src, dst);
+	cob_move (ctx, src, dst);
 }
 
 /* Convenience functions */
@@ -2389,16 +2389,16 @@ display_get_long_long (cob_field *f)
 }
 
 void
-cob_set_int (cob_field *f, const int n)
+cob_set_int (cob_context *ctx, cob_field *f, const int n)
 {
 	cob_field	field;
 	COB_FIELD_INIT (sizeof (int), (unsigned char *)&n, &const_bin_attr);
-	cob_move (&field, f);
+	cob_move (ctx, &field, f);
 }
 
 /* note: removes decimal part - per design */
 int
-cob_get_int (cob_field *f)
+cob_get_int (cob_context *ctx, cob_field *f)
 {
 	switch (COB_FIELD_TYPE (f)) {
 	case COB_TYPE_NUMERIC_DISPLAY:
@@ -2423,7 +2423,7 @@ cob_get_int (cob_field *f)
 			cob_field	field;
 			int		val;
 			COB_FIELD_INIT (sizeof (int), (unsigned char *)&val, &const_bin_attr);
-			cob_move (f, &field);
+			cob_move (ctx, f, &field);
 			return val;
 		}
 	}
@@ -2432,7 +2432,7 @@ cob_get_int (cob_field *f)
 
 /* note: removes decimal part - per design */
 cob_s64_t
-cob_get_llint (cob_field *f)
+cob_get_llint (cob_context *ctx, cob_field *f)
 {
 	switch (COB_FIELD_TYPE (f)) {
 	case COB_TYPE_NUMERIC_DISPLAY:
@@ -2457,14 +2457,14 @@ cob_get_llint (cob_field *f)
 			cob_field	field;
 			cob_s64_t	val;
 			COB_FIELD_INIT (sizeof (cob_s64_t), (unsigned char *)&val, &const_binll_attr);
-			cob_move (f, &field);
+			cob_move (ctx, f, &field);
 			return val;
 		}
 	}
 }
 
 void
-cob_set_llint (cob_field *f, cob_s64_t max, const cob_s64_t n)
+cob_set_llint (cob_context *ctx, cob_field *f, cob_s64_t max, const cob_s64_t n)
 {
 	cob_field	field;
 	cob_s64_t	v;
@@ -2479,23 +2479,23 @@ cob_set_llint (cob_field *f, cob_s64_t max, const cob_s64_t n)
 			field.data = (unsigned char *)&v;
 		}
 	}
-	cob_move (&field, f);
+	cob_move (ctx, &field, f);
 	return;
 }
 
 void
-cob_set_llcon (cob_field *f, const cob_s64_t n)
+cob_set_llcon (cob_context *ctx, cob_field *f, const cob_s64_t n)
 {
 	cob_field	field;
 	COB_FIELD_INIT (sizeof (cob_s64_t), (unsigned char *)&n, &const_binll_attr);
-	cob_move (&field, f);
+	cob_move (ctx, &field, f);
 	return;
 }
 
 static cob_u64_t chopcompx [7] = { 0xFF, 0xFFFF, 0xFFFFFF, 0xFFFFFFFF,
 		0xFFFFFFFFFF, 0xFFFFFFFFFFFF, 0xFFFFFFFFFFFFFF};
 void
-cob_set_compx (cob_field *f, const cob_s64_t n)
+cob_set_compx (cob_context *ctx, cob_field *f, const cob_s64_t n)
 {
 	cob_field	field;
 	cob_s64_t	v;
@@ -2504,7 +2504,7 @@ cob_set_compx (cob_field *f, const cob_s64_t n)
 		v = n & chopcompx [f->size];
 		field.data = (unsigned char *)&v;
 	}
-	cob_move (&field, f);
+	cob_move (ctx, &field, f);
 	return;
 }
 
@@ -2519,7 +2519,7 @@ cob_init_move (cob_global *lptr, cob_settings *sptr)
  * Routines for C application code to access COBOL data follow
  */
 void
-cob_put_u64_compx (cob_u64_t val, void *mem, int len)
+cob_put_u64_compx (cob_context *ctx, cob_u64_t val, void *mem, int len)
 {
 #if !defined(WORDS_BIGENDIAN)
 	cob_u64_t	ulong;
@@ -2579,7 +2579,7 @@ cob_put_u64_compx (cob_u64_t val, void *mem, int len)
 }
 
 void
-cob_put_u64_comp5 (cob_u64_t val, void *mem, int len)
+cob_put_u64_comp5 (cob_context *ctx, cob_u64_t val, void *mem, int len)
 {
 	cob_u32_t	uint;
 	cob_u16_t	ushort;
@@ -2613,7 +2613,7 @@ cob_put_u64_comp5 (cob_u64_t val, void *mem, int len)
 }
 
 void
-cob_put_s64_compx (cob_s64_t val, void *mem, int len)
+cob_put_s64_compx (cob_context *ctx, cob_s64_t val, void *mem, int len)
 {
 #if !defined(WORDS_BIGENDIAN)
 	cob_s64_t	slong;
@@ -2673,7 +2673,7 @@ cob_put_s64_compx (cob_s64_t val, void *mem, int len)
 }
 
 void
-cob_put_s64_comp5 (cob_s64_t val, void *mem, int len)
+cob_put_s64_comp5 (cob_context *ctx, cob_s64_t val, void *mem, int len)
 {
 	cob_s32_t	sint;
 	cob_s16_t	sshort;
@@ -2707,7 +2707,7 @@ cob_put_s64_comp5 (cob_s64_t val, void *mem, int len)
 }
 
 cob_u64_t
-cob_get_u64_compx (void *mem, int len)
+cob_get_u64_compx (cob_context *ctx, void *mem, int len)
 {
 	cob_u64_t	ulong;
 	cob_u32_t	uint;
@@ -2762,7 +2762,7 @@ cob_get_u64_compx (void *mem, int len)
 }
 
 cob_u64_t
-cob_get_u64_comp5 (void *mem, int len)
+cob_get_u64_comp5 (cob_context *ctx, void *mem, int len)
 {
 	cob_u64_t	ulong;
 	cob_u32_t	uint;
@@ -2796,7 +2796,7 @@ cob_get_u64_comp5 (void *mem, int len)
 }
 
 cob_s64_t
-cob_get_s64_comp5 (void *mem, int len)
+cob_get_s64_comp5 (cob_context *ctx, void *mem, int len)
 {
 	cob_s64_t	slong;
 	int		sint;
@@ -2836,7 +2836,7 @@ cob_get_s64_comp5 (void *mem, int len)
 }
 
 cob_s64_t
-cob_get_s64_compx (void *mem, int len)
+cob_get_s64_compx (cob_context *ctx, void *mem, int len)
 {
 	cob_s64_t	slong;
 	int		sint;
@@ -2901,7 +2901,7 @@ cob_get_s64_compx (void *mem, int len)
 }
 
 void
-cob_put_s64_comp3 (cob_s64_t val, void *mem, int len)
+cob_put_s64_comp3 (cob_context *ctx, cob_s64_t val, void *mem, int len)
 {
 	int		sign, dig1, dig2;
 	cob_s64_t	num;
@@ -2928,7 +2928,7 @@ cob_put_s64_comp3 (cob_s64_t val, void *mem, int len)
 }
 
 void
-cob_put_u64_comp3 (cob_u64_t val, void *mem, int len)
+cob_put_u64_comp3 (cob_context *ctx, cob_u64_t val, void *mem, int len)
 {
 	int		dig1, dig2;
 	cob_u64_t	num = val;
@@ -2948,7 +2948,7 @@ cob_put_u64_comp3 (cob_u64_t val, void *mem, int len)
 }
 
 cob_s64_t
-cob_get_s64_comp3 (void *mem, int len)
+cob_get_s64_comp3 (cob_context *ctx, void *mem, int len)
 {
 	int		sign, j;
 	cob_s64_t	val = 0;
@@ -2969,7 +2969,7 @@ cob_get_s64_comp3 (void *mem, int len)
 }
 
 cob_u64_t
-cob_get_u64_comp3 (void *mem, int len)
+cob_get_u64_comp3 (cob_context *ctx, void *mem, int len)
 {
 	int		j;
 	cob_u64_t	val = 0;
@@ -2985,7 +2985,7 @@ cob_get_u64_comp3 (void *mem, int len)
 }
 
 void
-cob_put_u64_comp6 (cob_u64_t val, void *mem, int len)
+cob_put_u64_comp6 (cob_context *ctx, cob_u64_t val, void *mem, int len)
 {
 	int		dig1, dig2;
 	cob_u64_t	num = val;
@@ -3003,7 +3003,7 @@ cob_put_u64_comp6 (cob_u64_t val, void *mem, int len)
 }
 
 cob_u64_t
-cob_get_u64_comp6 (void *mem, int len)
+cob_get_u64_comp6 (cob_context *ctx, void *mem, int len)
 {
 	int		j;
 	cob_u64_t	val = 0;
@@ -3022,7 +3022,7 @@ static char ebcdic_pos[11] = "{ABCDEFGHI";
 static char ebcdic_neg[11] = "}JKLMNOPQR";
 
 void
-cob_put_s64_pic9 (cob_s64_t val, void *mem, int len)
+cob_put_s64_pic9 (cob_context *ctx, cob_s64_t val, void *mem, int len)
 {
 	cob_s64_t	num;
 	cob_u8_t	*p = mem;
@@ -3056,7 +3056,7 @@ cob_put_s64_pic9 (cob_s64_t val, void *mem, int len)
 }
 
 cob_s64_t
-cob_get_s64_pic9 (void *mem, int len)
+cob_get_s64_pic9 (cob_context *ctx, void *mem, int len)
 {
 	cob_s64_t	val = 0;
 	cob_u8_t	*p = mem;
@@ -3124,7 +3124,7 @@ cob_get_s64_pic9 (void *mem, int len)
 }
 
 void
-cob_put_u64_pic9 (cob_u64_t val, void *mem, int len)
+cob_put_u64_pic9 (cob_context *ctx, cob_u64_t val, void *mem, int len)
 {
 	cob_u64_t	num = val;
 	cob_u8_t	*p = mem;
@@ -3138,7 +3138,7 @@ cob_put_u64_pic9 (cob_u64_t val, void *mem, int len)
 }
 
 cob_u64_t
-cob_get_u64_pic9 (void *mem, int len)
+cob_get_u64_pic9 (cob_context *ctx, void *mem, int len)
 {
 	cob_u64_t	val = 0;
 	cob_u8_t	*p = mem;
@@ -3152,24 +3152,24 @@ cob_get_u64_pic9 (void *mem, int len)
 }
 
 void
-cob_put_comp1 (float val, void *mem)
+cob_put_comp1 (cob_context *ctx, float val, void *mem)
 {
 	memcpy (mem, &val, sizeof(float));
 }
 void
-cob_put_comp2 (double val, void *mem)
+cob_put_comp2 (cob_context *ctx, double val, void *mem)
 {
 	memcpy (mem, &val, sizeof(double));
 }
 float
-cob_get_comp1 (void *mem)
+cob_get_comp1 (cob_context *ctx, void *mem)
 {
 	float val;
 	memcpy (&val, mem, sizeof(float));
 	return val;
 }
 double
-cob_get_comp2 (void *mem)
+cob_get_comp2 (cob_context *ctx, void *mem)
 {
 	double val;
 	memcpy (&val, mem, sizeof(double));
@@ -3177,13 +3177,13 @@ cob_get_comp2 (void *mem)
 }
 
 void
-cob_put_pointer (void *val, void *mem)
+cob_put_pointer (cob_context *ctx, void *val, void *mem)
 {
 	memcpy (mem, &val, sizeof(void *));
 }
 
 char *
-cob_get_picx (void *cbl_data, size_t len, void *char_field, size_t num_chars)
+cob_get_picx (cob_context *ctx, void *cbl_data, size_t len, void *char_field, size_t num_chars)
 {
 	size_t		i;
 	cob_u8_t	*p = cbl_data;
@@ -3205,7 +3205,7 @@ cob_get_picx (void *cbl_data, size_t len, void *char_field, size_t num_chars)
 }
 
 void
-cob_put_picx (void *cbl_data, size_t len, void *string)
+cob_put_picx (cob_context *ctx, void *cbl_data, size_t len, void *string)
 {
 	size_t	i, j;
 	cob_u8_t	*p = cbl_data;

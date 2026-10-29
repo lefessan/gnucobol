@@ -194,7 +194,7 @@ set_xml_code (const enum xml_code_status code)
 		return;
 	}
 	/* LCOV_EXCL_STOP */
-	cob_set_int (COB_MODULE_PTR->xml_code, (int)code);
+	cob_set_int (COB_CTX_TODO, COB_MODULE_PTR->xml_code, (int)code);
 }
 
 /* set internal XML exception and special register XML-CODE */
@@ -209,7 +209,7 @@ set_xml_exception (const enum xml_code_status code)
 static COB_INLINE COB_A_INLINE int
 get_xml_code (void)
 {
-	return cob_get_int (COB_MODULE_PTR->xml_code);
+	return cob_get_int (COB_CTX_TODO, COB_MODULE_PTR->xml_code);
 }
 
 /* set special register XML-EVENT */
@@ -478,7 +478,7 @@ set_json_code (const enum json_code_status code)
 		return;
 	}
 	/* LCOV_EXCL_STOP */
-	cob_set_int (COB_MODULE_PTR->json_code, (int)code);
+	cob_set_int (COB_CTX_TODO, COB_MODULE_PTR->json_code, (int)code);
 }
 
 /* set internal JSON exception and special register JSON-CODE */
@@ -661,7 +661,7 @@ get_num (cob_field * const f, void * (*strndup_func)(const char *, size_t),
 	edited_field.data = cob_malloc (edited_field.size);
 
 	/* Set field */
-	cob_move (f, &edited_field);
+	cob_move (COB_CTX_TODO, f, &edited_field);
 
 	/* Replace decimal point in num with given decimal_point */
 	dp_pos = memchr (edited_field.data, COB_MODULE_PTR->decimal_point,
@@ -1553,7 +1553,7 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 		/* FIXME: COUNT IN may never be bigger than the field size! See above. */
 		/* TODO: for NATIONAL data (UTF-16): bytes / 2;
 		         otherwise - including UTF-8 amount of bytes */
-		cob_set_int (count, chars_written);
+		cob_set_int (COB_CTX_TODO, count, chars_written);
 	}
 }
 
@@ -1732,7 +1732,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		char	*enc = NULL;
 		if (encoding) {
 			/* CHECKME: is there a reasonable array size to use instead? */
-			enc = cob_get_picx (encoding->data, encoding->size, NULL, 0);
+			enc = cob_get_picx (COB_CTX_TODO, encoding->data, encoding->size, NULL, 0);
 		}
 
 		/* setup sax-parser callbacks */
@@ -2168,7 +2168,7 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 
 		/* TODO: for NATIONAL data (UTF-16): bytes / 2;
 		         otherwise - including UTF-8 amount of bytes */
-		cob_set_int (count, print_len);
+		cob_set_int (COB_CTX_TODO, count, print_len);
 	}
 }
 

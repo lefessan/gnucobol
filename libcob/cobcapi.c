@@ -258,16 +258,16 @@ cob_get_dbl_param (int n)
 
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_FLOAT:
-		return (double)cob_get_comp1 (cbl_data);
+		return (double)cob_get_comp1 (COB_CTX_TODO, cbl_data);
 	case COB_TYPE_NUMERIC_DOUBLE:
-		return (double)cob_get_comp2 (cbl_data);
+		return (double)cob_get_comp2 (COB_CTX_TODO, cbl_data);
 	default:
 		memcpy(&float_attr, &const_float_attr, sizeof(cob_field_attr));
 		float_attr.scale = f->attr->scale;
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &float_attr;
-		cob_move (f, &temp);
+		cob_move (COB_CTX_TODO, f, &temp);
 		return (double)val;
 	}
 }
@@ -287,10 +287,10 @@ cob_put_dbl_param (int n, double val)
 
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_FLOAT:
-		cob_put_comp1 ((float)val, cbl_data);
+		cob_put_comp1 (COB_CTX_TODO, (float)val, cbl_data);
 		return;
 	case COB_TYPE_NUMERIC_DOUBLE:
-		cob_put_comp2 (val, cbl_data);
+		cob_put_comp2 (COB_CTX_TODO, val, cbl_data);
 		return;
 	default:
 		memcpy(&float_attr, &const_float_attr, sizeof(cob_field_attr));
@@ -298,7 +298,7 @@ cob_put_dbl_param (int n, double val)
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &float_attr;
-		cob_move (&temp, f);
+		cob_move (COB_CTX_TODO, &temp, f);
 		return;
 	}
 }
@@ -321,32 +321,32 @@ cob_get_s64_param (int n)
 
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		return cob_get_s64_pic9 (cbl_data, size);
+		return cob_get_s64_pic9 (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_BINARY:
 #ifndef WORDS_BIGENDIAN
 		if (!COB_FIELD_BINARY_SWAP (f)) {
-			return cob_get_s64_comp5 (cbl_data, size);
+			return cob_get_s64_comp5 (COB_CTX_TODO, cbl_data, size);
 		}
 #endif
-		return cob_get_s64_compx (cbl_data, size);
+		return cob_get_s64_compx (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_PACKED:
-		return cob_get_s64_comp3 (cbl_data, size);
+		return cob_get_s64_comp3 (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_FLOAT:
-		dbl = cob_get_comp1 (cbl_data);
+		dbl = cob_get_comp1 (COB_CTX_TODO, cbl_data);
 		val = (cob_s64_t)dbl; /* possible data loss is explicit requested */
 		return val;
 	case COB_TYPE_NUMERIC_DOUBLE:
-		dbl = cob_get_comp2 (cbl_data);
+		dbl = cob_get_comp2 (COB_CTX_TODO, cbl_data);
 		val = (cob_s64_t)dbl; /* possible data loss is explicit requested */
 		return val;
 	case COB_TYPE_NUMERIC_EDITED:
-		return cob_get_s64_pic9 (cbl_data, size);
+		return cob_get_s64_pic9 (COB_CTX_TODO, cbl_data, size);
 	default:
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &const_binll_attr;
 		const_binll_attr.scale = f->attr->scale;
-		cob_move (f, &temp);
+		cob_move (COB_CTX_TODO, f, &temp);
 		return val;
 	}
 }
@@ -369,32 +369,32 @@ cob_get_u64_param (int n)
 	size     = (int)f->size;
 	switch (COB_MODULE_PTR->cob_procedure_params[n - 1]->attr->type) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		return cob_get_u64_pic9 (cbl_data, size);
+		return cob_get_u64_pic9 (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_BINARY:
 #ifndef WORDS_BIGENDIAN
 		if (!COB_FIELD_BINARY_SWAP (f)) {
-			return cob_get_u64_comp5 (cbl_data, size);
+			return cob_get_u64_comp5 (COB_CTX_TODO, cbl_data, size);
 		}
 #endif
-		return cob_get_u64_compx (cbl_data, size);
+		return cob_get_u64_compx (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_PACKED:
-		return cob_get_u64_comp3 (cbl_data, size);
+		return cob_get_u64_comp3 (COB_CTX_TODO, cbl_data, size);
 	case COB_TYPE_NUMERIC_FLOAT:
-		dbl = cob_get_comp1 (cbl_data);
+		dbl = cob_get_comp1 (COB_CTX_TODO, cbl_data);
 		val = (cob_u64_t)dbl; /* possible data loss is explicit requested */
 		return val;
 	case COB_TYPE_NUMERIC_DOUBLE:
-		dbl = cob_get_comp2 (cbl_data);
+		dbl = cob_get_comp2 (COB_CTX_TODO, cbl_data);
 		val = (cob_u64_t)dbl; /* possible data loss is explicit requested */
 		return val;
 	case COB_TYPE_NUMERIC_EDITED:
-		return cob_get_u64_pic9 (cbl_data, size);
+		return cob_get_u64_pic9 (COB_CTX_TODO, cbl_data, size);
 	default:
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &const_binull_attr;
 		const_binull_attr.scale = f->attr->scale;
-		cob_move (f, &temp);
+		cob_move (COB_CTX_TODO, f, &temp);
 		return val;
 	}
 }
@@ -406,7 +406,7 @@ cob_get_picx_param (int n, void *char_field, size_t char_len)
 	if (f == NULL) {
 		return NULL;
 	}
-	return cob_get_picx (f->data, f->size, char_field, char_len);
+	return cob_get_picx (COB_CTX_TODO, f->data, f->size, char_field, char_len);
 }
 
 int
@@ -593,7 +593,7 @@ cob_put_field_str (const cob_field *dst, const char *str)
 			wrk = *cob_intr_numval (&wrk);
 		}
 	}
-	cob_move (&wrk, (cob_field *)dst);
+	cob_move (COB_CTX_TODO, &wrk, (cob_field *)dst);
 	return 0;
 }
 
@@ -623,34 +623,34 @@ cob_put_s64_param (int n, cob_s64_t val)
 	size     = (int)f->size;
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		cob_put_s64_pic9 (val, cbl_data, size);
+		cob_put_s64_pic9 (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_BINARY:
 #ifndef WORDS_BIGENDIAN
 		if (!COB_FIELD_BINARY_SWAP (f)) {
-			cob_put_s64_comp5 (val, cbl_data, size);
+			cob_put_s64_comp5 (COB_CTX_TODO, val, cbl_data, size);
 			return;
 		}
 #endif
-		cob_put_s64_compx (val, cbl_data, size);
+		cob_put_s64_compx (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_PACKED:
-		cob_put_s64_comp3 (val, cbl_data, size);
+		cob_put_s64_comp3 (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_FLOAT:
 		flt = (float)val;  /* possible data loss is explicit requested */
-		cob_put_comp1 (flt, cbl_data);
+		cob_put_comp1 (COB_CTX_TODO, flt, cbl_data);
 		return;
 	case COB_TYPE_NUMERIC_DOUBLE:
 		dbl = (double)val; /* possible data loss is explicit requested */
-		cob_put_comp2 (dbl, cbl_data);
+		cob_put_comp2 (COB_CTX_TODO, dbl, cbl_data);
 		return;
 	default:	/* COB_TYPE_NUMERIC_EDITED, ... */
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &const_binll_attr;
 		const_binll_attr.scale = f->attr->scale;
-		cob_move (&temp, f);
+		cob_move (COB_CTX_TODO, &temp, f);
 		return;
 	}
 }
@@ -681,34 +681,34 @@ cob_put_u64_param (int n, cob_u64_t val)
 	size     = (int)f->size;
 	switch (f->attr->type) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		cob_put_u64_pic9 (val, cbl_data, size);
+		cob_put_u64_pic9 (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_BINARY:
 #ifndef WORDS_BIGENDIAN
 		if (!COB_FIELD_BINARY_SWAP (f)) {
-			cob_put_u64_comp5 (val, cbl_data, size);
+			cob_put_u64_comp5 (COB_CTX_TODO, val, cbl_data, size);
 			return;
 		}
 #endif
-		cob_put_u64_compx (val, cbl_data, size);
+		cob_put_u64_compx (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_PACKED:
-		cob_put_u64_comp3 (val, cbl_data, size);
+		cob_put_u64_comp3 (COB_CTX_TODO, val, cbl_data, size);
 		return;
 	case COB_TYPE_NUMERIC_FLOAT:
 		flt = (float)val;  /* possible data loss is explicit requested */
-		cob_put_comp1 (flt, cbl_data);
+		cob_put_comp1 (COB_CTX_TODO, flt, cbl_data);
 		return;
 	case COB_TYPE_NUMERIC_DOUBLE:
 		dbl = (double)val;  /* possible data loss is explicit requested */
-		cob_put_comp2 (dbl, cbl_data);
+		cob_put_comp2 (COB_CTX_TODO, dbl, cbl_data);
 		return;
 	default:	/* COB_TYPE_NUMERIC_EDITED, ... */
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
 		temp.attr = &const_binll_attr;
 		const_binll_attr.scale = f->attr->scale;
-		cob_move (&temp, f);
+		cob_move (COB_CTX_TODO, &temp, f);
 		return;
 	}
 }
@@ -734,9 +734,9 @@ cob_put_picx_param (int n, void *char_field)
 		s->attr = &all_display_attr;
 		s->data = char_field;
 		s->size = strlen (char_field);
-		cob_move (s, f);
+		cob_move (COB_CTX_TODO, s, f);
 	} else {
-		cob_put_picx (f->data, f->size, char_field);
+		cob_put_picx (COB_CTX_TODO, f->data, f->size, char_field);
 	}
 }
 

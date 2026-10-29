@@ -3487,7 +3487,7 @@ output_integer (cb_tree x)
 		const struct cb_binary_op *p = CB_BINARY_OP (x);
 		if (p->flag == BOP_RESOLVE_AS_INTEGER) {
 			if (!cb_fits_int (p->x) || !cb_fits_int (p->y)) {
-				output ("cob_get_int (");
+				output ("cob_get_int (ctx, ");
 				output_param (x, -1);
 				output (")");
 				break;
@@ -3780,7 +3780,7 @@ output_integer (cb_tree x)
 		break;
 	}
 	case CB_TAG_INTRINSIC:
-		output ("cob_get_int (");
+		output ("cob_get_int (ctx, ");
 		output_param (x, -1);
 		output (")");
 		break;
@@ -3829,7 +3829,7 @@ output_long_integer (cb_tree x)
 		if (p->flag == BOP_RESOLVE_AS_INTEGER) {
 			if (!cb_fits_long_long (p->x) 
 			 || !cb_fits_long_long (p->y)) {
-				output ("cob_get_llint (");
+				output ("cob_get_llint (ctx, ");
 				output_param (x, -1);
 				output (")");
 				break;
@@ -4037,7 +4037,7 @@ output_long_integer (cb_tree x)
 		break;
 	}
 	case CB_TAG_INTRINSIC:
-		output ("cob_get_llint (");
+		output ("cob_get_llint (ctx, ");
 		output_param (x, -1);
 		output (")");
 		break;
@@ -5001,6 +5001,53 @@ output_funcall_item (cb_tree x, const int i, unsigned int func_nolitcast)
    TODO (T1.2): during the migration file by file, the list of converted
    functions; at the end, replaced by "all cob_ functions" */
 static const char *const ctx_functions[] = {
+	"cob_add",
+	"cob_add_int",
+	"cob_add_packed_int",
+	"cob_add_packed_int64",
+	"cob_alloc_move",
+	"cob_cmp_float",
+	"cob_cmp_int",
+	"cob_cmp_llint",
+	"cob_cmp_numdisp",
+	"cob_cmp_packed",
+	"cob_cmp_uint",
+	"cob_decimal_add",
+	"cob_decimal_align",
+	"cob_decimal_alloc",
+	"cob_decimal_clear",
+	"cob_decimal_cmp",
+	"cob_decimal_div",
+	"cob_decimal_get_field",
+	"cob_decimal_init",
+	"cob_decimal_mul",
+	"cob_decimal_pop",
+	"cob_decimal_pow",
+	"cob_decimal_push",
+	"cob_decimal_set",
+	"cob_decimal_set_field",
+	"cob_decimal_set_llint",
+	"cob_decimal_set_ullint",
+	"cob_decimal_sub",
+	"cob_div",
+	"cob_div_quotient",
+	"cob_div_remainder",
+	"cob_get_comp1",
+	"cob_get_comp2",
+	"cob_get_int",
+	"cob_get_llint",
+	"cob_get_picx",
+	"cob_get_s64_comp3",
+	"cob_get_s64_comp5",
+	"cob_get_s64_compx",
+	"cob_get_s64_pic9",
+	"cob_get_u64_comp3",
+	"cob_get_u64_comp5",
+	"cob_get_u64_comp6",
+	"cob_get_u64_compx",
+	"cob_get_u64_pic9",
+	"cob_gmp_free",
+	"cob_init_table",
 	"cob_inspect_after",
 	"cob_inspect_all",
 	"cob_inspect_before",
@@ -5014,10 +5061,44 @@ static const char *const ctx_functions[] = {
 	"cob_inspect_start",
 	"cob_inspect_trailing",
 	"cob_inspect_translating",
+	"cob_logical_and",
+	"cob_logical_left",
+	"cob_logical_left_c",
+	"cob_logical_not",
+	"cob_logical_or",
+	"cob_logical_right",
+	"cob_logical_right_c",
+	"cob_logical_xor",
+	"cob_move",
+	"cob_move_bcd",
+	"cob_move_ibm",
+	"cob_mul",
+	"cob_pointer_manip",
+	"cob_put_comp1",
+	"cob_put_comp2",
+	"cob_put_picx",
+	"cob_put_pointer",
+	"cob_put_s64_comp3",
+	"cob_put_s64_comp5",
+	"cob_put_s64_compx",
+	"cob_put_s64_pic9",
+	"cob_put_u64_comp3",
+	"cob_put_u64_comp5",
+	"cob_put_u64_comp6",
+	"cob_put_u64_compx",
+	"cob_put_u64_pic9",
+	"cob_set_compx",
+	"cob_set_int",
+	"cob_set_llcon",
+	"cob_set_llint",
+	"cob_set_packed_int",
+	"cob_set_packed_zero",
 	"cob_string_append",
 	"cob_string_delimited",
 	"cob_string_finish",
 	"cob_string_init",
+	"cob_sub",
+	"cob_sub_int",
 	"cob_unstring_delimited",
 	"cob_unstring_finish",
 	"cob_unstring_init",
@@ -5475,7 +5556,7 @@ propagate_table (cb_tree x, int bgn_idx)
 	} else {
 		/* Table size is only known at run time */
 		output_prefix ();
-		output ("cob_init_table (");
+		output ("cob_init_table (ctx, ");
 		output_data (x);
 		output (", ");
 		output_size (x);
@@ -7149,7 +7230,7 @@ output_call_by_value_args (cb_tree x, cb_tree l)
 		return;
 	case CB_TAG_INTRINSIC:
 		if (CB_INTRINSIC(x)->intr_tab->category == CB_CATEGORY_NUMERIC) {
-			output ("cob_get_int (");
+			output ("cob_get_int (ctx, ");
 			output_param (x, -1);
 			output (")");
 		} else {
@@ -7635,7 +7716,7 @@ output_call (struct cb_call *p)
 				output_prefix ();
 				if (cb_fit_to_int (x)) {
 					pval = (unsigned int)cb_get_int (x);
-					output ("cob_set_int(&content_fb_%d, %d)",n,pval);
+					output ("cob_set_int(ctx, &content_fb_%d, %d)",n,pval);
 				} else {
 					if (CB_LITERAL (x)->sign >= 0) {
 						output ("content_%u.dataull = ", n);
@@ -7678,7 +7759,7 @@ output_call (struct cb_call *p)
 					output_prefix ();
 					if (cb_fit_to_int (x)) {
 						pval = (unsigned int)cb_get_int (x);
-						output ("cob_set_int(&content_fb_%d, %d)",n,pval);
+						output ("cob_set_int(ctx, &content_fb_%d, %d)",n,pval);
 					} else if (CB_LITERAL (x)->sign >= 0) {
 						output ("content_%u.dataull = ", n);
 						output (CB_FMT_LLU_F, cb_get_u_long_long (x));
@@ -8117,7 +8198,7 @@ output_call (struct cb_call *p)
 #endif
 		} else if (p->call_returning != cb_null) {
 			output_prefix ();
-			output ("cob_set_int (");
+			output ("cob_set_int (ctx, ");
 			output_param (p->call_returning, -1);
 			output (", ret);");
 			output_newline ();
@@ -8194,7 +8275,7 @@ output_xml_parse (struct cb_xml_parse *p)
 	output_block_open ();
 	output_line ("void *xml_state = NULL;");
 	output_prefix ();
-	output ("cob_set_int ("),
+	output ("cob_set_int (ctx, "),
 	output_param (CB_TREE (current_program->xml_code), 0);
 	output (", 0);");
 	output_newline ();
@@ -9837,7 +9918,7 @@ output_assign (const struct cb_assign *ap)
 		 && f1->usage != CB_USAGE_LENGTH) {
 			output_prefix ();
 		 	if (f1->usage == CB_USAGE_COMP_X) {
-				output ("cob_set_compx (");
+				output ("cob_set_compx (ctx, ");
 				output_param (ap->var, 0);
 				output (", (cob_s64_t)");
 				output_integer (ap->val);
@@ -9847,10 +9928,10 @@ output_assign (const struct cb_assign *ap)
 			if (CB_NUMERIC_LITERAL_P (ap->val)
 			 && CB_LITERAL (ap->val)->scale == 0
 			 && cb_get_long_long (ap->val) < cob_exp10_ll[f1->pic->digits]) {
-				output ("cob_set_llcon (");
+				output ("cob_set_llcon (ctx, ");
 				output_param (ap->var, 0);
 			} else {
-				output ("cob_set_llint (");
+				output ("cob_set_llint (ctx, ");
 				output_param (ap->var, 0);
 				output (", ");
 				output (CB_FMT_LLD_F, cob_exp10_ll[f1->pic->digits]);
@@ -11967,7 +12048,7 @@ output_report_move_sums (struct cb_field *f, int first)
 		if (CB_BINARY_OP_P (x)) {
 			output_line ("/* Compute %s */", cb_name (x));
 			output_prefix ();
-			output ("cob_move (");
+			output ("cob_move (ctx, ");
 			output_param (x, -1);
 			output (", ");
 			output_param (CB_PURPOSE (l), -1);
@@ -12059,7 +12140,7 @@ output_report_move_source (struct cb_field *f, int first)
 		}
 		stack_id = 0;
 		output_prefix ();
-		output ("cob_move (");
+		output ("cob_move (ctx, ");
 		output_param (f->report_source, -1);
 		output (", ");
 		if (f->report_from) {
@@ -12690,7 +12771,7 @@ pickup_cob_param (cb_tree l, cob_u32_t inc)
 			strcpy(wrk,"0");
 		}
 		output_line ("if (cob_glob_ptr->cob_call_params > %u) { /* BY VALUE %s */", inc, f->name);
-		output_line ("    cob_alloc_move(%s[%u], &%s%d, %s);",
+		output_line ("    cob_alloc_move(ctx, %s[%u], &%s%d, %s);",
 				     "module->next->cob_procedure_params", inc,
 				     CB_PREFIX_FIELD, f->id, wrk);
 		if (!cb_sticky_linkage) {
@@ -13323,9 +13404,9 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_line ("/* Allocate decimal numbers */");
 		output_prefix ();
 		if (prog->flag_recursive) {
-			output ("cob_decimal_push (%u", prog->decimal_index_max);
+			output ("cob_decimal_push (ctx, %u", prog->decimal_index_max);
 		} else {
-			output ("cob_decimal_alloc (%u", prog->decimal_index_max);
+			output ("cob_decimal_alloc (ctx, %u", prog->decimal_index_max);
 		}
 		for (inc = 0; inc < prog->decimal_index_max; inc++) {
 			output (", &%s%u", CB_PREFIX_DECIMAL, inc);
@@ -13726,7 +13807,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	if (prog->decimal_index_max && prog->flag_recursive) {
 		output_line ("/* Free decimal structures */");
 		output_prefix ();
-		output ("cob_decimal_pop (%u", prog->decimal_index_max);
+		output ("cob_decimal_pop (ctx, %u", prog->decimal_index_max);
 		for (inc = 0; inc < prog->decimal_index_max; inc++) {
 			output (", %s%u", CB_PREFIX_DECIMAL, inc);
 		}
@@ -13920,8 +14001,8 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		}
 		output_line ("%s%d = &%s%d;", CB_PREFIX_DEC_CONST, m->id,
 			     CB_PREFIX_DEC_FIELD, m->id);
-		output_line ("cob_decimal_init (%s%d);", CB_PREFIX_DEC_CONST, m->id);
-		output_line ("cob_decimal_set_field (%s%d, (cob_field *)&%s%d);",
+		output_line ("cob_decimal_init (ctx, %s%d);", CB_PREFIX_DEC_CONST, m->id);
+		output_line ("cob_decimal_set_field (ctx, %s%d, (cob_field *)&%s%d);",
 			     CB_PREFIX_DEC_CONST, m->id,
 			     CB_PREFIX_CONST, m->id);
 		output_newline ();
@@ -14135,7 +14216,7 @@ cancel_end:
 			seen = 1;
 			output_line ("/* Clear Decimal Constant values */");
 		}
-		output_line ("cob_decimal_clear (%s%d);", CB_PREFIX_DEC_CONST, m->id);
+		output_line ("cob_decimal_clear (ctx, %s%d);", CB_PREFIX_DEC_CONST, m->id);
 		output_line ("%s%d = NULL;", CB_PREFIX_DEC_CONST, m->id);
 	}
 	if (seen) {

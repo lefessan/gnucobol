@@ -90,7 +90,7 @@ display_numeric (cob_field *f, FILE *fp)
 		}
 		COB_FIELD_INIT (size, COB_TERM_BUFF, &attr);
 
-		cob_move (f, &field);
+		cob_move (COB_CTX_TODO, f, &field);
 	}
 
 	/* output of data to viewport */
@@ -185,7 +185,7 @@ pretty_display_numeric (cob_field *f, FILE *fp)
 				has_sign ? (COB_FLAG_HAVE_SIGN | COB_FLAG_SIGN_SEPARATE): 0,
 				(const cob_pic_symbol*)pic);
 
-			cob_move (f, &field);
+			cob_move (COB_CTX_TODO, f, &field);
 		}
 
 		/* output of data to viewport */
@@ -1019,7 +1019,7 @@ cob_accept (cob_field *f)
 	}
 	if (COB_MODULE_PTR->crt_status) {
 		if (COB_FIELD_IS_NUMERIC (COB_MODULE_PTR->crt_status)) {
-			cob_set_int (COB_MODULE_PTR->crt_status, 0);
+			cob_set_int (COB_CTX_TODO, COB_MODULE_PTR->crt_status, 0);
 		} else if (COB_MODULE_PTR->crt_status->size == 3) {
 			memcpy (COB_MODULE_PTR->crt_status->data, "0\0\0", (size_t)3);
 		} else {
@@ -1070,7 +1070,7 @@ cob_accept (cob_field *f)
 			temp.size = f->size;
 		}
 	}
-	cob_move (&temp, f);
+	cob_move (COB_CTX_TODO, &temp, f);
 }
 
 void

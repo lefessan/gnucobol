@@ -132,7 +132,7 @@ cob_str_memcpy (cob_field *dst, unsigned char *src, const int size)
 	temp.size = size;
 	temp.data = src;
 	temp.attr = &const_alpha_attr;
-	cob_move (&temp, dst);
+	cob_move (COB_CTX_TODO, &temp, dst);
 }
 
 static void
@@ -366,7 +366,7 @@ inspect_common_no_replace (
 	}
 
 	if (n != 0) {
-		cob_add_int (f1, n, 0);
+		cob_add_int (COB_CTX_TODO, f1, n, 0);
 	}
 }
 
@@ -679,11 +679,11 @@ cob_inspect_characters_intern (struct cob_inspect_state *st, cob_field *f1)
 				}
 			}
 			if (n > 0) {
-				cob_add_int (f1, n, 0);
+				cob_add_int (COB_CTX_TODO, f1, n, 0);
 			}
 		} else {
 			/* common case: no markers in the length to check */
-			cob_add_int (f1, (int)len, 0);
+			cob_add_int (COB_CTX_TODO, f1, (int)len, 0);
 		}
 	}
 	set_inspect_mark (st, pos, len);
@@ -955,7 +955,7 @@ cob_string_init_intern (struct cob_string_state *st, cob_field *dst, cob_field *
 	cobglobptr->cob_exception_code = 0;
 
 	if (st->ptr) {
-		st->offset = cob_get_int (st->ptr) - 1;
+		st->offset = cob_get_int (COB_CTX_TODO, st->ptr) - 1;
 		if (st->offset < 0 || st->offset >= (int)st->dst->size) {
 			cob_set_exception (COB_EC_OVERFLOW_STRING);
 		}
@@ -1032,7 +1032,7 @@ static void
 cob_string_finish_intern (struct cob_string_state *st)
 {
 	if (st->ptr) {
-		cob_set_int (st->ptr, st->offset + 1);
+		cob_set_int (COB_CTX_TODO, st->ptr, st->offset + 1);
 	}
 }
 void
@@ -1090,7 +1090,7 @@ cob_unstring_init_intern (
 	}
 
 	if (st->ptr) {
-		st->offset = cob_get_int (st->ptr) - 1;
+		st->offset = cob_get_int (COB_CTX_TODO, st->ptr) - 1;
 		if (st->offset < 0 || st->offset >= (int)st->src->size) {
 			cob_set_exception (COB_EC_OVERFLOW_UNSTRING);
 		}
@@ -1247,7 +1247,7 @@ cob_unstring_into_intern (
 		if (dlm_data) {
 			cob_str_memcpy (dlm, dlm_data, (int) dlm_size);
 		} else if (COB_FIELD_IS_NUMERIC (dlm)) {
-			cob_set_int (dlm, 0);
+			cob_set_int (COB_CTX_TODO, dlm, 0);
 		} else {
 			memset (dlm->data, ' ', dlm->size);
 		}
@@ -1255,7 +1255,7 @@ cob_unstring_into_intern (
 
 	/* set COUNT IN */
 	if (cnt) {
-		cob_set_int (cnt, match_size);
+		cob_set_int (COB_CTX_TODO, cnt, match_size);
 	}
 }
 void
@@ -1271,7 +1271,7 @@ cob_unstring_into (cob_context *ctx,
 static void
 cob_unstring_tallying_intern (struct cob_unstring_state *st, cob_field *f)
 {
-	cob_add_int (f, st->count, 0);
+	cob_add_int (COB_CTX_TODO, f, st->count, 0);
 }
 void
 cob_unstring_tallying (cob_context *ctx, cob_field *f)
@@ -1288,7 +1288,7 @@ cob_unstring_finish_intern (struct cob_unstring_state *st)
 	}
 
 	if (st->ptr) {
-		cob_set_int (st->ptr, st->offset + 1);
+		cob_set_int (COB_CTX_TODO, st->ptr, st->offset + 1);
 	}
 }
 void
