@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_dump_sub, cob_dump_symbols), common.h, termio.c: ACCEPT
+	  / DISPLAY / DUMP functions take the context
 	* call.c (insert), common.c (cob_sig_handler,
 	  call_exit_handlers_and_terminate, cob_set_main_argv0), common.h
 	  (cob_accept, cob_file_external_addr, cob_file_malloc,

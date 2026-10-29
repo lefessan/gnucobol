@@ -11403,7 +11403,7 @@ cob_dump_sub ( cob_symbol *sym, int k, int sub)
 
 	sym_sub  [sym_idx-1] = sub;
 	cob_sym_get_field (COB_CTX_TODO, &f0, sym, k);
-	cob_dump_field ( sym[k].level, sym[k].name?sym[k].name:"FILLER", 
+	cob_dump_field (COB_CTX_TODO,  sym[k].level, sym[k].name?sym[k].name:"FILLER", 
 					&f0, 0, sym_idx, 
 					sym_sub [0], sym_size [0], 
 					sym_sub [1], sym_size [1], 
@@ -11479,11 +11479,11 @@ cob_dump_symbols (cob_module *mod)
 		if (sect != sym[k].section) {
 			sect = sym[k].section;
 			if (!sym[k].is_file)
-				cob_dump_output (sectname[sect]);
+				cob_dump_output (COB_CTX_TODO, sectname[sect]);
 		}
 		if (sym[k].is_file) {
 			memcpy (&fl, sym[k].adrs, sizeof(void*));
-			cob_dump_file (sym[k].name, fl);
+			cob_dump_file (COB_CTX_TODO, sym[k].name, fl);
 			continue;
 		}
 		skipgrp = 0;
@@ -11498,7 +11498,7 @@ cob_dump_symbols (cob_module *mod)
 			skpsym = &sym[k];
 			sprintf (msg," >>>> Dump of %s aborted! <<<< !!",
 						sym[k].name?sym[k].name:"FILLER");
-			cob_dump_output (msg);
+			cob_dump_output (COB_CTX_TODO, msg);
 		} else if (sym[k].occurs > 1) {
 			for (sym_idx = 0; sym_idx < SYM_MAX_IDX; sym_idx++)
 				sym_sub [sym_idx] = sym_size [sym_idx] = 0;
@@ -11507,7 +11507,7 @@ cob_dump_symbols (cob_module *mod)
 			if (sym[k].is_group)
 				skipgrp = 1;
 		} else {
-			cob_dump_field ( sym[k].level, sym[k].name?sym[k].name:"FILLER", &f0, 0, 0);
+			cob_dump_field (COB_CTX_TODO,  sym[k].level, sym[k].name?sym[k].name:"FILLER", &f0, 0, 0);
 		}
 		if (skipgrp) {
 skipsym:
@@ -11533,7 +11533,7 @@ skipsym:
 		}
 	}
 	sprintf (msg, "END OF DUMP - %s", mod->module_name);
-	cob_dump_output (msg);
+	cob_dump_output (COB_CTX_TODO, msg);
 	fputc ('\n', fp);
 	fflush (fp);
 }

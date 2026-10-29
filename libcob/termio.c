@@ -327,7 +327,7 @@ cob_display_common (const cob_field *f, FILE *fp)
 }
 
 void
-cob_display (const int to_device, const int newline, const int varcnt, ...)
+cob_display (cob_context *ctx, const int to_device, const int newline, const int varcnt, ...)
 {
 	FILE		*fp;
 	int		close_fp = 0;
@@ -690,7 +690,7 @@ static int	dump_null_adrs = 0;
 static void dump_pending_output (FILE*);
 
 void
-cob_dump_output (const char *str)
+cob_dump_output (cob_context *ctx, const char *str)
 {
 	FILE	*fp = cob_get_dump_file ();
 
@@ -706,7 +706,7 @@ cob_dump_output (const char *str)
 
 /* Output file header for DUMP purposes */
 void
-cob_dump_file (const char *name, cob_file *fl)
+cob_dump_file (cob_context *ctx, const char *name, cob_file *fl)
 {
 	FILE	*fp = cob_get_dump_file ();
 	const char *mode;
@@ -818,7 +818,7 @@ dump_pending_output (FILE* fp)
 
 /* Output field for DUMP purposes */
 void
-cob_dump_field (const int level, const char *name, 
+cob_dump_field (cob_context *ctx, const int level, const char *name, 
 		cob_field *f_addr, const cob_uli_t field_offset, const cob_u32_t indexes, ...)
 {
 	size_t 	adjust = field_offset;
@@ -1004,7 +1004,7 @@ cob_print_field (FILE *fp, cob_field *f, int indent, int width)
 /* ACCEPT */
 
 void
-cob_accept (cob_field *f)
+cob_accept (cob_context *ctx, cob_field *f)
 {
 	unsigned char	*p;
 	size_t		size;
