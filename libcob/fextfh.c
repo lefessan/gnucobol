@@ -53,20 +53,20 @@ free_extfh_fcd (void)
 	for (ff = fcd_file_list; ff; ff = nff) {
 		nff = ff->next;
 		if (ff->free_select) {
-			cob_cache_free ((void*)ff->f->select_name);
+			cob_cache_free (COB_CTX_TODO, (void*)ff->f->select_name);
 		}
 		if (ff->free_fcd) {
 			if (ff->fcd->fnamePtr != NULL) {
-				cob_cache_free ((void*)(ff->fcd->fnamePtr));
+				cob_cache_free (COB_CTX_TODO, (void*)(ff->fcd->fnamePtr));
 			}
-			cob_cache_free((void*)ff->fcd);
+			cob_cache_free(COB_CTX_TODO, (void*)ff->fcd);
 		} else {
-			cob_cache_free((void*)ff->f);
+			cob_cache_free(COB_CTX_TODO, (void*)ff->f);
 		}
 		if (ff->fname) {
-			cob_cache_free ((void*)ff->fname);
+			cob_cache_free (COB_CTX_TODO, (void*)ff->fname);
 		}
-		cob_cache_free((void*)ff);
+		cob_cache_free(COB_CTX_TODO, (void*)ff);
 	}
 }
 
@@ -195,7 +195,7 @@ copy_file_to_fcd (cob_file *f, FCD3 *fcd)
 	fcd->fcdVer = FCD_VER_64Bit;
 
 	if (f->fcd != fcd && fcd->fnamePtr) {
-		cob_cache_free ((void*)fcd->fnamePtr);
+		cob_cache_free (COB_CTX_TODO, (void*)fcd->fnamePtr);
 		fcd->fnamePtr = NULL;
 	}
 	if (fcd->fnamePtr == NULL) {
@@ -213,7 +213,7 @@ copy_file_to_fcd (cob_file *f, FCD3 *fcd)
 			assign_to[0] = 0;
 		}
 		fnlen = strlen (assign_to);
-		fcd->fnamePtr = cob_cache_malloc (fnlen + 1);
+		fcd->fnamePtr = cob_cache_malloc (COB_CTX_TODO, fnlen + 1);
 		strcpy (fcd->fnamePtr, assign_to);
 		STCOMPX2(fnlen, fcd->fnameLen);
 	}
@@ -250,14 +250,14 @@ copy_file_to_fcd (cob_file *f, FCD3 *fcd)
 			nkeys = f->nkeys < 16 ? f->nkeys : 16;	/* allocate at least 16 keys CHECKME: why? */
 			kdblen = sizeof(KDB) - sizeof(kdb->key) + (sizeof(KDB_KEY) * nkeys) + (sizeof(EXTKEY) * keycomp);
 			nkeys = f->nkeys;
-			fcd->kdbPtr = kdb = cob_cache_malloc (kdblen + sizeof(EXTKEY));
+			fcd->kdbPtr = kdb = cob_cache_malloc (COB_CTX_TODO, kdblen + sizeof(EXTKEY));
 			STCOMPX2(kdblen, kdb->kdbLen);
 			STCOMPX2(nkeys, kdb->nkeys);
 		} else if (fcd->kdbPtr == NULL) {
 			nkeys = 16;
 			kdblen = sizeof(KDB) - sizeof(kdb->key) + (sizeof(KDB_KEY) * nkeys) + (sizeof(EXTKEY) * keycomp);
 			nkeys = 0;
-			fcd->kdbPtr = kdb = cob_cache_malloc (kdblen + sizeof(EXTKEY));
+			fcd->kdbPtr = kdb = cob_cache_malloc (COB_CTX_TODO, kdblen + sizeof(EXTKEY));
 			STCOMPX2(kdblen, kdb->kdbLen);
 			STCOMPX2(nkeys, kdb->nkeys);
 		} else {
@@ -319,12 +319,12 @@ update_fcd_to_file (FCD3* fcd, cob_file *f, cob_field *fnstatus, int wasOpen)
 		const int status_code_1 = isdigit(fcd->fileStatus[0])
 			? COB_D2I (fcd->fileStatus[0]) : 9;
 		if (status_code_1 != 0
-		 || cob_last_exception_is (COB_EC_I_O_EOP)) {
+		 || cob_last_exception_is (COB_CTX_TODO, COB_EC_I_O_EOP)) {
 			/* EOP is non-fatal therefore 00 status but needs exception;
 			   note that the global exception is only set if GnuCOBOL is used
 			   as EXTFH, in every other case we currently can't set EOP;
 			   also note that fcd->lineCount is never read/set */
-			cob_set_exception (status_exception[status_code_1]);
+			cob_set_exception (COB_CTX_TODO, status_exception[status_code_1]);
 		}
 		if (f->file_status) {
 			memcpy (f->file_status, fcd->fileStatus, 2);
@@ -348,7 +348,7 @@ update_fcd_to_file (FCD3* fcd, cob_file *f, cob_field *fnstatus, int wasOpen)
 	f->record_min = LDCOMPX4(fcd->minRecLen);
 	f->record_max = LDCOMPX4(fcd->maxRecLen);
 	if (f->record == NULL) {
-		f->record = cob_cache_malloc(sizeof(cob_field));
+		f->record = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_field));
 		f->record->data = fcd->recPtr;
 		f->record->attr = &alnum_attr;
 	}
@@ -446,7 +446,7 @@ copy_keys_fcd_to_file (FCD3 *fcd, cob_file *f, int doall)
 		 || f->keys[k].offset != LDCOMPX4(key->pos)
 		 || (parts == 1 && f->keys[k].field->size != LDCOMPX4(key->len))) {
 			if (f->keys[k].field == NULL) {
-				f->keys[k].field = cob_cache_malloc (sizeof(cob_field));
+				f->keys[k].field = cob_cache_malloc (COB_CTX_TODO, sizeof(cob_field));
 			}
 			if (f->record
 			 && f->record->data) {
@@ -459,7 +459,7 @@ copy_keys_fcd_to_file (FCD3 *fcd, cob_file *f, int doall)
 		klen = 0;
 		for (p = 0; p < parts; p++) {
 			if (f->keys[k].component[p] == NULL) {
-				f->keys[k].component[p] = cob_cache_malloc (sizeof(cob_field));
+				f->keys[k].component[p] = cob_cache_malloc (COB_CTX_TODO, sizeof(cob_field));
 			}
 			if (f->record
 			 && f->record->data) {
@@ -471,13 +471,13 @@ copy_keys_fcd_to_file (FCD3 *fcd, cob_file *f, int doall)
 			key   = (EXTKEY*) ((char*)(key) + sizeof(EXTKEY));
 		}
 		if (f->keys[k].field == NULL) {
-			f->keys[k].field = cob_cache_malloc (sizeof(cob_field));
+			f->keys[k].field = cob_cache_malloc (COB_CTX_TODO, sizeof(cob_field));
 		}
 		if (parts > 1
 		 && f->keys[k].field != NULL) {
 			if (f->keys[k].field->data == NULL
 			 || f->keys[k].field->size != klen) {
-				f->keys[k].field->data = cob_cache_malloc ((size_t)klen);
+				f->keys[k].field->data = cob_cache_malloc (COB_CTX_TODO, (size_t)klen);
 				f->keys[k].field->size = klen;
 			}
 		}
@@ -572,11 +572,11 @@ copy_fcd_to_file (FCD3* fcd, cob_file *f, struct fcd_file *fcd_list_entry)
 	} else if (fcd->fileOrg == ORG_RELATIVE) {
 		f->organization = COB_ORG_RELATIVE;
 		if (f->keys == NULL) {
-			f->keys = cob_cache_malloc(sizeof(cob_file_key));
+			f->keys = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_file_key));
 		}
 		if (f->keys[0].field == NULL) {
-			f->keys[0].field = cob_cache_malloc(sizeof(cob_field));
-			f->keys[0].field->data = cob_cache_malloc (4);
+			f->keys[0].field = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_field));
+			f->keys[0].field->data = cob_cache_malloc (COB_CTX_TODO, 4);
 			f->keys[0].field->attr = &compx_attr;
 			f->keys[0].field->size = 4;
 		}
@@ -612,14 +612,14 @@ copy_fcd_to_file (FCD3* fcd, cob_file *f, struct fcd_file *fcd_list_entry)
 	if (f->record == NULL
 	 && fcd->recPtr != NULL
 	 && k > 0) {
-		f->record = cob_cache_malloc(sizeof(cob_field));
+		f->record = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_field));
 		f->record->data = fcd->recPtr;
 		f->record->size = k;
 		f->record->attr = &alnum_attr;
 	}
 #if 0 /* CHECKME: this is in 3.x but was not here - not needed ? */
 	if (f->file_status == NULL) {
-		f->file_status = cob_cache_malloc (2);
+		f->file_status = cob_cache_malloc (COB_CTX_TODO, 2);
 	}
 #endif
 
@@ -627,7 +627,7 @@ copy_fcd_to_file (FCD3* fcd, cob_file *f, struct fcd_file *fcd_list_entry)
 
 	if (f->assign == NULL
 	 && fcd->fnamePtr != NULL) {
-		f->assign = cob_cache_malloc(sizeof(cob_field));
+		f->assign = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_field));
 		f->assign->data = (unsigned char*)fcd->fnamePtr;
 		f->assign->size = LDCOMPX2(fcd->fnameLen);
 		f->assign->attr = &alnum_attr;
@@ -661,7 +661,7 @@ copy_fcd_to_file (FCD3* fcd, cob_file *f, struct fcd_file *fcd_list_entry)
 		k++;	/* copy with trailing NUL */
 		/* we don't necessarily know later if we built the name ourself,
 		   so we need to cache the storage */
-		f->select_name = cob_cache_malloc (k);
+		f->select_name = cob_cache_malloc (COB_CTX_TODO, k);
 		memcpy ((void *)f->select_name, fdname, k);
 		if (fcd_list_entry) {
 		    fcd_list_entry->free_select = 1;
@@ -676,14 +676,14 @@ copy_fcd_to_file (FCD3* fcd, cob_file *f, struct fcd_file *fcd_list_entry)
 				f->nkeys = LDCOMPX2(fcd->kdbPtr->nkeys);
 				if (f->nkeys > MAX_FILE_KEYS) {
 					/* CHECKME - Should this result in any error handling? */
-					cob_runtime_warning (_("maximum keys (%d/%d) exceeded for file '%s'"),
+					cob_runtime_warning (COB_CTX_TODO, _("maximum keys (%d/%d) exceeded for file '%s'"),
 						(int)f->nkeys, MAX_FILE_KEYS, cob_get_filename_print (f->file, 0));
 					f->nkeys = MAX_FILE_KEYS;
 				}
-				f->keys = cob_cache_malloc (sizeof(cob_file_key) * f->nkeys);
+				f->keys = cob_cache_malloc (COB_CTX_TODO, sizeof(cob_file_key) * f->nkeys);
 				copy_keys_fcd_to_file (fcd, f, 0);
 			} else {
-				f->keys = cob_cache_malloc(sizeof(cob_file_key));
+				f->keys = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_file_key));
 			}
 		} else if (f->nkeys > 0
 		        && fcd->kdbPtr != NULL
@@ -710,9 +710,9 @@ find_fcd (cob_file *f, int free_fcd)
 			return ff->fcd;
 		}
 	}
-	fcd = cob_cache_malloc (sizeof (FCD3));
+	fcd = cob_cache_malloc (COB_CTX_TODO, sizeof (FCD3));
 	copy_file_to_fcd (f, fcd);
-	ff = cob_cache_malloc (sizeof (struct fcd_file));
+	ff = cob_cache_malloc (COB_CTX_TODO, sizeof (struct fcd_file));
 	ff->next = fcd_file_list;
 	ff->fcd = fcd;
 	ff->f = f;
@@ -729,7 +729,7 @@ fcd2_to_fcd3 (FCD2 *fcd2)
 {
 	FCD3 *fcd;
 	if (tmpfcd == NULL) {
-		tmpfcd = cob_cache_malloc (sizeof(FCD3));
+		tmpfcd = cob_cache_malloc (COB_CTX_TODO, sizeof(FCD3));
 	}
 	fcd = tmpfcd;
 	fcd->fcdVer = FCD_VER_64Bit;
@@ -864,11 +864,11 @@ newfile:
 	f->fcd = fcd;
 	/* attach it to our fcd_file_list, if not found above create a new one */
 	if (!ff) {
-		ff = cob_cache_malloc (sizeof (struct fcd_file));
+		ff = cob_cache_malloc (COB_CTX_TODO, sizeof (struct fcd_file));
 		ff->free_fcd = 0;
 		ff->next = fcd_file_list;
 		ff->fcd = fcd;
-		ff->fname = cob_cache_malloc (strlen(fname) + 1);
+		ff->fname = cob_cache_malloc (COB_CTX_TODO, strlen(fname) + 1);
 		strcpy(ff->fname, fname);
 		fcd_file_list = ff;
 	}
@@ -895,7 +895,7 @@ update_record_and_keys_if_necessary (cob_file * f, FCD3 *fcd)
 		if (fcd->recPtr != NULL) {
 			f->record->data = fcd->recPtr;
 		} else {
-			f->record->data = cob_cache_malloc (f->record_max + 1);
+			f->record->data = cob_cache_malloc (COB_CTX_TODO, f->record_max + 1);
 		}
 		f->record->size = LDCOMPX4(fcd->curRecLen);
 		f->record->attr = &alnum_attr;
@@ -1028,16 +1028,16 @@ cob_extfh_close (EXTFH_FUNC callfh, cob_file *f,
 				}
 				if (ff->free_fcd) {
 					if (ff->fcd->fnamePtr != NULL) {
-						cob_cache_free ((void*)(ff->fcd->fnamePtr));
+						cob_cache_free (COB_CTX_TODO, (void*)(ff->fcd->fnamePtr));
 					}
-					cob_cache_free((void*)ff->fcd);
+					cob_cache_free(COB_CTX_TODO, (void*)ff->fcd);
 				} else {
-					cob_cache_free((void*)ff->f);
+					cob_cache_free(COB_CTX_TODO, (void*)ff->f);
 				}
 				if (ff->fname) {
-					cob_cache_free ((void*)ff->fname);
+					cob_cache_free (COB_CTX_TODO, (void*)ff->fname);
 				}
-				cob_cache_free((void*)ff);
+				cob_cache_free(COB_CTX_TODO, (void*)ff);
 				break;
 			}
 			pff = ff;
@@ -1276,14 +1276,14 @@ cob_sys_extfh (const void *opcode_ptr, void *fcd_ptr)
 	 || !COB_MODULE_PTR->cob_procedure_params[0]
 	 || !COB_MODULE_PTR->cob_procedure_params[1]
 	 || COB_MODULE_PTR->cob_procedure_params[1]->size < 2) {
-		cob_set_exception (COB_EC_PROGRAM_ARG_MISMATCH);
+		cob_set_exception (COB_CTX_TODO, COB_EC_PROGRAM_ARG_MISMATCH);
 		return 1;	/* correct? */
 	}
 	if (COB_MODULE_PTR->cob_procedure_params[0]->size < 2
 	 || COB_MODULE_PTR->cob_procedure_params[1]->size < 5) {
 		fcd->fileStatus[0] = '9';
 		fcd->fileStatus[1] = 161;
-		cob_set_exception (COB_EC_PROGRAM_ARG_MISMATCH);
+		cob_set_exception (COB_CTX_TODO, COB_EC_PROGRAM_ARG_MISMATCH);
 		return 1;	/* correct? */
 	}
 
@@ -1293,7 +1293,7 @@ cob_sys_extfh (const void *opcode_ptr, void *fcd_ptr)
 		/* EXTFH with auto-conversion FCD2<->FCD3*/
 		int retsts = EXTFH ((unsigned char *)opcode_ptr, fcd);
 		if (retsts) {
-			cob_set_exception (COB_EC_PROGRAM_ARG_MISMATCH);
+			cob_set_exception (COB_CTX_TODO, COB_EC_PROGRAM_ARG_MISMATCH);
 		}
 		return retsts;
 	}
@@ -1303,9 +1303,9 @@ cob_sys_extfh (const void *opcode_ptr, void *fcd_ptr)
 	 || fcd->fcdVer != FCD_VER_64Bit) {
 		fcd->fileStatus[0] = '9';
 		fcd->fileStatus[1] = 161;
-		cob_set_exception (COB_EC_PROGRAM_ARG_MISMATCH);
+		cob_set_exception (COB_CTX_TODO, COB_EC_PROGRAM_ARG_MISMATCH);
 		if (fcd->fcdVer != FCD_VER_64Bit) {
-			cob_runtime_warning (_("ERROR: EXTFH called with FCD version %d"), fcd->fcdVer);
+			cob_runtime_warning (COB_CTX_TODO, _("ERROR: EXTFH called with FCD version %d"), fcd->fcdVer);
 		}
 		return 1;	/* correct? */
 	}
@@ -1351,7 +1351,7 @@ cob_file_fcd_adrs (cob_file *f, void *pfcd)
 	FCD3	*fcd = NULL;
 	/* LCOV_EXCL_START */
 	if (f == NULL) {
-		cob_runtime_error (_("invalid internal call of %s"), "cob_file_fcd_adrs");
+		cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "cob_file_fcd_adrs");
 		cob_hard_failure_internal ("libcob");
 	}
 	/* LCOV_EXCL_STOP */
@@ -1379,7 +1379,7 @@ cob_file_fcdkey_adrs (cob_file *f, void *pkey)
 	FCD3	*fcd = NULL;
 	/* LCOV_EXCL_START */
 	if (f == NULL) {
-		cob_runtime_error (_("invalid internal call of %s"), "cob_file_fcdkey_adrs");
+		cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "cob_file_fcdkey_adrs");
 		cob_hard_failure_internal ("libcob");
 	}
 	/* LCOV_EXCL_STOP */
@@ -1396,7 +1396,7 @@ int
 EXTFH (unsigned char *opcode, FCD3 *fcd)
 {
 	if (opcode == NULL || fcd == NULL) {
-		cob_runtime_warning (_("call to '%s' with invalid parameter '%s'"),
+		cob_runtime_warning (COB_CTX_TODO, _("call to '%s' with invalid parameter '%s'"),
 			"EXTFH", opcode == NULL ? "opcode" : "fcd");
 		return -1;
 	}
@@ -1410,7 +1410,7 @@ EXTFH (unsigned char *opcode, FCD3 *fcd)
 
 		fcd = fcd2_to_fcd3 (fcd2);
 		if (fcd == NULL) {
-			cob_runtime_warning (_("call to '%s' with invalid parameter '%s'"),
+			cob_runtime_warning (COB_CTX_TODO, _("call to '%s' with invalid parameter '%s'"),
 				"EXTFH", "fcd");
 			return -1;
 		}
@@ -1501,7 +1501,7 @@ EXTFH3 (unsigned char *opcode, FCD3 *fcd)
 	if (fcd->fcdVer != FCD_VER_64Bit) {
 		fcd->fileStatus[0] = '9';
 		fcd->fileStatus[1] = 161;
-		cob_runtime_warning (_("ERROR: EXTFH called with FCD version %d"), fcd->fcdVer);
+		cob_runtime_warning (COB_CTX_TODO, _("ERROR: EXTFH called with FCD version %d"), fcd->fcdVer);
 		return 1;
 	}
 	sts = opts = 0;
@@ -1575,7 +1575,7 @@ org_handling:
 				if (f->record == NULL
 				 && fcd->recPtr != NULL
 				 && LDCOMPX4(fcd->curRecLen) > 0) {
-					f->record = cob_cache_malloc(sizeof(cob_field));
+					f->record = cob_cache_malloc(COB_CTX_TODO, sizeof(cob_field));
 					f->record->data = fcd->recPtr;
 					f->record->attr = &alnum_attr;
 					f->record->size = LDCOMPX4(fcd->maxRecLen);
@@ -1628,14 +1628,14 @@ org_handling:
 	default:
 		fcd->fileStatus[0] = '9';
 		fcd->fileStatus[1] = 161;
-		cob_runtime_warning (_("ERROR: EXTFH called with wrong file organization %d"), fcd->fileOrg);
+		cob_runtime_warning (COB_CTX_TODO, _("ERROR: EXTFH called with wrong file organization %d"), fcd->fileOrg);
 		return -1;
 	}
 
 	if (fcd->fnamePtr == NULL) {
 		fcd->fileStatus[0] = '9';
 		fcd->fileStatus[1] = 141;
-		cob_runtime_warning (_("ERROR: EXTFH called with no %s pointer"),"filename");
+		cob_runtime_warning (COB_CTX_TODO, _("ERROR: EXTFH called with no %s pointer"),"filename");
 		return -1;
 	}
 
@@ -1766,7 +1766,7 @@ org_handling:
 	if (fcd->recPtr == NULL) {
 		fcd->fileStatus[0] = '9';
 		fcd->fileStatus[1] = 141;
-		cob_runtime_warning (_("ERROR: EXTFH called with no %s pointer; Function %d"),
+		cob_runtime_warning (COB_CTX_TODO, _("ERROR: EXTFH called with no %s pointer; Function %d"),
 						"record", opcd & 0xFF);
 		return -1;
 	}
@@ -1988,7 +1988,7 @@ org_handling:
 #else
 		fcd->fileStatus[1] = 100;
 #endif
-		cob_runtime_warning (_("ERROR: EXTFH called with unknown Function %d"),
+		cob_runtime_warning (COB_CTX_TODO, _("ERROR: EXTFH called with unknown Function %d"),
 				opcd & 0xFF);
 		/* MF does not set the return-code in this case - we possible want to do that */
 		break;

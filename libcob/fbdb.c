@@ -285,11 +285,11 @@ bdb_bt_compare (DB *db, const DBT *k1, const DBT *k2
 #else
 	/* LCOV_EXCL_START */
 	if (col == NULL) {
-		cob_runtime_error ("bdb_bt_compare was set but no collating sequence was stored in DBT");
+		cob_runtime_error (COB_CTX_TODO, "bdb_bt_compare was set but no collating sequence was stored in DBT");
 		cob_hard_failure ();
 	}
 	if (k1->size != k2->size) {
-		cob_runtime_error ("bdb_bt_compare was given keys of different length");
+		cob_runtime_error (COB_CTX_TODO, "bdb_bt_compare was given keys of different length");
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -377,7 +377,7 @@ bdb_err_event (DB_ENV *env, u_int32_t event, void *info)
 #endif
 	default: msg = "unknown"; break;
 	}
-	cob_runtime_error (_("BDB (%s), error: %d %s"), "fatal error", event, msg);
+	cob_runtime_error (COB_CTX_TODO, _("BDB (%s), error: %d %s"), "fatal error", event, msg);
 	/* FIXME: check if possible to be passed to original caller returning status 39 */
 	cob_hard_failure ();
 }
@@ -404,7 +404,7 @@ join_environment (cob_file_api *a)
 	}
 	ret = db_env_create (&bdb_env, 0);
 	if (ret) {
-		cob_runtime_error (_("cannot join BDB environment (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _("cannot join BDB environment (%s), error: %d %s"),
 				   "env_create", ret, db_strerror (ret));
 		return ret;
 	}
@@ -422,7 +422,7 @@ join_environment (cob_file_api *a)
 	flags = DB_CREATE | DB_INIT_MPOOL | DB_INIT_CDB;
 	ret = bdb_env->open (bdb_env, file_setptr->bdb_home, flags, 0);
 	if (ret) {
-		cob_runtime_error (_("cannot join BDB environment (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _("cannot join BDB environment (%s), error: %d %s"),
 				   "env->open", ret, db_strerror (ret));
 		bdb_env->close (bdb_env, 0);
 		bdb_env = NULL;
@@ -495,7 +495,7 @@ bdb_lock_file (cob_file *f, char *filename, int lock_mode)
 	if (ret == DB_LOCK_NOTGRANTED)
 		return COB_STATUS_61_FILE_SHARING;
 	if (ret) {
-		cob_runtime_error (_("BDB (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _("BDB (%s), error: %d %s"),
 				   "file lock_get", ret, db_strerror (ret));
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
@@ -598,7 +598,7 @@ bdb_lock_record (cob_file *f, const char *key, const unsigned int keylen)
 	if (ret == DB_LOCK_NOTGRANTED)
 		return COB_STATUS_51_RECORD_LOCKED;
 	if (ret) {
-		cob_runtime_error (_("BDB (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _("BDB (%s), error: %d %s"),
 				   "lock_get", ret, db_strerror (ret));
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
@@ -672,7 +672,7 @@ bdb_test_record_lock (cob_file *f, const char *key, const unsigned int keylen)
 	if (ret == DB_LOCK_NOTGRANTED)
 		return COB_STATUS_51_RECORD_LOCKED;
 	if (ret) {
-		cob_runtime_error (_("BDB (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _("BDB (%s), error: %d %s"),
 				   "lock_get", ret, db_strerror (ret));
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
@@ -698,7 +698,7 @@ bdb_unlock_all (cob_file *f)
 		ret = bdb_env->lock_put (bdb_env, &p->bdb_record_lock);
 	}
 	if (ret) {
-		cob_runtime_error (_("BDB (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _("BDB (%s), error: %d %s"),
 				   "lock_put", ret, db_strerror (ret));
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
@@ -720,7 +720,7 @@ bdb_unlock_last (cob_file *f)
 		ret = bdb_env->lock_put (bdb_env, &p->bdb_locks[p->bdb_lock_num]);
 	}
 	if (ret) {
-		cob_runtime_error (_("BDB (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _("BDB (%s), error: %d %s"),
 				   "lock_put", ret, db_strerror (ret));
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
@@ -747,7 +747,7 @@ bdb_test_lock_advance(cob_file *f, int nextprev, int skip_lock)
 		return COB_STATUS_51_RECORD_LOCKED;
 	}
 	if (ret) {
-		cob_runtime_error (_("BDB (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _("BDB (%s), error: %d %s"),
 			"lock_get", ret, db_strerror (ret));
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
@@ -774,7 +774,7 @@ bdb_lock_advance(cob_file *f, int nextprev, int skip_lock)
 		return COB_STATUS_51_RECORD_LOCKED;
 	}
 	if (ret) {
-		cob_runtime_error (_ ("BDB (%s), error: %d %s"),
+		cob_runtime_error (COB_CTX_TODO, _ ("BDB (%s), error: %d %s"),
 			"lock_get", ret, db_strerror (ret));
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
@@ -1057,7 +1057,7 @@ ix_bdb_start_internal (cob_file *f, const int cond, cob_field *key,
 			int keylen = db_keylen (f, p->key_index);
 			/* LCOV_EXCL_START */
 			if (partlen <= 0) {
-				cob_runtime_error (_("invalid internal call of %s"),
+				cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"),
 					"indexed_start_internal/bdb_keylen");
 				cob_hard_failure_internal ("libcob");
 			}
@@ -1336,8 +1336,8 @@ ix_bdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_m
 		break;
 	/* LCOV_EXCL_START */
 	default:
-		cob_runtime_error (_("invalid internal call of %s"), "indexed_open");
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "indexed_open");
+		cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 	/* LCOV_EXCL_STOP */
 	}
 
@@ -1387,14 +1387,14 @@ ix_bdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_m
 			if (f->flag_big_endian) {
 				ret = p->db[i]->set_lorder (p->db[i], 1234);
 				if (ret) {
-					cob_runtime_error (_("cannot set BDB byteorder (%s), error: %d %s"),
+					cob_runtime_error (COB_CTX_TODO, _("cannot set BDB byteorder (%s), error: %d %s"),
 							   "set_lorder", ret, db_strerror (ret));
 					return COB_STATUS_39_CONFLICT_ATTRIBUTE;
 				}
 			} else if (f->flag_little_endian) {
 				ret = p->db[i]->set_lorder (p->db[i], 4321);
 				if (ret) {
-					cob_runtime_error (_("cannot set BDB byteorder (%s), error: %d %s"),
+					cob_runtime_error (COB_CTX_TODO, _("cannot set BDB byteorder (%s), error: %d %s"),
 							   "set_lorder", ret, db_strerror (ret));
 					return COB_STATUS_39_CONFLICT_ATTRIBUTE;
 				}

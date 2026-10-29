@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_misc.at: runtime support functions take the context
 	* testsuite.src/run_misc.at: CALL / CANCEL / resolve functions take the
 	  context
 	* atlocal.in: portable test of COB_ENABLE_DEBUG ('=' instead of the

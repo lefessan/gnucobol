@@ -1,6 +1,40 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (set_resolve_error, cache_preload, cob_resolve_internal,
+	  cob_call_error, cob_resolve, cob_resolve_cobol, ...), cconv.c
+	  (cob_load_collation), cobcapi.c (get_value, cob_parse_field),
+	  cobcapi.h, common.c (cob_get_strerror, sort_compare,
+	  sort_compare_collate, cob_rescan_env_vals,
+	  cob_get_last_exception_name, cob_add_exception, ...), common.h
+	  (print_runtime_conf, cob_relocate_string, cob_last_exception_is,
+	  cob_last_runtime_error, cob_module_enter, cob_module_leave, ...),
+	  fbdb.c (bdb_bt_compare, bdb_err_event, join_environment,
+	  bdb_lock_file, bdb_lock_record, bdb_test_record_lock, ...), fextfh.c
+	  (free_extfh_fcd, copy_file_to_fcd, update_fcd_to_file,
+	  copy_keys_fcd_to_file, copy_fcd_to_file, find_fcd, ...), fileio.c
+	  (get_io_ptr, isam_to_file, cob_key_def, set_qbl_buf, cob_open_qbl,
+	  cob_close_qbl, ...), fisam.c (indexed_keydesc), flmdb.c (lmdb_open),
+	  focextfh.c (get_io_ptr), foci.c (oci_open), fodbc.c (odbc_open),
+	  fsqlxfd.c (db_cmpkey, cob_load_xfd, cob_load_ddl, getSchemaEnvName,
+	  cob_sql_stmt), intrinsic.c (comp_field, cob_alloc_field,
+	  cob_mod_or_rem, numval, get_min_and_max_of_args,
+	  seconds_from_formatted_time, ...), mlio.c (set_xml_exception,
+	  set_json_exception, generate_content, generate_json_from_tree,
+	  cob_xml_generate, cob_xml_parse, ...), move.c (store_common_region,
+	  optimized_move_display_to_edited, cob_alloc_move, cob_set_llint),
+	  numeric.c (cob_decimal_adjust, cob_decimal_get_ieee64dec,
+	  cob_decimal_set_ieee64dec, cob_decimal_get_ieee128dec,
+	  cob_decimal_set_ieee128dec, cob_add_packed, ...), profiling.c
+	  (cob_prof_realloc_arrays, cob_prof_end), reportio.c
+	  (limitCheckOneLine, cob_report_suppress), screenio.c
+	  (init_cob_screen_if_needed, handle_status,
+	  raise_ec_on_invalid_line_or_col, cob_screen_init,
+	  pass_cursor_to_program, get_line_and_col_from_field, ...), strings.c
+	  (inspect_common, cob_inspect_converting_intern,
+	  cob_string_init_intern, cob_string_append_intern,
+	  cob_unstring_init_intern, cob_unstring_finish_intern), termio.c
+	  (cob_display, cob_accept): runtime support functions take the context
 	* call.c (cob_call_error, cob_resolve_cobol, cob_call_field,
 	  cob_cancel_field, cob_call, cob_func, ...), cobcapi.c
 	  (cob_get_param_field, cob_get_num_params, cob_get_field_str,

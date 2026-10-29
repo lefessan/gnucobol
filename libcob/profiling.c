@@ -203,14 +203,14 @@ cob_prof_realloc_arrays (void)
 
 	if (max_prof_depth >= new_size){
 		int i;
-		cob_runtime_warning (_("[cob_prof] Profiling overflow at %d calls, aborting profiling."),
+		cob_runtime_warning (COB_CTX_TODO, _("[cob_prof] Profiling overflow at %d calls, aborting profiling."),
 			current_idx);
-		cob_runtime_warning (_("  Last 10 calls on stack:"));
+		cob_runtime_warning (COB_CTX_TODO, _("  Last 10 calls on stack:"));
 		for (i = 0; i < cob_min_int(10, current_idx); i++){
 			struct cob_prof_module *info = called_runtimes[current_idx-1-i];
 			int proc_idx = called_procedures[current_idx-1-i];
 			struct cob_prof_procedure *proc = info->procedures + proc_idx;
-			cob_runtime_warning (_("  * %s at %s:%d"), proc->text,
+			cob_runtime_warning (COB_CTX_TODO, _("  * %s at %s:%d"), proc->text,
 					     proc->file, proc->line);
 		}
 		is_active = 0;
@@ -566,7 +566,7 @@ cob_prof_end ()
 		fclose (file);
 		fprintf(stderr, "File %s generated\n", cobsetptr->cob_prof_filename);
 	} else {
-		cob_runtime_warning (_("error '%s' opening COB_PROF_FILE '%s'"),
+		cob_runtime_warning (COB_CTX_TODO, _("error '%s' opening COB_PROF_FILE '%s'"),
 				     cob_get_strerror (), cobsetptr->cob_prof_filename);
 	}
 	current_idx = -1;

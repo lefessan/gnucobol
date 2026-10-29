@@ -278,9 +278,9 @@ set_resolve_error (int module_type)
 {
 	resolve_error = resolve_error_buff;
 	if (module_type == COB_MODULE_TYPE_PROGRAM) {
-		cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
+		cob_set_exception (COB_CTX_TODO, COB_EC_PROGRAM_NOT_FOUND);
 	} else {
-		cob_set_exception (COB_EC_FUNCTION_NOT_FOUND);
+		cob_set_exception (COB_CTX_TODO, COB_EC_FUNCTION_NOT_FOUND);
 	}
 }
 
@@ -626,7 +626,7 @@ cache_preload (const char *path)
 
 	libhandle = lt_dlopen (path);
 	if (!libhandle) {
-		cob_runtime_warning (
+		cob_runtime_warning (COB_CTX_TODO, 
 			_("preloading from existing path '%s' failed; %s"), path, lt_dlerror());
 		return 0;
 	}
@@ -929,7 +929,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 			  "entry point '%s' not found", (const char *)s);
 		set_resolve_error (module_type);
 		/* lt_dlerror will now give either the message from lt_dlopen or lt_dlym */
-		cob_runtime_warning (
+		cob_runtime_warning (COB_CTX_TODO, 
 			_("loading from existing path '%s' failed; %s"),
 			call_filename_buff, lt_dlerror ());
 		return NULL;
@@ -962,7 +962,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 				  "entry point '%s' not found", (const char *)s);
 			set_resolve_error (module_type);
 			/* lt_dlerror will now give either the message from lt_dlopen or lt_dlym */
-			cob_runtime_warning (
+			cob_runtime_warning (COB_CTX_TODO, 
 				_("loading from existing path '%s' failed; %s"),
 				call_filename_buff, lt_dlerror ());
 			return NULL;
@@ -1045,7 +1045,7 @@ cob_resolve_error (cob_context *ctx)
 void
 cob_call_error (cob_context *ctx)
 {
-	cob_runtime_error ("%s", cob_resolve_error (ctx));
+	cob_runtime_error (ctx, "%s", cob_resolve_error (ctx));
 	cob_hard_failure ();
 }
 
@@ -1077,7 +1077,7 @@ cob_resolve (cob_context *ctx, const char *name)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -1098,7 +1098,7 @@ cob_resolve_cobol (cob_context *ctx, const char *name, const int fold_case, cons
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -1113,7 +1113,7 @@ cob_resolve_cobol (cob_context *ctx, const char *name, const int fold_case, cons
 		if (errind) {
 			cob_call_error (ctx);
 		}
-		cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
+		cob_set_exception (ctx, COB_EC_PROGRAM_NOT_FOUND);
 	}
 	cobglobptr->cob_call_name_hash = cob_get_name_hash (name);
 	return p;
@@ -1126,14 +1126,14 @@ cob_resolve_func (cob_context *ctx, const char *name)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
 	p = cob_resolve_internal (name, NULL, 0, COB_MODULE_TYPE_FUNCTION, 1);
 	if (!p) {
 		/* Note: exception raised above */
-		cob_runtime_error (_("user-defined FUNCTION '%s' not found"), name);
+		cob_runtime_error (ctx, _("user-defined FUNCTION '%s' not found"), name);
 		cob_hard_failure ();
 	}
 	return p;
@@ -1192,7 +1192,7 @@ cob_call_field (cob_context *ctx, const cob_field *f, const struct cob_call_stru
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -1203,7 +1203,7 @@ cob_call_field (cob_context *ctx, const cob_field *f, const struct cob_call_stru
 	if (*name == ' ') {
 		size_t				len;
 		/* same warning as in cobc/typeck.c */
-		cob_runtime_warning (
+		cob_runtime_warning (ctx, 
 			_("'%s' literal includes leading spaces which are omitted"), name);
 		len = strlen (name);
 		while (*name == ' ') {
@@ -1260,7 +1260,7 @@ cob_call_field (cob_context *ctx, const cob_field *f, const struct cob_call_stru
 		if (errind) {
 			cob_call_error (ctx);
 		} else {
-			cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
+			cob_set_exception (ctx, COB_EC_PROGRAM_NOT_FOUND);
 			return NULL;
 		}
 	}
@@ -1300,10 +1300,10 @@ cob_cancel (cob_context *ctx, const char *name)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!name) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_cancel");
+		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_cancel");
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -1343,7 +1343,7 @@ cob_cancel_field (cob_context *ctx, const cob_field *f, const struct cob_call_st
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 	if (!f || f->size == 0) {
@@ -1462,14 +1462,14 @@ cob_call (cob_context *ctx, const char *name, const int argc, void **argv)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!name) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_call");
+		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_call");
 		cob_hard_failure ();
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (_("invalid number of arguments passed to '%s'"), "cob_call");
+		cob_runtime_error (ctx, _("invalid number of arguments passed to '%s'"), "cob_call");
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -1654,15 +1654,15 @@ cob_call_cobol (cob_context *ctx, const char *name, const int argc, ...)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (_("invalid number of arguments passed to '%s'"), "cob_call_cobol");
-		cob_stop_run (1);
+		cob_runtime_error (ctx, _("invalid number of arguments passed to '%s'"), "cob_call_cobol");
+		cob_stop_run (ctx, 1);
 	}
 	if (!name) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_call_cobol");
-		cob_stop_run (1);
+		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_call_cobol");
+		cob_stop_run (ctx, 1);
 	}
 	/* LCOV_EXCL_STOP */
 	unifunc.funcvoid = cob_resolve_cobol (ctx, name, 0, 1);
@@ -1763,15 +1763,15 @@ cob_call_entry (cob_context *ctx, void *entry, const int argc, ...)
 
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (_("invalid number of arguments passed to '%s'"), "cob_call_entry");
-		cob_stop_run (1);
+		cob_runtime_error (ctx, _("invalid number of arguments passed to '%s'"), "cob_call_entry");
+		cob_stop_run (ctx, 1);
 	}
 	if (!entry) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_call_entry");
-		cob_stop_run (1);
+		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_call_entry");
+		cob_stop_run (ctx, 1);
 	}
 	/* LCOV_EXCL_STOP */
 	unifunc.funcvoid = entry;
@@ -1870,14 +1870,14 @@ cob_savenv (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!jbuf) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_savenv");
+		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_savenv");
 		cob_hard_failure ();
 	}
 	if (cob_jmp_primed) {
-		cob_runtime_error (_("multiple call to 'cob_setjmp'"));
+		cob_runtime_error (ctx, _("multiple call to 'cob_setjmp'"));
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -1897,14 +1897,14 @@ cob_longjmp (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
 	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+		cob_fatal_error (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!jbuf) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_longjmp");
+		cob_runtime_error (ctx, _("NULL parameter passed to '%s'"), "cob_longjmp");
 		cob_hard_failure ();
 	}
 	if (!cob_jmp_primed) {
-		cob_runtime_error (_("call to 'cob_longjmp' with no prior 'cob_setjmp'"));
+		cob_runtime_error (ctx, _("call to 'cob_longjmp' with no prior 'cob_setjmp'"));
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -2033,7 +2033,7 @@ size_t cob_try_preload (const char* module_name)
 	ret = cache_preload (module_name);
 
 	if (ret == 0) {
-		cob_runtime_warning (_("preloading of '%s' failed"), module_name);
+		cob_runtime_warning (COB_CTX_TODO, _("preloading of '%s' failed"), module_name);
 	}
 	return ret;
 #endif

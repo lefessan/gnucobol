@@ -1652,8 +1652,8 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		break;
 	/* LCOV_EXCL_START */
 	default:
-		cob_runtime_error (_("invalid internal call of %s"), "indexed_open");
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_runtime_error (COB_CTX_TODO, _("invalid internal call of %s"), "indexed_open");
+		cob_fatal_error (COB_CTX_TODO, COB_FERROR_CODEGEN);
 	/* LCOV_EXCL_STOP */
 	}
 
