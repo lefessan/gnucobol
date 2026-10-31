@@ -1574,7 +1574,6 @@ void
 cob_lmdb_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	a->io_funcs[COB_IO_LMDB] = (void*)&lmdb_funcs;
-	cobglobptr = a->glbptr;
 	cobsetptr = a->setptr;
 	db_data_dir = NULL;
 	db_buff = cob_malloc (COB_SMALL_BUFF);

@@ -72,7 +72,6 @@ static int		get_seconds_past_midnight (void);
 
 /* Local variables */
 
-static cob_global	*cobglobptr;
 
 static const cob_field_attr	const_alpha_attr =
 				{COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
@@ -678,7 +677,7 @@ cob_alloc_field (cob_context *ctx, cob_decimal *d)
 static cob_field *
 cob_mod_or_rem (cob_context *ctx, cob_field *f1, cob_field *f2, const int func_is_rem)
 {
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	cob_decimal_set_field_ctx (ctx, &d2, f1);
 	cob_decimal_set_field_ctx (ctx, &d3, f2);
 
@@ -729,7 +728,7 @@ cob_mod_or_rem (cob_context *ctx, cob_field *f1, cob_field *f2, const int func_i
 /* [sp][+|-][sp]{digits[.[digits]]|.digits}[sp][E[sp]{+|-}[sp]digits[sp]] */
 
 int
-cob_check_numval_f (const cob_field *srcfield)
+cob_check_numval_f (cob_context *ctx, const cob_field *srcfield)
 {
 	unsigned char	*p = srcfield->data;
 	const unsigned int	fsize = (unsigned int)srcfield->size;
@@ -1795,7 +1794,7 @@ get_interval_and_current_year_from_args (cob_context *ctx, const int num_args, v
 #if defined(_WIN32) || defined(__CYGWIN__) || defined (HAVE_LANGINFO_CODESET)
 #ifdef HAVE_LANGINFO_CODESET
 static int
-locale_time (const int hours, const int minutes, const int seconds,
+locale_time (cob_context *ctx, const int hours, const int minutes, const int seconds,
 	     cob_field *locale_field, char *buff)
 {
 	int 	deflocale = 0;
@@ -1824,7 +1823,7 @@ locale_time (const int hours, const int minutes, const int seconds,
 
 	/* Set locale if not done yet */
 	if (deflocale) {
-		(void) setlocale (LC_ALL, cobglobptr->cob_locale);
+		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}
 
 	strftime (buff, LOCTIME_BUFSIZE, buff2, &tstruct);
@@ -1833,7 +1832,7 @@ locale_time (const int hours, const int minutes, const int seconds,
 }
 #else
 static int
-locale_time (const int hours, const int minutes, const int seconds,
+locale_time (cob_context *ctx, const int hours, const int minutes, const int seconds,
 	     cob_field *locale_field, char *buff)
 {
 	size_t		len;
@@ -2362,7 +2361,7 @@ rest_is_offset_format (const char *str, const int with_colon)
 
 /* CHECKME: Why not using GMP string functions here? */
 static void
-add_decimal_digits (int decimal_places, cob_decimal *second_fraction,
+add_decimal_digits (cob_context *ctx, int decimal_places, cob_decimal *second_fraction,
 		    char *buff, ptrdiff_t *buff_pos)
 {
 	int	scale = second_fraction->scale;
@@ -2510,7 +2509,7 @@ format_time (cob_context *ctx, const struct time_format format, int time,
 	sprintf (buff, format_str, hours, minutes, seconds);
 
 	if (format.decimal_places != 0) {
-		add_decimal_digits (format.decimal_places, second_fraction,
+		add_decimal_digits (ctx, format.decimal_places, second_fraction,
 				    buff, &buff_pos);
 	}
 
@@ -3719,7 +3718,7 @@ cob_intr_binop_ctx (cob_context *ctx, cob_field *f1, const int op, cob_field *f2
 		cob_decimal_mul_ctx (ctx, &d1, &d2);
 		break;
 	case '/':
-		cobglobptr->cob_exception_code = 0;
+		ctx->glob.cob_exception_code = 0;
 		if (mpz_sgn (d2.value) == 0) {
 			/* Divide by zero */
 			cob_set_exception_ctx (ctx, COB_EC_SIZE_ZERO_DIVIDE);
@@ -4456,19 +4455,19 @@ cob_intr_exception_file_ctx (cob_context *ctx)
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
 	/* check if last-exception is active and a file-exception */
-	if (!cobglobptr->cob_error_file ||
+	if (!ctx->glob.cob_error_file ||
 	    (!cob_last_exception_is_ctx (ctx, COB_EC_I_O))) {
 		field.size = 2;
 		make_field_entry (&field);
 		memcpy (curr_field->data, "00", (size_t)2);
 	} else {
-		flen = strlen (cobglobptr->cob_error_file->select_name);
+		flen = strlen (ctx->glob.cob_error_file->select_name);
 		field.size = flen + 2;
 		make_field_entry (&field);
 		memcpy (curr_field->data,
-			cobglobptr->cob_error_file->file_status, (size_t)2);
+			ctx->glob.cob_error_file->file_status, (size_t)2);
 		memcpy (&(curr_field->data[2]),
-			cobglobptr->cob_error_file->select_name, flen);
+			ctx->glob.cob_error_file->select_name, flen);
 	}
 	return curr_field;
 }
@@ -4486,7 +4485,7 @@ cob_field *
 cob_intr_exception_location_ctx (cob_context *ctx)
 {
 	/* check if last-exception is active and if LOCATION is available */
-	if (!cobglobptr->last_exception_id) {
+	if (!ctx->glob.last_exception_id) {
 		cob_field	field;
 		COB_FIELD_INIT (0, NULL, &const_alpha_attr);
 		field.size = 1;
@@ -4494,27 +4493,27 @@ cob_intr_exception_location_ctx (cob_context *ctx)
 		*(curr_field->data) = ' ';
 	} else {
 		char buff[COB_SMALL_BUFF];
-		if (cobglobptr->last_exception_section
-		 && cobglobptr->last_exception_paragraph) {
+		if (ctx->glob.last_exception_section
+		 && ctx->glob.last_exception_paragraph) {
 			snprintf (buff, (size_t)COB_SMALL_MAX, "%s; %s OF %s; %u",
-				  cobglobptr->last_exception_id,
-				  cobglobptr->last_exception_paragraph,
-				  cobglobptr->last_exception_section,
-				  cobglobptr->last_exception_line);
-		} else if (cobglobptr->last_exception_section) {
+				  ctx->glob.last_exception_id,
+				  ctx->glob.last_exception_paragraph,
+				  ctx->glob.last_exception_section,
+				  ctx->glob.last_exception_line);
+		} else if (ctx->glob.last_exception_section) {
 			snprintf (buff, (size_t)COB_SMALL_MAX, "%s; %s; %u",
-				  cobglobptr->last_exception_id,
-				  cobglobptr->last_exception_section,
-				  cobglobptr->last_exception_line);
-		} else if (cobglobptr->last_exception_paragraph) {
+				  ctx->glob.last_exception_id,
+				  ctx->glob.last_exception_section,
+				  ctx->glob.last_exception_line);
+		} else if (ctx->glob.last_exception_paragraph) {
 			snprintf (buff, (size_t)COB_SMALL_MAX, "%s; %s; %u",
-				  cobglobptr->last_exception_id,
-				  cobglobptr->last_exception_paragraph,
-				  cobglobptr->last_exception_line);
+				  ctx->glob.last_exception_id,
+				  ctx->glob.last_exception_paragraph,
+				  ctx->glob.last_exception_line);
 		} else {
 			snprintf (buff, (size_t)COB_SMALL_MAX, "%s; ; %u",
-				  cobglobptr->last_exception_id,
-				  cobglobptr->last_exception_line);
+				  ctx->glob.last_exception_id,
+				  ctx->glob.last_exception_line);
 		}
 		buff[COB_SMALL_MAX] = 0; /* silence warnings */
 		cob_alloc_set_field_str (buff, 0, 0);
@@ -4570,8 +4569,8 @@ cob_intr_exception_statement_ctx (cob_context *ctx)
 	make_field_entry (&field);
 
 	memset (curr_field->data, ' ', (size_t)31);
-	if (cobglobptr->last_exception_statement != STMT_UNKNOWN) {
-		const char *statement = cob_statement_name[cobglobptr->last_exception_statement];
+	if (ctx->glob.last_exception_statement != STMT_UNKNOWN) {
+		const char *statement = cob_statement_name[ctx->glob.last_exception_statement];
 		flen = strlen (statement);
 		if (flen > 31) {
 			flen = 31;
@@ -4663,7 +4662,7 @@ cob_intr_char_ctx (cob_context *ctx, cob_field *srcfield)
 	} else {
 		const unsigned char *col = COB_MODULE_PTR->collating_sequence;
 		unsigned char chr;
-		cobglobptr->cob_exception_code = 0;
+		ctx->glob.cob_exception_code = 0;
 		--i;
 		if (col == NULL) {
 			chr = (unsigned char)i;
@@ -4744,7 +4743,7 @@ cob_intr_combined_datetime_ctx (cob_context *ctx, cob_field *srcdays, cob_field 
 	cob_decimal	*srtime;
 	cob_decimal	*hundred_thousand;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Validate and extract the value of srcdays */
 	srdays = cob_get_int_ctx (ctx, srcdays);
@@ -4804,7 +4803,7 @@ cob_intr_date_of_integer_ctx (cob_context *ctx, cob_field *srcdays)
 	COB_FIELD_INIT (8, NULL, &attr);
 	make_field_entry (&field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	/* Base 1601-01-01 */
 	days = cob_get_int_ctx (ctx, srcdays);
 	if (!valid_integer_date (days)) {
@@ -4841,7 +4840,7 @@ cob_intr_day_of_integer_ctx (cob_context *ctx, cob_field *srcdays)
 	COB_FIELD_INIT (7, NULL, &attr);
 	make_field_entry (&field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	/* Base 1601-01-01 */
 	days = cob_get_int_ctx (ctx, srcdays);
 	if (!valid_integer_date (days)) {
@@ -4874,7 +4873,7 @@ cob_intr_integer_of_date_ctx (cob_context *ctx, cob_field *srcfield)
 	int		month;
 	int		year;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	/* Base 1601-01-01 */
 	indate = cob_get_int_ctx (ctx, srcfield);
 	year = indate / 10000;
@@ -4915,7 +4914,7 @@ cob_intr_integer_of_day_ctx (cob_context *ctx, cob_field *srcfield)
 	int		days;
 	int		year;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	/* Base 1601-01-01 */
 	indate = cob_get_int_ctx (ctx, srcfield);
 	year = indate / 1000;
@@ -5014,7 +5013,7 @@ cob_intr_factorial_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	int		srcval;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	srcval = cob_get_int_ctx (ctx, srcfield);
 	d1.scale = 0;
 	if (srcval < 0) {
@@ -5081,7 +5080,7 @@ cob_intr_exp_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	if (mpz_sgn (d1.value) == 0) {
 		/* Power is zero */
@@ -5112,7 +5111,7 @@ cob_intr_exp10_ctx (cob_context *ctx, cob_field *srcfield)
 
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	sign = mpz_sgn (d1.value);
 	if (sign == 0) {
@@ -5162,7 +5161,7 @@ cob_intr_log_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	if (mpz_sgn (d1.value) != 1) {
 		/* value must be > 0 */
 		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
@@ -5201,7 +5200,7 @@ cob_intr_log10_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	if (mpz_sgn (d1.value) != 1) {
 		/* value must be > 0 */
 		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
@@ -5267,7 +5266,7 @@ cob_intr_acos_ctx (cob_context *ctx, cob_field *srcfield)
 	mpz_set_ui (d3.value, 1UL);
 	d3.scale = 0;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	if (cob_decimal_cmp_ctx (ctx, &d4, &d2) < 0 || cob_decimal_cmp_ctx (ctx, &d5, &d3) > 0) {
 		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		cob_alloc_set_field_uint (0);
@@ -5304,7 +5303,7 @@ cob_intr_asin_ctx (cob_context *ctx, cob_field *srcfield)
 	mpz_set_ui (d3.value, 1UL);
 	d3.scale = 0;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	if (cob_decimal_cmp_ctx (ctx, &d4, &d2) < 0
 	 || cob_decimal_cmp_ctx (ctx, &d5, &d3) > 0) {
 		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
@@ -5339,7 +5338,7 @@ cob_intr_atan_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	if (mpz_sgn (d1.value) == 0) {
 		/* Atan (0) = 0 */
@@ -5368,7 +5367,7 @@ cob_intr_cos_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	cob_decimal_get_mpf (cob_mpft, &d1);
 	cob_mpf_cos (cob_mpft, cob_mpft);
@@ -5391,7 +5390,7 @@ cob_intr_sin_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	cob_decimal_get_mpf (cob_mpft, &d1);
 	cob_mpf_sin (cob_mpft, cob_mpft);
@@ -5414,7 +5413,7 @@ cob_intr_tan_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	cob_decimal_get_mpf (cob_mpft, &d1);
 	cob_mpf_tan (cob_mpft, cob_mpft);
@@ -5437,7 +5436,7 @@ cob_intr_sqrt_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	if (mpz_sgn (d1.value) == -1) {
 		/* value must be >= 0 */
 		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
@@ -5508,7 +5507,7 @@ cob_intr_numval_f_ctx (cob_context *ctx, cob_field *srcfield)
 	         (the testsuite checks both variants) */
 #ifdef INVALID_NUMVAL_IS_ZERO 
 	/* Validate source field */
-	if (cob_check_numval_f (srcfield)) {
+	if (cob_check_numval_f (ctx, srcfield)) {
 		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		cob_alloc_set_field_uint (0);
 		return curr_field;
@@ -6439,7 +6438,7 @@ cob_intr_standard_deviation_va_ctx (cob_context *ctx, const int num_args, va_lis
 	GET_VARIANCE (num_args, args);
 	cob_trim_decimal (&d1);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Take square root of variance */
 	mpz_set_ui (d3.value, 5UL);
@@ -6554,7 +6553,7 @@ cob_intr_year_to_yyyy_va_ctx (cob_context *ctx, const int params, va_list cob_va
 	int		current_year;
 	int		maxyear;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	va_copy (args, cob_va_args);
 	f = va_arg (args, cob_field *);
 	year = cob_get_int_ctx (ctx, f);
@@ -6635,7 +6634,7 @@ cob_intr_date_to_yyyymmdd_va_ctx (cob_context *ctx, const int params, va_list co
 	int		current_year;
 	int		maxyear;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	va_copy (args, cob_va_args);
 
@@ -6706,7 +6705,7 @@ cob_intr_day_to_yyyyddd_va_ctx (cob_context *ctx, const int params, va_list cob_
 	int		current_year;
 	int		maxyear;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	va_copy (args, cob_va_args);
 
@@ -6820,7 +6819,7 @@ cob_intr_seconds_from_formatted_time_ctx (cob_context *ctx, cob_field *format_fi
 					   format_field->size);
 	memcpy (format_str, format_field->data, str_length);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Validate the format string */
 	if (cob_valid_datetime_format (format_str, decimal_point)) {
@@ -6886,7 +6885,7 @@ cob_intr_locale_date_ctx (cob_context *ctx, const int offset, const int length,
 	char		locale_buff[COB_MINI_BUFF];
 #endif
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
 	if (COB_FIELD_IS_NUMERIC (srcfield)) {
@@ -6939,7 +6938,7 @@ cob_intr_locale_date_ctx (cob_context *ctx, const int offset, const int length,
 	memset (buff2, 0, sizeof(buff2));
 	snprintf(buff2, sizeof(buff2) - 1, "%s", nl_langinfo (D_FMT));
 	if (deflocale) {
-		(void) setlocale (LC_ALL, cobglobptr->cob_locale);
+		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}
 	strftime (buff, sizeof(buff), buff2, &tstruct);
 #else
@@ -7009,7 +7008,7 @@ cob_intr_locale_time_ctx (cob_context *ctx, const int offset, const int length,
 	char		buff[LOCTIME_BUFSIZE] = { '\0' };
 #endif
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
 	if (COB_FIELD_IS_NUMERIC (srcfield)) {
@@ -7044,7 +7043,7 @@ cob_intr_locale_time_ctx (cob_context *ctx, const int offset, const int length,
 		goto derror;
 	}
 
-	if (locale_time (hours, minutes, seconds, locale_field, buff)) {
+	if (locale_time (ctx, hours, minutes, seconds, locale_field, buff)) {
 		goto derror;
 	}
 
@@ -7076,7 +7075,7 @@ cob_intr_lcl_time_from_secs_ctx (cob_context *ctx, const int offset, const int l
 	char		buff[LOCTIME_BUFSIZE] = { '\0' };
 #endif
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
 	if (COB_FIELD_IS_NUMERIC (srcfield)) {
@@ -7092,7 +7091,7 @@ cob_intr_lcl_time_from_secs_ctx (cob_context *ctx, const int offset, const int l
 	minutes = indate / 60;
 	seconds = indate % 60;
 
-	if (locale_time (hours, minutes, seconds, locale_field, buff)) {
+	if (locale_time (ctx, hours, minutes, seconds, locale_field, buff)) {
 		goto derror;
 	}
 
@@ -7122,7 +7121,7 @@ cob_intr_mon_decimal_point_ctx (cob_context *ctx)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -7164,7 +7163,7 @@ cob_intr_num_decimal_point_ctx (cob_context *ctx)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -7206,7 +7205,7 @@ cob_intr_mon_thousands_sep_ctx (cob_context *ctx)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -7248,7 +7247,7 @@ cob_intr_num_thousands_sep_ctx (cob_context *ctx)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -7290,7 +7289,7 @@ cob_intr_currency_symbol_ctx (cob_context *ctx)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -7353,7 +7352,7 @@ cob_intr_test_numval_c (cob_field *srcfield, cob_field *currency)
 cob_field *
 cob_intr_test_numval_f_ctx (cob_context *ctx, cob_field *srcfield)
 {
-	cob_alloc_set_field_int (cob_check_numval_f (srcfield));
+	cob_alloc_set_field_int (cob_check_numval_f (ctx, srcfield));
 	return curr_field;
 }
 
@@ -7534,7 +7533,7 @@ cob_intr_locale_compare_va_ctx (cob_context *ctx, const int params, va_list cob_
 	cob_field	field;
 	va_list		args;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	va_copy (args, cob_va_args);
 	f1 = va_arg (args, cob_field *);
 	f2 = va_arg (args, cob_field *);
@@ -7598,7 +7597,7 @@ cob_intr_locale_compare_va_ctx (cob_context *ctx, const int params, va_list cob_
 
 #ifdef	HAVE_SETLOCALE
 	if (deflocale) {
-		(void) setlocale (LC_ALL, cobglobptr->cob_locale);
+		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}
 #endif
 
@@ -7657,7 +7656,7 @@ cob_intr_formatted_date_ctx (cob_context *ctx, const int offset, const int lengt
 	COB_FIELD_INIT (field_length, NULL, &const_alpha_attr);
 	make_field_entry (&field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	days = cob_get_int_ctx (ctx, days_field);
 
 	if (!valid_day_and_format (days, format_str)) {
@@ -7734,7 +7733,7 @@ cob_intr_formatted_time_va_ctx (cob_context *ctx, const int offset, const int le
 	COB_FIELD_INIT (field_length, NULL, &const_alpha_attr);
 	make_field_entry (&field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Extract and validate the times and time format */
 
@@ -7855,7 +7854,7 @@ cob_intr_formatted_datetime_va_ctx (cob_context *ctx, const int offset, const in
 	COB_FIELD_INIT (field_length, NULL, &const_alpha_attr);
 	make_field_entry (&field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Validate the formats, dates and times */
 	if (!cob_valid_datetime_format (fmt_str, COB_MODULE_PTR->decimal_point)) {
@@ -7948,7 +7947,7 @@ cob_intr_test_formatted_datetime_ctx (cob_context *ctx, cob_field *format_field,
 	int	time_part_offset;
 	int	error_pos;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Copy to null-terminated strings */
 	copy_data_to_null_terminated_str (format_field, datetime_format_str,
@@ -8052,7 +8051,7 @@ cob_intr_integer_of_formatted_date_ctx (cob_context *ctx, cob_field *format_fiel
 	int	is_date;
 	struct date_format date_fmt;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	copy_data_to_null_terminated_str (format_field, original_format_str,
 					  COB_DATETIMESTR_MAX);
@@ -8122,7 +8121,7 @@ cob_intr_formatted_current_date_ctx (cob_context *ctx, const int offset, const i
 	COB_FIELD_INIT (field_length, NULL, &const_alpha_attr);
 	make_field_entry (&field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Validate format */
 	if (!cob_valid_datetime_format (format_str, COB_MODULE_PTR->decimal_point)) {
@@ -8527,7 +8526,6 @@ cob_init_intrinsic (cob_global *lptr)
 	struct calc_struct	*calc_temp;
 	cob_u32_t		i;
 
-	cobglobptr = lptr;
 
 	move_field = NULL;
 	curr_entry = 0;

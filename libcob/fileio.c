@@ -198,7 +198,6 @@ struct cobsort {
 
 /* Local variables */
 
-cob_global	*file_globptr = NULL;
 cob_settings	*file_setptr = NULL;
 
 static unsigned int	delete_file_status = 0;
@@ -249,7 +248,7 @@ static int dummy_stub		() {return 0;};
 static int dummy_91			() {return COB_STATUS_91_NOT_AVAILABLE;};
 
 static int cob_set_file_format(cob_context *, cob_file *, char *, int);
-static void cob_set_file_defaults (cob_file *);
+static void cob_set_file_defaults (cob_context *, cob_file *);
 static int cob_savekey (cob_file *f, int idx, unsigned char *data);
 static int cob_file_open	(cob_context *, cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
 static int cob_file_close	(cob_context *, cob_file_api *, cob_file *, const int);
@@ -2084,7 +2083,7 @@ cob_set_ls_defaults (cob_file *f)
  * Set file format based on defaults, runtime.cfg 
  */
 static void
-cob_set_file_defaults (cob_file *f)
+cob_set_file_defaults (cob_context *ctx, cob_file *f)
 {
 	/*
 	 * Set default I/O routine
@@ -2403,7 +2402,7 @@ cob_set_file_format (cob_context *ctx, cob_file *f, char *defstr, int updt)
 						f->flag_line_adv = COB_LINE_ADVANCE;
 						f->flag_set_isam = 0;
 					}
-					cob_set_file_defaults (f);
+					cob_set_file_defaults (ctx, f);
 					if (strcasecmp(value,"DA") == 0) {
 						f->file_format = COB_FILE_IS_MF;
 						f->flag_set_type = 1;
@@ -3412,7 +3411,7 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 	/* TODO: internally let status be an enum (also in internal storage);
 	   and then map here to an i-o status "per dialect",
 	   inluding alphanumeric 0x and 9/123 status values */
-	file_globptr->cob_error_file = f;
+	ctx->glob.cob_error_file = f;
 	if (status == 0) {
 		memset (f->file_status, '0', (size_t)2);
 #ifdef COB_EXPERIMENTAL
@@ -3476,7 +3475,7 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 	 && (!delete_file_status || status == 0)) {
 		/* EOP is non-fatal therefore 00 status but needs exception */
 		if (eop_status == 0) {
-			file_globptr->cob_exception_code = 0;
+			ctx->glob.cob_exception_code = 0;
 		} else {
 #if 0 /* correct thing to do, but then also needs to have codegen adjusted
          --> module-incompatibility --> 4.x */
@@ -5328,9 +5327,9 @@ lineseq_read (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opt
 	char	*previous_locale = NULL;
 
 	if (file_setptr->cob_ls_validate
-	 && file_globptr->cob_locale_ctype) {
+	 && ctx->glob.cob_locale_ctype) {
 		previous_locale = setlocale (LC_CTYPE, NULL);
-		setlocale (LC_CTYPE, file_globptr->cob_locale_ctype);
+		setlocale (LC_CTYPE, ctx->glob.cob_locale_ctype);
 	}
 #endif
 
@@ -6996,7 +6995,7 @@ cob_file_external_addr_ctx (cob_context *ctx, const char *exname,
 {
 	cob_file	**epfl = cob_external_addr_ctx (ctx, exname, sizeof (cob_file *));
 
-	if (file_globptr->cob_initial_external) {
+	if (ctx->glob.cob_initial_external) {
 		/* if the pointer was setup the first time:
 		   allocate the file and store the address for next request */
 		cob_file_malloc_ctx (ctx, pfl, pky, nkeys, linage);
@@ -7161,7 +7160,7 @@ cob_pre_open_ctx (cob_context *ctx, cob_file *f)
 	f->max_rec_num = 0;
 	f->cur_rec_num = 0;
 
-	cob_set_file_defaults (f);
+	cob_set_file_defaults (ctx, f);
 
 	/* Obtain the file name */
 	if (f->assign != NULL
@@ -7228,7 +7227,7 @@ cob_pre_open_def_ctx (cob_context *ctx, cob_file *f, char *setdef, char *isdef, 
 		cob_field_to_string (f->assign, file_open_name, COB_FILE_MAX, CCM_NONE);
 	}
 
-	cob_set_file_defaults (f);
+	cob_set_file_defaults (ctx, f);
 	f->flag_updt_file = 1;
 	f->flag_keycheck = 0;
 
@@ -10447,7 +10446,7 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 	   if necessary use a colon or hyphen */
 	implicit_close_of_msgid = _("implicit CLOSE of ");
 
-	file_api.glbptr = file_globptr = lptr;
+	file_api.glbptr = lptr;
 	file_api.setptr = file_setptr  = sptr;
 	file_api.add_file_cache = cob_cache_file;
 	file_api.del_file_cache = cob_cache_del;
@@ -10671,7 +10670,7 @@ open_vfile (cob_context *ctx, cob_u16_ptr heap_id, unsigned char status[2], cons
 
 	int return_code;
 
-	if (cobglobptr->cob_call_params < 2
+	if (ctx->glob.cob_call_params < 2
 	 || !COB_MODULE_PTR->cob_procedure_params[0]
 	 || !COB_MODULE_PTR->cob_procedure_params[1]
 	 || COB_MODULE_PTR->cob_procedure_params[0]->size != sizeof(cob_u16_t)
@@ -10788,7 +10787,7 @@ locate_segment (cob_context *ctx, cob_u16_t heap, cob_u64_t data_loc, cob_u32_t 
 	PHEAP_ENTRY		ptr_heap;
 	PSEG_HDR		ptr_seg;
 
-	if (cobglobptr->cob_call_params < 4
+	if (ctx->glob.cob_call_params < 4
 	 || !COB_MODULE_PTR->cob_procedure_params[3]
 	 || COB_MODULE_PTR->cob_procedure_params[3]->size < size) {
 		cob_set_exception_ctx (ctx, COB_EC_PROGRAM_ARG_MISMATCH);

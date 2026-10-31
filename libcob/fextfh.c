@@ -1329,7 +1329,7 @@ cob_sys_extfh (const void *opcode_ptr, void *fcd_ptr)
 
 	COB_CHK_PARMS (EXTFH, 2);
 
-	if (cobglobptr->cob_call_params < 2
+	if (ctx->glob.cob_call_params < 2
 	 || !COB_MODULE_PTR->cob_procedure_params[0]
 	 || !COB_MODULE_PTR->cob_procedure_params[1]
 	 || COB_MODULE_PTR->cob_procedure_params[1]->size < 2) {
@@ -1584,7 +1584,7 @@ EXTFH3 (cob_context *ctx, unsigned char *opcode, FCD3 *fcd)
 	memcpy (fnstatus, "00", 2);
 	memcpy (fcd->fileStatus, "00", 2);
 
-	if (cobglobptr == NULL) {	/* Auto Init GnuCOBOL runtime */
+	if (ctx == NULL) {	/* Auto Init GnuCOBOL runtime */
 		cob_init (0, NULL);
 		/* COB_MODULE_PTR (part of cobglobptr structure) was not set,
 		   add to allow tracing and to get better messages on fileio errors */

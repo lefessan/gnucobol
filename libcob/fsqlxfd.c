@@ -308,7 +308,7 @@ new_xfd (struct file_xfd *fx, int cmd)
 }
 
 static cob_pic_symbol *
-bld_picture (cob_pic_symbol *pic, int sign, int digits, int scale)
+bld_picture (cob_context *ctx, cob_pic_symbol *pic, int sign, int digits, int scale)
 {
 	cob_pic_symbol *p = pic;
 	if (sign == 0
@@ -349,7 +349,7 @@ bld_picture (cob_pic_symbol *pic, int sign, int digits, int scale)
 }
 
 static void
-bld_fields (struct map_xfd *mx, cob_file *fl)
+bld_fields (cob_context *ctx, struct map_xfd *mx, cob_file *fl)
 {
 	int		numsz;
 	if (fl->organization == COB_ORG_RELATIVE
@@ -359,7 +359,7 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 		if (mx->sqlsize > 13)
 			mx->sqlsize = 13;
 		mx->sqlattr.type = COB_TYPE_NUMERIC_DISPLAY;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, 12, 0);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, 12, 0);
 		mx->sqlfld.size = mx->sqlsize-1;
 		mx->sqlfld.data = mx->sdata;
 		mx->sqlfld.attr = &mx->sqlattr;
@@ -387,7 +387,7 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 #endif
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMPU:
 		mx->recattr.type = COB_TYPE_NUMERIC_BINARY;
@@ -395,7 +395,7 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 		mx->recattr.flags |= COB_FLAG_BINARY_SWAP;
 #endif
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_ALNUM : COB_TYPE_NUMERIC_EDITED;
-		mx->sqlattr.pic = mx->scale == 0 ? NULL : bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = mx->scale == 0 ? NULL : bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMPX:
 		mx->recattr.type = COB_TYPE_NUMERIC_BINARY;
@@ -409,45 +409,45 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_REAL_BINARY;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMP5U:
 		mx->recattr.type = COB_TYPE_NUMERIC_BINARY;
 		mx->recattr.flags = COB_FLAG_REAL_BINARY;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMP5IDX:
 	case COB_XFDT_COMP5REL:
 		mx->recattr.type = COB_TYPE_NUMERIC_BINARY;
 		mx->recattr.flags = COB_FLAG_REAL_BINARY;
 		mx->sqlattr.type = COB_TYPE_NUMERIC_DISPLAY;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_FLOAT:
 		mx->recattr.type = mx->size < 7 ? COB_TYPE_NUMERIC_FLOAT : COB_TYPE_NUMERIC_DOUBLE;
 		mx->sqlattr.type = COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PACKS:
 		mx->recattr.type = COB_TYPE_NUMERIC_PACKED;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PACKU:
 		mx->recattr.type = COB_TYPE_NUMERIC_PACKED;
 		mx->recattr.flags = COB_FLAG_REAL_BINARY;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMP6:
 		mx->recattr.type = COB_TYPE_NUMERIC_PACKED;
 		mx->recattr.flags = COB_FLAG_NO_SIGN_NIBBLE;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PICA:
 	case COB_XFDT_PICX:
@@ -465,42 +465,42 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_LEADING;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9LS:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9T:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9TS:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9S:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9U:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = 0;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = 0;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	}
 	if (mx->dtfrm) {
@@ -1357,7 +1357,7 @@ cob_load_xfd (cob_context *ctx, struct db_state *db, cob_file *fl, char *alt_nam
 			memset(mp,0,indsize);
 			fx->map[i].ind = (void*)mp;
 			mp += indsize;
-			bld_fields (&fx->map[i],fl);
+			bld_fields (ctx, &fx->map[i],fl);
 		} else if (fx->map[i].cmd == XC_WHEN) {
 			if (fx->map[i].colname) {
 				if ((lbl = cob_find_xfd_col (fx, fx->map[i].colname)) < 0) {

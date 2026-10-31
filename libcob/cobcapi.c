@@ -57,7 +57,6 @@ static cob_field_attr	const_binull_attr =
 
 static size_t		capi_lastsize = 0;
 static void			*capi_buffer = NULL;
-static cob_global	*cobglobptr = NULL;
 static cob_settings	*cobsetptr = NULL;
 static struct watch_list {
 		struct watch_list	*next;
@@ -85,7 +84,6 @@ cob_get_buff (const size_t buffsize)
 void
 cob_init_cobcapi (cob_global *lptr, cob_settings* sptr)
 {
-	cobglobptr = lptr;
 	cobsetptr = sptr;
 } 
 
@@ -114,7 +112,7 @@ cob_field *
 cob_get_param_field (int n, const char *caller_name)
 {
 	cob_context	*ctx = cob_get_current_context ();
-	if (cobglobptr == NULL
+	if (ctx == NULL
 	 || COB_MODULE_PTR == NULL) {
 		/* note: same message in call.c */
 		cob_runtime_warning_external_ctx (ctx, caller_name, 1,
@@ -122,10 +120,10 @@ cob_get_param_field (int n, const char *caller_name)
 		return NULL;
 	}
 	if (n < 1
-	 || n > cobglobptr->cob_call_params) {
+	 || n > ctx->glob.cob_call_params) {
 		cob_runtime_warning_external_ctx (ctx, caller_name, 1,
 			_("parameter %d is not within range of %d"),
-			n, cobglobptr->cob_call_params);
+			n, ctx->glob.cob_call_params);
 		return NULL;
 	}
 	if (COB_MODULE_PTR->cob_procedure_params[n - 1] == NULL) {
@@ -161,8 +159,8 @@ int
 cob_get_num_params (void)
 {
 	cob_context	*ctx = cob_get_current_context ();
-	if (cobglobptr) {
-		return cobglobptr->cob_call_params;
+	if (ctx) {
+		return ctx->glob.cob_call_params;
 	}
 
 	/* note: same message in call.c */
@@ -602,7 +600,7 @@ cob_put_field_str (const cob_field *dst, const char *str)
 	if (COB_FIELD_IS_NUMERIC (dst)) {
 		if (COB_FIELD_TYPE (dst) & COB_TYPE_NUMERIC_FLOAT
 		 || COB_FIELD_TYPE (dst) & COB_TYPE_NUMERIC_DOUBLE) {
-			if (cob_check_numval_f (&wrk)) return 1;
+			if (cob_check_numval_f (ctx, &wrk)) return 1;
 			wrk = *cob_intr_numval_f_ctx (ctx, &wrk);
 		} else {
 			if (cob_check_numval_ctx (ctx, &wrk, NULL, 0, 1)) return 1;
@@ -1003,11 +1001,11 @@ cob_parse_field (cob_context *ctx, cob_module  *mod, cob_field *f, char *field_r
  * return is ZERO, if all ok, else an error status
  */
 static int
-cob_setup_field (char *mod_name, int buflen, char *buf, cob_module **xmod)
+cob_setup_field (cob_context *ctx, char *mod_name, int buflen, char *buf, cob_module **xmod)
 {
 	cob_module	*mod;
 
-	if (cobglobptr == NULL
+	if (ctx == NULL
 	 || COB_MODULE_PTR == NULL) {
 		snprintf(buf,(size_t)buflen,"Not initialized");
 		return 1;
@@ -1051,7 +1049,7 @@ cob_get_field_value (char *mod_name, char *field_ref, int buflen, char *buf)
 	int			sts;
 	cob_field	f;
 	*buf = 0;
-	if ( (sts=cob_setup_field (mod_name, buflen, buf, &mod)) != 0)
+	if ( (sts=cob_setup_field (ctx, mod_name, buflen, buf, &mod)) != 0)
 		return sts;
 
 	sts = cob_parse_field (ctx, mod, &f, field_ref);
@@ -1079,7 +1077,7 @@ cob_put_field_value (char *mod_name, char *field_ref, int buflen, char *buf)
 	cob_module	*mod;
 	int			sts;
 	cob_field	f;
-	if ( (sts = cob_setup_field (mod_name, buflen, buf, &mod)) != 0)
+	if ( (sts = cob_setup_field (ctx, mod_name, buflen, buf, &mod)) != 0)
 		return sts;
 
 	sts = cob_parse_field (ctx, mod, &f, field_ref);
@@ -1107,7 +1105,7 @@ cob_watch_field_value (char *mod_name, char *field_ref)
 	char		buf[256];
 	cob_field	f;
 	struct watch_list	*wl;
-	if ( (sts = cob_setup_field (mod_name, (int)sizeof(buf), buf, &mod)) != 0)
+	if ( (sts = cob_setup_field (ctx, mod_name, (int)sizeof(buf), buf, &mod)) != 0)
 		return sts;
 
 	sts = cob_parse_field (ctx, mod, &f, field_ref);
@@ -1148,7 +1146,7 @@ cob_watch_field_free (char *mod_name, char *field_ref)
 	char		buf[256];
 	cob_field	f;
 	struct watch_list	*wl, *wp;
-	if ( cob_setup_field (mod_name, (int)sizeof(buf), buf, &mod))
+	if ( cob_setup_field (ctx, mod_name, (int)sizeof(buf), buf, &mod))
 		return 1;
 
 	if (cob_parse_field (ctx, mod, &f, field_ref)) 

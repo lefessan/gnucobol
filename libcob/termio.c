@@ -45,7 +45,6 @@
 
 /* Local variables */
 
-static cob_global		*cobglobptr = NULL;
 static cob_settings		*cobsetptr = NULL;
 
 static char no_syspunch_error_raised = 0;
@@ -338,7 +337,7 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 	switch (to_device) {
 	case 0:	/* general (SYSOUT) */
 		fp = stdout;
-		if (cobglobptr->cob_screen_initialized) {
+		if (ctx->glob.cob_screen_initialized) {
 			if (!COB_DISP_TO_STDERR) {
 				disp_redirect = 1;
 			} else {
@@ -387,7 +386,7 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 		/* fallback: display to the defined SYSOUT */
 		} else {
 			fp = stdout;
-			if (cobglobptr->cob_screen_initialized) {
+			if (ctx->glob.cob_screen_initialized) {
 				if (!COB_DISP_TO_STDERR) {
 					disp_redirect = 1;
 				} else {
@@ -1066,7 +1065,7 @@ cob_accept_ctx (cob_context *ctx, cob_field *f)
 	int		ipchr;
 	cob_field	temp;
 
-	if (cobglobptr->cob_screen_initialized) {
+	if (ctx->glob.cob_screen_initialized) {
 		cob_field_accept_ctx (ctx, f, NULL, NULL, NULL, NULL,
 				  NULL, NULL, NULL, NULL,
 				  COB_SCREEN_PROMPT);
@@ -1138,6 +1137,5 @@ cob_accept (cob_field *f)
 void
 cob_init_termio (cob_global *lptr, cob_settings *sptr)
 {
-	cobglobptr = lptr;
 	cobsetptr  = sptr;
 }

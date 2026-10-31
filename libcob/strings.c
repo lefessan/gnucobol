@@ -94,7 +94,6 @@ struct cob_unstring_state {
 
 /* Local variables */
 
-static cob_global		*cobglobptr = NULL;
 
 static const cob_field_attr	const_alpha_attr =
 				{COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
@@ -126,7 +125,7 @@ strings_state (cob_context *ctx)
 /* Local functions */
 
 static COB_INLINE COB_A_INLINE void
-cob_update_low_value (void)
+cob_update_low_value (cob_context *ctx)
 {
 	if (COB_MODULE_PTR && COB_MODULE_PTR->collating_sequence != NULL) {
 		str_cob_low.data = (cob_u8_ptr)&COB_MODULE_PTR->collating_sequence[0];
@@ -482,11 +481,11 @@ inspect_common (cob_context *ctx,
 	}
 
 	if (!f1) {
-		cob_update_low_value ();
+		cob_update_low_value (ctx);
 		f1 = &str_cob_low;
 	}
 	if (!f2) {
-		cob_update_low_value ();
+		cob_update_low_value (ctx);
 		f2 = &str_cob_low;
 	}
 
@@ -531,7 +530,7 @@ inspect_common (cob_context *ctx,
    one-time cob_inspect_finish (copying the REPLACING characters back) */
 
 static COB_INLINE COB_A_INLINE void
-cob_inspect_init_common_intern (struct cob_inspect_state *st, cob_field *var)
+cob_inspect_init_common_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *var)
 {
 	if (COB_FIELD_HAVE_SIGN (var) && !COB_FIELD_SIGN_SEPARATE(var)) {
 		/* it is allowed to TRANSFORM / INSPECT a numeric display signed element;
@@ -542,7 +541,7 @@ cob_inspect_init_common_intern (struct cob_inspect_state *st, cob_field *var)
                    different cob_inspect_* functions */
 		st->var_copy = *var;
 		st->var = &st->var_copy;
-		st->sign = cob_real_get_sign (var, 0);
+		st->sign = cob_real_get_sign (ctx, var, 0);
 	} else {
 		st->var = NULL;
 	}
@@ -552,12 +551,12 @@ cob_inspect_init_common_intern (struct cob_inspect_state *st, cob_field *var)
 	st->end = NULL;
 	st->repdata_size = 0;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 }
 static void
-cob_inspect_init_intern (struct cob_inspect_state *st, cob_field *var, const cob_u32_t replacing)
+cob_inspect_init_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *var, const cob_u32_t replacing)
 {
-	cob_inspect_init_common_intern (st, var);
+	cob_inspect_init_common_intern (ctx, st, var);
 	st->replacing = replacing;
 
 	if (st->size > st->mark_size) {
@@ -580,7 +579,7 @@ cob_inspect_init_intern (struct cob_inspect_state *st, cob_field *var, const cob
 void
 cob_inspect_init_ctx (cob_context *ctx, cob_field *var, const cob_u32_t replacing)
 {
-	cob_inspect_init_intern (&strings_state (ctx)->inspect, var, replacing);
+	cob_inspect_init_intern (ctx, &strings_state (ctx)->inspect, var, replacing);
 }
 
 /* compatibility: cob_inspect_init without context */
@@ -600,15 +599,15 @@ cob_inspect_init (cob_field *var, const cob_u32_t replacing)
    one-time cob_inspect_converting/cob_inspect_translating (actual conversion) */
 
 static void
-cob_inspect_init_converting_intern (struct cob_inspect_state *st, cob_field *var)
+cob_inspect_init_converting_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *var)
 {
-	cob_inspect_init_common_intern (st, var);
+	cob_inspect_init_common_intern (ctx, st, var);
 	st->replacing = 0;	/* only set for pre 3.2 compat because of cob_inspect_finish */
 }
 void
 cob_inspect_init_converting_ctx (cob_context *ctx, cob_field *var)
 {
-	cob_inspect_init_converting_intern (&strings_state (ctx)->inspect, var);
+	cob_inspect_init_converting_intern (ctx, &strings_state (ctx)->inspect, var);
 }
 
 /* compatibility: cob_inspect_init_converting without context */
@@ -840,11 +839,11 @@ cob_inspect_converting_intern (cob_context *ctx,
 	}
 
 	if (!f1) {
-		cob_update_low_value ();
+		cob_update_low_value (ctx);
 		f1 = &str_cob_low;
 	}
 	if (!f2) {
-		cob_update_low_value ();
+		cob_update_low_value (ctx);
 		f2 = &str_cob_low;
 	}
 	if (f1->size != f2->size) {
@@ -933,7 +932,7 @@ end:
 	if (st->var) {
 		/* FIXME: needs test cases for all "goto end" cases above,
 		   ideally with a SIGN SEPARATE variable */
-		cob_real_put_sign (st->var, st->sign);
+		cob_real_put_sign (ctx, st->var, st->sign);
 	}
 }
 void
@@ -951,7 +950,7 @@ cob_inspect_converting (const cob_field *f1, const cob_field *f2)
 
 /* note: currently not used by cobc (disabled unfinished prototype) */
 static void
-cob_inspect_translating_intern (struct cob_inspect_state *st, const unsigned char *conv_table)
+cob_inspect_translating_intern (cob_context *ctx, struct cob_inspect_state *st, const unsigned char *conv_table)
 {
 	const size_t	len = st->end - st->start;
 
@@ -973,13 +972,13 @@ cob_inspect_translating_intern (struct cob_inspect_state *st, const unsigned cha
 	}
 
 	if (st->var) {
-		cob_real_put_sign (st->var, st->sign);
+		cob_real_put_sign (ctx, st->var, st->sign);
 	}
 }
 void
 cob_inspect_translating_ctx (cob_context *ctx, const unsigned char* conv_table)
 {
-	cob_inspect_translating_intern (&strings_state (ctx)->inspect, conv_table);
+	cob_inspect_translating_intern (ctx, &strings_state (ctx)->inspect, conv_table);
 }
 
 /* compatibility: cob_inspect_translating without context */
@@ -990,7 +989,7 @@ cob_inspect_translating (const unsigned char* conv_table)
 }
 
 static void
-cob_inspect_finish_intern (struct cob_inspect_state *st)
+cob_inspect_finish_intern (cob_context *ctx, struct cob_inspect_state *st)
 {
 	/* Note: this is not called any more for TRANSFORM/INSPECT CONVERTING
 	         since GnuCOBOL 3.2 codegen (only for "old modules")! */
@@ -1015,13 +1014,13 @@ cob_inspect_finish_intern (struct cob_inspect_state *st)
 	}
 
 	if (st->var) {
-		cob_real_put_sign (st->var, st->sign);
+		cob_real_put_sign (ctx, st->var, st->sign);
 	}
 }
 void
 cob_inspect_finish_ctx (cob_context *ctx)
 {
-	cob_inspect_finish_intern (&strings_state (ctx)->inspect);
+	cob_inspect_finish_intern (ctx, &strings_state (ctx)->inspect);
 }
 
 /* compatibility: cob_inspect_finish without context */
@@ -1055,7 +1054,7 @@ cob_string_init_intern (cob_context *ctx, struct cob_string_state *st, cob_field
 		st->ptr = &st->ptr_copy;
 	}
 	st->offset = 0;
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	if (st->ptr) {
 		st->offset = cob_get_int_ctx (ctx, st->ptr) - 1;
@@ -1110,7 +1109,7 @@ cob_string_append_intern (cob_context *ctx, struct cob_string_state *st, cob_fie
 	int	i;
 	int	size;
 
-	if (cobglobptr->cob_exception_code) {
+	if (ctx->glob.cob_exception_code) {
 		return;
 	}
 
@@ -1207,7 +1206,7 @@ cob_unstring_init_intern (cob_context *ctx,
 	st->count = 0;
 	st->ndlms = 0;
 	st->dlm_list_size = 0;
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	if (num_dlm > st->dlm_list_size) {
 		if (st->dlm_list) {
 			cob_free (st->dlm_list);
@@ -1277,7 +1276,7 @@ cob_unstring_into_intern (cob_context *ctx,
 	size_t		dlm_size = 0;
 	int		match_size = 0;
 
-	if (cobglobptr->cob_exception_code) {
+	if (ctx->glob.cob_exception_code) {
 		/* commonly COB_EC_OVERFLOW_UNSTRING: the specified WITH POINTER was
 		   too big, all other functions  must be returned early;
 		   TODO: adjust cobc to only call if cob_unstring_init was
@@ -1507,7 +1506,6 @@ cob_exit_strings (cob_context *ctx)
 void
 cob_init_strings (cob_global *lptr)
 {
-	cobglobptr = lptr;
 
 	str_cob_low.size = 1;
 	str_cob_low.data = (cob_u8_ptr)"\0";
