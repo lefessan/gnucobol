@@ -531,8 +531,8 @@ set_file_pos (cob_file *f, off_t pos)
 }
 
 /* file_format: see COB_FILE_IS_xx */
-static const char *file_format[12] = {"0","1","2","3","B32","B64","L32","L64","?","?","gc","mf"};
-static const char *dict_ext = "dd";
+static const char *const file_format[12] = {"0","1","2","3","B32","B64","L32","L64","?","?","gc","mf"};
+static const char dict_ext[] = "dd";
 
 #if defined(WITH_INDEXED)
 static const char ix_routine = WITH_INDEXED;
@@ -3977,8 +3977,8 @@ cob_file_write_opt (cob_context *ctx, cob_file *f, const int opt)
  * Check if input file is Micro Focus variable length format
  *         (Refer to Micro Focus file format documentation for details)
  */
-static unsigned char mfhdrmark2[4] = {0x30,0x7E,0x00,0x00};
-static unsigned char mfhdrmark4[4] = {0x30,0x00,0x00,0x7C};
+static const unsigned char mfhdrmark2[4] = {0x30,0x7E,0x00,0x00};
+static const unsigned char mfhdrmark4[4] = {0x30,0x00,0x00,0x7C};
 static int
 check_mf_format(cob_context *ctx, cob_file *f, char *filename)
 {
