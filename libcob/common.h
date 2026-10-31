@@ -1902,6 +1902,7 @@ typedef struct __cob_global {
 typedef struct cob_runtime	cob_runtime;	/* opaque */
 
 struct cob_common_state;	/* opaque, common.c */
+struct cob_numeric_state;	/* opaque, numeric.c */
 struct cob_strings_state;	/* opaque, strings.c */
 
 typedef struct cob_context {
@@ -1909,6 +1910,7 @@ typedef struct cob_context {
 	cob_global		glob;
 	struct __cob_settings		*settings;	/* runtime settings */
 	struct cob_common_state		*common;	/* allocated with the context */
+	struct cob_numeric_state	*numeric;	/* allocated with the context */
 	struct cob_strings_state	*strings;	/* allocated on first use */
 } cob_context;
 
