@@ -455,7 +455,7 @@ COB_HIDDEN char		*cob_setup_filename	(cob_context *, const cob_field *);
 COB_HIDDEN void		cob_init_reportio	(cob_global *, cob_settings *);
 COB_HIDDEN void		cob_init_call		(cob_context *, cob_global *, cob_settings *, const int);
 COB_HIDDEN void		cob_init_cobcapi	(cob_global *, cob_settings *);
-COB_HIDDEN void		cob_init_intrinsic	(cob_global *);
+COB_HIDDEN void		cob_init_intrinsic	(cob_context *, cob_global *);
 COB_HIDDEN void		cob_init_strings	(cob_global *);
 COB_HIDDEN void		cob_init_move		(cob_global *, cob_settings *);
 COB_HIDDEN void		cob_init_prof		(cob_global *, cob_settings *);
@@ -478,13 +478,13 @@ COB_HIDDEN void		free_extfh_fcd		(cob_context *);
 
 COB_HIDDEN void		cob_exit_screen		(cob_context *);
 COB_HIDDEN void		cob_exit_screen_from_signal	(cob_context *, int);
-COB_HIDDEN void		cob_exit_numeric	(void);
+COB_HIDDEN void		cob_exit_numeric	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio_msg_only	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio		(cob_context *);
 COB_HIDDEN void		cob_exit_reportio	(void);
 COB_HIDDEN void		cob_exit_call		(cob_context *);
 COB_HIDDEN void		cob_exit_cobcapi	(void);
-COB_HIDDEN void		cob_exit_intrinsic	(void);
+COB_HIDDEN void		cob_exit_intrinsic	(cob_context *);
 COB_HIDDEN void		cob_exit_strings	(cob_context *);
 COB_HIDDEN void		cob_exit_mlio		(void);
 
@@ -496,8 +496,8 @@ COB_HIDDEN void		cob_real_put_sign	(cob_context *, cob_field *, const int);
 
 #ifndef COB_WITHOUT_DECIMAL
 COB_HIDDEN void		cob_decimal_init2	(cob_decimal *, const cob_uli_t);
-COB_HIDDEN void		cob_decimal_set_mpf (cob_decimal *, const mpf_t);
-COB_HIDDEN void		cob_decimal_get_mpf (mpf_t, const cob_decimal *);
+COB_HIDDEN void		cob_decimal_set_mpf (cob_context *, cob_decimal *, const mpf_t);
+COB_HIDDEN void		cob_decimal_get_mpf (cob_context *, mpf_t, const cob_decimal *);
 #endif
 COB_HIDDEN void		cob_decimal_setget_fld	(cob_context *, cob_field *, cob_field *,
 						 const int);

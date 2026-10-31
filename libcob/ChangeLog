@@ -1,6 +1,14 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_init_cobcapi, cob_exit_screen_from_signal,
+	  cob_exit_cobcapi, cob_decimal_init2), common.c
+	  (cob_terminate_routines, cob_init), common.h, intrinsic.c
+	  (cob_decimal_pow_ctx, cob_intr_e_ctx, cob_intr_pi_ctx,
+	  cob_intr_exp_ctx, cob_intr_log_ctx, cob_intr_log10_ctx, ...),
+	  numeric.c (shift_decimal, align_decimal, cob_decimal_set_ieee64dec,
+	  cob_decimal_set_ieee128dec, cob_decimal_set_mpf_core,
+	  cob_decimal_set_mpf, ...): state of the arithmetic in the context
 	* call.c (cob_set_library_path, do_cancel_module, add_to_preload,
 	  cache_preload, cob_resolve_internal, cob_cancel_ctx, ...), cobcapi.c
 	  (cob_init_cobcapi), coblocal.h (cob_exit_reportio), common.c

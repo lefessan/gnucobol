@@ -991,9 +991,9 @@ cob_terminate_routines (cob_context *ctx)
 	cob_exit_reportio ();
 	cob_exit_mlio ();
 
-	cob_exit_intrinsic ();
+	cob_exit_intrinsic (ctx);
 	cob_exit_strings (ctx);
-	cob_exit_numeric ();
+	cob_exit_numeric (ctx);
 
 	cob_exit_common_modules ();
 	if (module_unload == COB_IMMEDIATE) {
@@ -11513,7 +11513,7 @@ cob_init (const int argc, char **argv)
 	cob_init_strings (&ctx->glob);
 	cob_init_move (&ctx->glob, cobsetptr);
 	cob_init_prof (&ctx->glob, cobsetptr);
-	cob_init_intrinsic (&ctx->glob);
+	cob_init_intrinsic (ctx, &ctx->glob);
 	cob_init_fileio (ctx, &ctx->glob, cobsetptr);
 	cob_init_call (ctx, &ctx->glob, cobsetptr, check_mainhandle);
 	cob_init_cobcapi (&ctx->glob, cobsetptr);

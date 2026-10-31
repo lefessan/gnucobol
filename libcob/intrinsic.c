@@ -3256,17 +3256,17 @@ cob_decimal_pow_ctx (cob_context *ctx, cob_decimal *pd1, cob_decimal *pd2)
 	if (sign == -1) {
 		mpz_abs (pd1->value, pd1->value);
 	}
-	cob_decimal_get_mpf (cob_mpft, pd1);
+	cob_decimal_get_mpf (ctx, cob_mpft, pd1);
 	if (pd2->scale == 1 && !mpz_cmp_ui (pd2->value, 5UL)) {
 		/* Square root short cut */
 		mpf_sqrt (cob_mpft2, cob_mpft);
 	} else {
-		cob_decimal_get_mpf (cob_mpft2, pd2);
+		cob_decimal_get_mpf (ctx, cob_mpft2, pd2);
 		cob_mpf_log (cob_mpft, cob_mpft);
 		mpf_mul (cob_mpft, cob_mpft, cob_mpft2);
 		cob_mpf_exp (cob_mpft2, cob_mpft);
 	}
-	cob_decimal_set_mpf (pd1, cob_mpft2);
+	cob_decimal_set_mpf (ctx, pd1, cob_mpft2);
 	if (sign == -1) {
 		mpz_neg (pd1->value, pd1->value);
 	}
@@ -5041,7 +5041,7 @@ cob_intr_e_ctx (cob_context *ctx)
 {
 	mpf_set_ui (cob_mpft, 1UL);
 	cob_mpf_exp (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5061,7 +5061,7 @@ cob_intr_pi_ctx (cob_context *ctx)
 	if (!set_cob_pi) setup_cob_pi ();
 
 	mpf_set (cob_mpft, cob_pi);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5088,9 +5088,9 @@ cob_intr_exp_ctx (cob_context *ctx, cob_field *srcfield)
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_exp (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5179,9 +5179,9 @@ cob_intr_log_ctx (cob_context *ctx, cob_field *srcfield)
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_log (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5218,9 +5218,9 @@ cob_intr_log10_ctx (cob_context *ctx, cob_field *srcfield)
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_log10 (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5273,9 +5273,9 @@ cob_intr_acos_ctx (cob_context *ctx, cob_field *srcfield)
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_acos (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5317,9 +5317,9 @@ cob_intr_asin_ctx (cob_context *ctx, cob_field *srcfield)
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_asin (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5346,9 +5346,9 @@ cob_intr_atan_ctx (cob_context *ctx, cob_field *srcfield)
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_atan (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5369,9 +5369,9 @@ cob_intr_cos_ctx (cob_context *ctx, cob_field *srcfield)
 
 	ctx->glob.cob_exception_code = 0;
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_cos (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5392,9 +5392,9 @@ cob_intr_sin_ctx (cob_context *ctx, cob_field *srcfield)
 
 	ctx->glob.cob_exception_code = 0;
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_sin (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -5415,9 +5415,9 @@ cob_intr_tan_ctx (cob_context *ctx, cob_field *srcfield)
 
 	ctx->glob.cob_exception_code = 0;
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_tan (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
 	cob_alloc_field (ctx, &d1);
 	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
@@ -8474,7 +8474,7 @@ cob_intr_standard_compare (const int params, ...)
 /* Initialization/exit routines */
 
 void
-cob_exit_intrinsic (void)
+cob_exit_intrinsic (cob_context *ctx)
 {
 	if (set_cob_sqrt_two) {
 		mpf_clear (cob_sqrt_two);
@@ -8521,7 +8521,7 @@ cob_exit_intrinsic (void)
 }
 
 void
-cob_init_intrinsic (cob_global *lptr)
+cob_init_intrinsic (cob_context *ctx, cob_global *lptr)
 {
 	struct calc_struct	*calc_temp;
 	cob_u32_t		i;
