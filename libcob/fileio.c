@@ -10376,7 +10376,7 @@ cob_exit_fileio_msg_only (cob_context *ctx)
 		 && l->file->open_mode != COB_OPEN_LOCKED
 		 && !l->file->flag_nonexistent
 		 && !COB_FILE_SPECIAL (l->file)) {
-			if (cob_runtime_warning_ss (implicit_close_of_msgid,
+			if (cob_runtime_warning_ss (ctx, implicit_close_of_msgid,
 				cob_get_filename_print (ctx, l->file, 0))) {
 				return;
 			}
