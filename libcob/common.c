@@ -985,7 +985,7 @@ cob_terminate_routines (cob_context *ctx)
 	cob_exit_mlio ();
 
 	cob_exit_intrinsic ();
-	cob_exit_strings ();
+	cob_exit_strings (ctx);
 	cob_exit_numeric ();
 
 	cob_exit_common_modules ();
@@ -12760,7 +12760,8 @@ init_statement_list (void)
 void
 cob_cleanup_thread (void)
 {
-	cob_exit_strings ();
+	/* frees the state of the string statements of the current context */
+	cob_exit_strings (cob_get_current_context ());
 }
 
 #ifdef _MSC_VER

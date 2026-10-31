@@ -1901,9 +1901,12 @@ typedef struct __cob_global {
 
 typedef struct cob_runtime	cob_runtime;	/* opaque */
 
+struct cob_strings_state;	/* opaque, strings.c */
+
 typedef struct cob_context {
 	cob_runtime		*rt;
 	cob_global		glob;
+	struct cob_strings_state	*strings;	/* allocated on first use */
 } cob_context;
 
 #ifndef COB_WITHOUT_JMP

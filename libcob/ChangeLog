@@ -1,6 +1,12 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_exit_intrinsic), common.c (cob_terminate_routines,
+	  cob_cleanup_thread), common.h, strings.c (alloc_figurative,
+	  inspect_common, cob_inspect_init_ctx,
+	  cob_inspect_init_converting_ctx, cob_inspect_start_ctx,
+	  cob_inspect_before_ctx, ...): state of the string statements in the
+	  context
 	* coblocal.h (cob_check_trace_file, cob_exit_numeric), common.c
 	  (ss_terminate_routines, cob_terminate_routines, cob_sig_handler,
 	  cob_sys_fork, cob_fatal_error_ctx), fbdb.c (cob_bdb_init_fileio,

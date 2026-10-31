@@ -485,7 +485,7 @@ COB_HIDDEN void		cob_exit_reportio	(void);
 COB_HIDDEN void		cob_exit_call		(void);
 COB_HIDDEN void		cob_exit_cobcapi	(void);
 COB_HIDDEN void		cob_exit_intrinsic	(void);
-COB_HIDDEN void		cob_exit_strings	(void);
+COB_HIDDEN void		cob_exit_strings	(cob_context *);
 COB_HIDDEN void		cob_exit_mlio		(void);
 
 COB_HIDDEN FILE		*cob_create_tmpfile	(const char *);
