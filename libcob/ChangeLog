@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_exit_common), common.h, termio.c (display_alnum_dump,
+	  cob_dump_output_ctx, cob_dump_file_ctx, cob_dump_file,
+	  setup_lvlwrk_and_dump_null_adrs, cob_dump_field_va_ctx): state of the
+	  DUMP output in the context
 	* strings.c (strings_state, cob_update_low_value, inspect_common,
 	  cob_inspect_converting_intern, cob_init_strings): LOW-VALUE field in
 	  the state of the context
