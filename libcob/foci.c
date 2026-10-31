@@ -27,25 +27,25 @@
 
 #include <oci.h>
 
-void cob_oci_init_fileio (cob_file_api *a);
+void cob_oci_init_fileio (cob_context *, cob_file_api *a);
 
 /* Local variables */
 
-static int oci_sync			(cob_file_api *, cob_file *);
-static int oci_commit		(cob_file_api *, cob_file *);
-static int oci_rollback		(cob_file_api *, cob_file *);
-static int oci_open			(cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
-static int oci_close		(cob_file_api *, cob_file *, const int);
-static int oci_start		(cob_file_api *, cob_file *, const int, cob_field *);
-static int oci_read			(cob_file_api *, cob_file *, cob_field *, const int);
-static int oci_read_next	(cob_file_api *, cob_file *, const int);
-static int oci_write		(cob_file_api *, cob_file *, const int);
-static int oci_delete		(cob_file_api *, cob_file *);
-static int oci_file_delete	(cob_file_api *, cob_file *, char *);
-static int oci_rewrite		(cob_file_api *, cob_file *, const int);
-static int oci_file_unlock	(cob_file_api *, cob_file *);
-static void oci_exit_fileio	(cob_file_api *);
-static int oci_fork 		(cob_file_api *);
+static int oci_sync			(cob_context *, cob_file_api *, cob_file *);
+static int oci_commit		(cob_context *, cob_file_api *, cob_file *);
+static int oci_rollback		(cob_context *, cob_file_api *, cob_file *);
+static int oci_open			(cob_context *, cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
+static int oci_close		(cob_context *, cob_file_api *, cob_file *, const int);
+static int oci_start		(cob_context *, cob_file_api *, cob_file *, const int, cob_field *);
+static int oci_read			(cob_context *, cob_file_api *, cob_file *, cob_field *, const int);
+static int oci_read_next	(cob_context *, cob_file_api *, cob_file *, const int);
+static int oci_write		(cob_context *, cob_file_api *, cob_file *, const int);
+static int oci_delete		(cob_context *, cob_file_api *, cob_file *);
+static int oci_file_delete	(cob_context *, cob_file_api *, cob_file *, char *);
+static int oci_rewrite		(cob_context *, cob_file_api *, cob_file *, const int);
+static int oci_file_unlock	(cob_context *, cob_file_api *, cob_file *);
+static void oci_exit_fileio	(cob_context *, cob_file_api *);
+static int oci_fork 		(cob_context *, cob_file_api *);
 static char * oci_version (void);
 
 static const struct cob_fileio_funcs oci_indexed_funcs = {
@@ -302,7 +302,7 @@ splitConnectString(struct db_state *db, char *env)
 }
 
 static int
-oci_commit (cob_file_api *a, cob_file *f)
+oci_commit (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 #ifdef COB_DEBUG_LOG
 	char	msg[24];
@@ -335,7 +335,7 @@ oci_commit (cob_file_api *a, cob_file *f)
 }
 
 static int
-oci_rollback (cob_file_api *a, cob_file *f)
+oci_rollback (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 #ifdef COB_DEBUG_LOG
 	char	msg[24];
@@ -657,7 +657,7 @@ oci_free_stmt ( SQL_STMT *s)
 }
 
 static int
-oci_sync (cob_file_api *a, cob_file *f)
+oci_sync (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	COB_UNUSED (f);
@@ -910,7 +910,7 @@ oci_create_table (cob_context *ctx,
 		sdir = (char*)COB_SCHEMA_DIR;
 	sprintf (filedd, "%s%s%s",sdir,SLASH_STR,fx->tablename);
 	if (db->a)
-		db->a->cob_write_dict (fx->fl, filedd);
+		db->a->cob_write_dict (ctx, fx->fl, filedd);
 
 	cob_load_ddl (ctx, db, fx);
 	if (fx->create_table == NULL) {
@@ -1142,9 +1142,8 @@ join_environment (cob_context *ctx, cob_file_api *a)
 
 /* Delete file */
 static int
-oci_file_delete (cob_file_api *a, cob_file *f, char *filename)
+oci_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p;
 	char		buff[COB_FILE_MAX+1];
 	struct file_xfd	*fx;
@@ -1171,7 +1170,7 @@ oci_file_delete (cob_file_api *a, cob_file *f, char *filename)
 	fx = p->fx;
 	snprintf(buff,sizeof(buff),"DROP TABLE %s",fx->tablename);
 	if (f->open_mode == COB_OPEN_CLOSED) {
-		oci_close (a, f, 0);
+		oci_close (ctx, a, f, 0);
 	}
 	DEBUG_LOG("db",("%s\n",buff));
 	if (ociStmt(db,buff)
@@ -1187,9 +1186,8 @@ oci_file_delete (cob_file_api *a, cob_file *f, char *filename)
 
 /* OPEN INDEXED file */
 static int
-oci_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+oci_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p;
 	int				i, k, ln;
 	char		buff[COB_FILE_MAX+1];
@@ -1378,18 +1376,18 @@ oci_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode
 /* Close the INDEXED file */
 
 static int
-oci_close (cob_file_api *a, cob_file *f, const int opt)
+oci_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int		k;
 
 	if (opt == COB_CLOSE_ABORT) {
-		oci_rollback (a, f);
+		oci_rollback (ctx, a, f);
 	} else
 	if (db->updatesDone > 0) {
 		db->updatesDone = db->commitInterval + 1;	/* Force COMMIT */
-		oci_commit (a, f);
+		oci_commit (ctx, a, f);
 	}
 	p = f->file;
 
@@ -1432,9 +1430,8 @@ oci_close (cob_file_api *a, cob_file *f, const int opt)
 /* START INDEXED file with positioning */
 
 static int
-oci_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
+oci_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int		ky, klen, partlen, paramtype;
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
@@ -1509,9 +1506,8 @@ oci_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 /* Random READ of the INDEXED file  */
 
 static int
-oci_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
+oci_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	struct map_xfd *col;
@@ -1640,9 +1636,8 @@ TryAgain:
 /* Sequential READ of the INDEXED file */
 
 static int
-oci_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+oci_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			ky;
@@ -1789,9 +1784,8 @@ oci_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 /* WRITE to the INDEXED file  */
 
 static int
-oci_write (cob_file_api *a, cob_file *f, const int opt)
+oci_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			k, num;
@@ -1842,7 +1836,7 @@ oci_write (cob_file_api *a, cob_file *f, const int opt)
 		DEBUG_LOG("db",("WRITE: %.40s...  Good!\n",fx->insert.text));
 	}
 	if (db->autocommit)
-		oci_commit (a,f);
+		oci_commit (ctx, a,f);
 
 	return ret;
 }
@@ -1851,9 +1845,8 @@ oci_write (cob_file_api *a, cob_file *f, const int opt)
 /* DELETE record from the INDEXED file  */
 
 static int
-oci_delete (cob_file_api *a, cob_file *f)
+oci_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			k, pos;
@@ -1898,7 +1891,7 @@ oci_delete (cob_file_api *a, cob_file *f)
 	DEBUG_LOG("db",("DELETE: %s status %d; %d deleted, return %02d\n",f->select_name,
 							db->dbStatus,k,ret));
 	if (db->autocommit)
-		oci_commit (a,f);
+		oci_commit (ctx, a,f);
 
 	return ret;
 }
@@ -1906,9 +1899,8 @@ oci_delete (cob_file_api *a, cob_file *f)
 /* REWRITE record to the INDEXED file  */
 
 static int
-oci_rewrite (cob_file_api *a, cob_file *f, const int opt)
+oci_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			k, pos, num, klen;
@@ -1927,7 +1919,7 @@ oci_rewrite (cob_file_api *a, cob_file *f, const int opt)
 	if (f->flag_read_chk_dups) {
 		DEBUG_LOG("db",("REWRITE: %s, begin check dups\n",f->select_name));
 		memcpy (p->saverec, f->record->data, f->record_max);
-		if(!oci_read (a, f, f->keys[0].field, 0)) {
+		if(!oci_read (ctx, a, f, f->keys[0].field, 0)) {
 			for (k=1; k < fx->nkeys && ret == COB_STATUS_00_SUCCESS; k++) {
 				if (f->keys[k].tf_duplicates == 1) {
 					klen = db_savekey (f, p->suppkey, f->record->data, k);
@@ -1981,14 +1973,14 @@ oci_rewrite (cob_file_api *a, cob_file *f, const int opt)
 	DEBUG_LOG("db",("REWRITE: %s, status %d; %d updated, return %02d%s!\n",f->select_name,
 						db->dbStatus,k,ret,db->autocommit?"; Commit":""));
 	if (db->autocommit)
-		oci_commit (a,f);
+		oci_commit (ctx, a,f);
 
 	return ret;
 }
 
 
 static int
-oci_file_unlock (cob_file_api *a, cob_file *f)
+oci_file_unlock (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	COB_UNUSED (f);
@@ -1998,20 +1990,20 @@ oci_file_unlock (cob_file_api *a, cob_file *f)
 
 /* Call this routine when a new process has been forked */
 static int
-oci_fork (cob_file_api *a)
+oci_fork (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 	return 0;
 }
 
 static void
-oci_exit_fileio (cob_file_api *a)
+oci_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 }
 
 void
-cob_oci_init_fileio (cob_file_api *a)
+cob_oci_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	a->io_funcs[COB_IO_OCI] = (void*)&oci_indexed_funcs;
 }

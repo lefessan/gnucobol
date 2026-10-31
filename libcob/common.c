@@ -884,12 +884,12 @@ cob_exit_common_modules (void)
 }
 
 static void
-ss_terminate_routines (void)
+ss_terminate_routines (cob_context *ctx)
 {
 	if (!cob_initialized || !cobglobptr) {
 		return;
 	}
-	cob_exit_fileio_msg_only ();
+	cob_exit_fileio_msg_only (ctx);
 
 	if (COB_MODULE_PTR && abort_reason[0] != 0) {
 		if (cobsetptr->cob_stacktrace) {
@@ -914,7 +914,7 @@ cob_terminate_routines (cob_context *ctx)
 	fflush (stderr);
 
 	cob_prof_end (ctx);
-	cob_exit_fileio_msg_only ();
+	cob_exit_fileio_msg_only (ctx);
 
 	if (COB_MODULE_PTR && abort_reason[0] != 0) {
 		if (cobsetptr->cob_stacktrace) {
@@ -1365,7 +1365,7 @@ cob_sig_handler (int sig)
 #endif
 	case SIGABRT:
 		if (cobsetptr && cobsetptr->cob_core_on_error != 0)  {
-			ss_terminate_routines ();
+			ss_terminate_routines (ctx);
 			break;
 		}
 		/* Fall-through */
@@ -8022,7 +8022,7 @@ cob_sys_fork (void)
 	int	pid;
 	if ((pid = fork ()) == 0 ) {
 		cob_process_id = 0;	/* reset cached value */
-		cob_fork_fileio(cobglobptr, cobsetptr);
+		cob_fork_fileio(ctx, cobglobptr, cobsetptr);
 		return 0;		/* child process just returns */
 	}
 	if (pid < 0) {			/* Some error happened */
@@ -10275,7 +10275,7 @@ cob_fatal_error_ctx (cob_context *ctx, const enum cob_fatal_error fatal_error)
 			break;
 		/* LCOV_EXCL_STOP */
 		}
-		err_cause = cob_get_filename_print (cobglobptr->cob_error_file, 1);
+		err_cause = cob_get_filename_print (ctx, cobglobptr->cob_error_file, 1);
 		/* FIXME: additional check if referenced program has active code location */
 		if (cobglobptr->last_exception_statement == STMT_UNKNOWN) {
 			cob_runtime_error_ctx (ctx, _("%s (status = %02d) for file %s"),

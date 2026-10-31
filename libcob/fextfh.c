@@ -677,7 +677,7 @@ copy_fcd_to_file (cob_context *ctx, FCD3* fcd, cob_file *f, struct fcd_file *fcd
 				if (f->nkeys > MAX_FILE_KEYS) {
 					/* CHECKME - Should this result in any error handling? */
 					cob_runtime_warning_ctx (ctx, _("maximum keys (%d/%d) exceeded for file '%s'"),
-						(int)f->nkeys, MAX_FILE_KEYS, cob_get_filename_print (f->file, 0));
+						(int)f->nkeys, MAX_FILE_KEYS, cob_get_filename_print (ctx, f->file, 0));
 					f->nkeys = MAX_FILE_KEYS;
 				}
 				f->keys = cob_cache_malloc_ctx (ctx, sizeof(cob_file_key) * f->nkeys);
@@ -1655,8 +1655,8 @@ org_handling:
 					f->record_max = LDCOMPX4(fcd->maxRecLen);
 				}
 				f->organization = COB_ORG_MAX;	/* To Force file.dd to be processed */
-				cob_chk_file_mapping (f, fname);
-				sts = cob_read_dict (f, fname, 1);
+				cob_chk_file_mapping (ctx, f, fname);
+				sts = cob_read_dict (ctx, f, fname, 1);
 				if (sts == -1) { /* Not present; check file */
 					int ftype = indexed_file_type (ctx, f, fname);
 					if (ftype >= 0) {

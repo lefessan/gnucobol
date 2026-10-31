@@ -251,22 +251,22 @@ static int dummy_91			() {return COB_STATUS_91_NOT_AVAILABLE;};
 static int cob_set_file_format(cob_context *, cob_file *, char *, int);
 static void cob_set_file_defaults (cob_file *);
 static int cob_savekey (cob_file *f, int idx, unsigned char *data);
-static int cob_file_open	(cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
-static int cob_file_close	(cob_file_api *, cob_file *, const int);
-static int cob_file_write_opt	(cob_file *, const int);
+static int cob_file_open	(cob_context *, cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
+static int cob_file_close	(cob_context *, cob_file_api *, cob_file *, const int);
+static int cob_file_write_opt	(cob_context *, cob_file *, const int);
 
-static int sequential_read	(cob_file_api *, cob_file *, const int);
-static int sequential_write	(cob_file_api *, cob_file *, const int);
-static int sequential_rewrite	(cob_file_api *, cob_file *, const int);
-static int lineseq_read		(cob_file_api *, cob_file *, const int);
-static int lineseq_write	(cob_file_api *, cob_file *, const int);
-static int lineseq_rewrite	(cob_file_api *, cob_file *, const int);
-static int relative_start	(cob_file_api *, cob_file *, const int, cob_field *);
-static int relative_read	(cob_file_api *, cob_file *, cob_field *, const int);
-static int relative_read_next	(cob_file_api *, cob_file *, const int);
-static int relative_write	(cob_file_api *, cob_file *, const int);
-static int relative_rewrite	(cob_file_api *, cob_file *, const int);
-static int relative_delete	(cob_file_api *, cob_file *);
+static int sequential_read	(cob_context *, cob_file_api *, cob_file *, const int);
+static int sequential_write	(cob_context *, cob_file_api *, cob_file *, const int);
+static int sequential_rewrite	(cob_context *, cob_file_api *, cob_file *, const int);
+static int lineseq_read		(cob_context *, cob_file_api *, cob_file *, const int);
+static int lineseq_write	(cob_context *, cob_file_api *, cob_file *, const int);
+static int lineseq_rewrite	(cob_context *, cob_file_api *, cob_file *, const int);
+static int relative_start	(cob_context *, cob_file_api *, cob_file *, const int, cob_field *);
+static int relative_read	(cob_context *, cob_file_api *, cob_file *, cob_field *, const int);
+static int relative_read_next	(cob_context *, cob_file_api *, cob_file *, const int);
+static int relative_write	(cob_context *, cob_file_api *, cob_file *, const int);
+static int relative_rewrite	(cob_context *, cob_file_api *, cob_file *, const int);
+static int relative_delete	(cob_context *, cob_file_api *, cob_file *);
 
 static struct cob_fileio_funcs sequential_funcs = {
 	cob_file_open,
@@ -389,11 +389,11 @@ static struct {
 	{0,0,0,NULL,NULL,NULL,NULL}
 };
 #ifdef	WITH_INDEX_EXTFH
-void cob_index_init_fileio (cob_file_api *);
+void cob_index_init_fileio (cob_context *, cob_file_api *);
 #endif
 
 #ifdef	WITH_SEQRA_EXTFH
-void cob_seqra_init_fileio (cob_file_api *);
+void cob_seqra_init_fileio (cob_context *, cob_file_api *);
 #endif
 
 
@@ -1345,7 +1345,7 @@ static char	module_msg[256];
 static int
 cob_load_module (cob_context *ctx, int iortn)
 {
-	void (*ioinit)(cob_file_api *);
+	void (*ioinit)(cob_context *, cob_file_api *);
 
 	if (iortn > COB_IO_MAX) {
 		/* possibly cob_runtime_error here */
@@ -1362,16 +1362,16 @@ cob_load_module (cob_context *ctx, int iortn)
 	}
 
 	module_errmsg[0] = 0;
-	ioinit = (void (*)(cob_file_api *))cob_load_lib_ctx (ctx, io_rtns[iortn].module, io_rtns[iortn].entry, module_errmsg);
+	ioinit = (void (*)(cob_context *, cob_file_api *))cob_load_lib_ctx (ctx, io_rtns[iortn].module, io_rtns[iortn].entry, module_errmsg);
 	if (ioinit == NULL) {
 		/* recheck with libcob */
-		ioinit = (void (*)(cob_file_api *))cob_load_lib_ctx (ctx, "libcob-5", io_rtns[iortn].entry, NULL);
+		ioinit = (void (*)(cob_context *, cob_file_api *))cob_load_lib_ctx (ctx, "libcob-5", io_rtns[iortn].entry, NULL);
 	}
 	if (ioinit == NULL) {
 		return 1;
 	}
 
-	ioinit (&file_api);
+	ioinit (ctx, &file_api);
 	io_rtns[iortn].loaded = 1;
 	return 0;
 }
@@ -1427,7 +1427,7 @@ cob_io_name (const int iortn)
 }
 
 int
-cob_write_dict (cob_file *f, char *filename)
+cob_write_dict (cob_context *ctx, cob_file *f, char *filename)
 {
 	char	outdd[COB_FILE_MAX], outbuf[4096];
 	FILE	*fo;
@@ -1457,9 +1457,8 @@ cob_write_dict (cob_file *f, char *filename)
  * sets file attributes for valid descriptions
  */
 int				/* Return 1 on broken definition, -1 on "not found" else 0 */
-cob_read_dict (cob_file *f, char *filename, int updt)
+cob_read_dict (cob_context *ctx, cob_file *f, char *filename, int updt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	char	inpdd[COB_FILE_MAX], ddbuf[2048], *sdir;
 	FILE	*fi;
 	int		line, ret;
@@ -1748,9 +1747,8 @@ apply_file_paths (char *src)
 
 /* adjust static buffer file_open_name per applicable mapping rules */
 void
-cob_chk_file_mapping (cob_file *f, char *filename)
+cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	char		*p;
 	char		*src;
 	char		*dst;
@@ -1926,7 +1924,7 @@ void
 cob_file_sync (cob_context *ctx, cob_file *f)
 {
 	if (f->organization == COB_ORG_INDEXED) {
-		fileio_funcs[get_io_ptr (ctx, f)]->iosync (&file_api, f);
+		fileio_funcs[get_io_ptr (ctx, f)]->iosync (ctx, &file_api, f);
 		return;
 	}
 	if (f->organization != COB_ORG_SORT && f->open_mode != COB_OPEN_INPUT) {
@@ -1945,7 +1943,7 @@ cob_file_sync (cob_context *ctx, cob_file *f)
 }
 
 static void
-cob_cache_file (cob_file *f)
+cob_cache_file (cob_context *ctx, cob_file *f)
 {
 	struct file_list	*l;
 
@@ -1961,7 +1959,7 @@ cob_cache_file (cob_file *f)
 }
 
 static void
-cob_cache_del (cob_file *f)
+cob_cache_del (cob_context *ctx, cob_file *f)
 {
 	struct file_list	*l, *m;
 
@@ -3938,9 +3936,8 @@ cob_seq_write_opt (cob_context *ctx, cob_file *f, const int opt)
 }
 
 static int
-cob_file_write_opt (cob_file *f, const int opt)
+cob_file_write_opt (cob_context *ctx, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	FILE	*fp = (FILE *)f->file;
 	int	i;
 
@@ -4113,7 +4110,7 @@ cob_fd_file_open (cob_context *ctx, cob_file *f, char *filename,
 	if (f->file_status[0] > '0')
 		return COB_D2I (f->file_status[0]) * 10 + COB_D2I(f->file_status[1]);
 	if (!f->flag_file_map) {
-		cob_chk_file_mapping (f, NULL);
+		cob_chk_file_mapping (ctx, f, NULL);
 		if (f->file_status[0] > '0')
 			return COB_D2I (f->file_status[0]) * 10 + COB_D2I(f->file_status[1]);
 		f->flag_file_map = 1;
@@ -4334,10 +4331,9 @@ cob_fd_file_open (cob_context *ctx, cob_file *f, char *filename,
 
 #define dMaxArgs 16
 static int
-cob_file_open (cob_file_api *a, cob_file *f, char *filename,
+cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 		const enum cob_open_mode mode, const int sharing)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	/* Note filename points to file_open_name */
 	/* cob_chk_file_mapping manipulates file_open_name directly */
 
@@ -4350,7 +4346,7 @@ cob_file_open (cob_file_api *a, cob_file *f, char *filename,
 
 	f->share_mode = (unsigned char)sharing;
 	if (!f->flag_file_map) {
-		cob_chk_file_mapping (f, NULL);
+		cob_chk_file_mapping (ctx, f, NULL);
 		if (f->file_status[0] > '0')
 			return COB_D2I (f->file_status[0]) * 10 + COB_D2I(f->file_status[1]);
 		f->flag_file_map = 1;
@@ -4360,7 +4356,7 @@ cob_file_open (cob_file_api *a, cob_file *f, char *filename,
 
 	if (file_setptr->cob_file_dict == COB_DICTIONARY_ALL
 	 && mode == COB_OPEN_OUTPUT)
-		a->cob_write_dict(f, filename);
+		a->cob_write_dict(ctx, f, filename);
 
 	f->file = NULL;
 	f->fd = -1;
@@ -4791,9 +4787,8 @@ cob_file_open (cob_file_api *a, cob_file *f, char *filename,
 }
 
 static int
-cob_file_close (cob_file_api *a, cob_file *f, const int opt)
+cob_file_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	COB_UNUSED (a);
 
 	if (!f->flag_is_pipe)
@@ -5016,7 +5011,7 @@ open_next (cob_file *f)
 /* SEQUENTIAL */
 
 static int
-sequential_read (cob_file_api *a, cob_file *f, const int read_opts)
+sequential_read (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
 	int	bytesread,padlen;
 	union {
@@ -5140,9 +5135,8 @@ again:
 }
 
 static int
-sequential_write (cob_file_api *a, cob_file *f, int opt)
+sequential_write (cob_context *ctx, cob_file_api *a, cob_file *f, int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int	padlen;
 
 	COB_UNUSED (a);
@@ -5212,7 +5206,7 @@ sequential_write (cob_file_api *a, cob_file *f, int opt)
 }
 
 static int
-sequential_rewrite (cob_file_api *a, cob_file *f, const int opt)
+sequential_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	union {
 		unsigned char	sbuff[4];
@@ -5322,7 +5316,7 @@ sequential_rewrite (cob_file_api *a, cob_file *f, const int opt)
 #endif
 
 static int
-lineseq_read (cob_file_api *a, cob_file *f, const int read_opts)
+lineseq_read (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
 	FILE		*fp = (FILE *)f->file;
 	unsigned char	*dataptr;
@@ -5533,9 +5527,8 @@ lineseq_size (cob_context *ctx, cob_file *f)
 }
 
 static int
-lineseq_write (cob_file_api *a, cob_file *f, const int opt)
+lineseq_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	FILE			*fp = (FILE *)f->file;
 	unsigned char		*p;
 	cob_linage		*lingptr;
@@ -5572,7 +5565,7 @@ lineseq_write (cob_file_api *a, cob_file *f, const int opt)
 				f->flag_needs_nl = 0;
 				f->flag_needs_cr = 0;
 			} else {
-				ret = cob_file_write_opt (f, opt);
+				ret = cob_file_write_opt (ctx, f, opt);
 				if (ret) {
 					return ret;
 				}
@@ -5694,7 +5687,7 @@ lineseq_write (cob_file_api *a, cob_file *f, const int opt)
 
 	/* WRITE BEFORE */
 	if (opt & COB_WRITE_BEFORE) {
-		ret = cob_file_write_opt (f, opt);
+		ret = cob_file_write_opt (ctx, f, opt);
 		if (ret) {
 			return ret;
 		}
@@ -5711,9 +5704,8 @@ lineseq_write (cob_file_api *a, cob_file *f, const int opt)
 }
 
 static int
-lineseq_rewrite (cob_file_api *a, cob_file *f, const int opt)
+lineseq_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	FILE		*fp = (FILE *)f->file;
 	unsigned char	*p;
 	const size_t	size = f->record->size;
@@ -5769,7 +5761,7 @@ lineseq_rewrite (cob_file_api *a, cob_file *f, const int opt)
 		rcsz = f->record->size;
 		savepos = (off_t)f->record_off;
 		memcpy (qbl_tmp, f->record->data, rcsz);
-		lineseq_read (a, f, 0);
+		lineseq_read (ctx, a, f, 0);
 		memcpy (qbl_hdr->data, f->record->data, f->record->size);
 		while (f->record->size < f->record_max) {
 			qbl_hdr->data[f->record->size++] = ' ';
@@ -5935,9 +5927,8 @@ relative_read_size (cob_file *f, off_t off, int *isdeleted)
 
 /* RELATIVE  START */
 static int
-relative_start (cob_file_api *a, cob_file *f, const int cond, cob_field *k)
+relative_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *k)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	off_t		off;
 	size_t		relsize;
 	int		kindex;
@@ -6102,9 +6093,8 @@ relative_read_off (cob_context *ctx, cob_file *f, off_t off)
 }
 
 static int
-relative_read (cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
+relative_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	off_t	off;
 	int	relnum,errsts;
 	struct stat	st;
@@ -6149,9 +6139,8 @@ relative_read (cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
 }
 
 static int
-relative_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+relative_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	off_t	curroff;
 	off_t	relsize;
 	int		relnum;
@@ -6326,9 +6315,8 @@ relative_padout(cob_file *f, char pad, int len)
 }
 
 static int
-relative_write (cob_file_api *a, cob_file *f, const int opt)
+relative_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	off_t	off;
 	size_t	relsize;
 	int	isdeleted=0;
@@ -6410,9 +6398,8 @@ relative_write (cob_file_api *a, cob_file *f, const int opt)
 }
 
 static int
-relative_rewrite (cob_file_api *a, cob_file *f, const int opt)
+relative_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	off_t	off;
 	size_t	relsize;
 	int	relnum,isdeleted=0,errsts;
@@ -6497,9 +6484,8 @@ relative_rewrite (cob_file_api *a, cob_file *f, const int opt)
 }
 
 static int
-relative_delete (cob_file_api *a, cob_file *f)
+relative_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	off_t	off;
 	size_t	relsize;
 	struct stat	st;
@@ -6649,7 +6635,7 @@ cob_file_unlock (cob_context *ctx, cob_file *f)
 #endif
 
 		} else {
-			fileio_funcs[get_io_ptr (ctx, f)]->iounlock (&file_api, f);
+			fileio_funcs[get_io_ptr (ctx, f)]->iounlock (ctx, &file_api, f);
 		}
 	}
 }
@@ -7183,7 +7169,7 @@ cob_pre_open_ctx (cob_context *ctx, cob_file *f)
 		cob_field_to_string (f->assign, file_open_name, (size_t)COB_FILE_MAX, CCM_NONE);
 
 		f->flag_file_map = 1;
-		cob_chk_file_mapping (f, NULL);
+		cob_chk_file_mapping (ctx, f, NULL);
 		if (f->file_status[0] > '0')
 			return ;
 
@@ -7322,7 +7308,7 @@ cob_open_ctx (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, cons
 	if (f->flag_io_tran
 	 && f->flag_close_pend) {
 		cob_file_save_status (ctx, f, fnstatus,
-				 fileio_funcs[get_io_ptr (ctx, f)]->open (&file_api, f, file_open_name,
+				 fileio_funcs[get_io_ptr (ctx, f)]->open (ctx, &file_api, f, file_open_name,
 									mode, sharing));
 		return;
 	}
@@ -7418,7 +7404,7 @@ cob_open_ctx (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, cons
 			cob_file_save_status (ctx, f, fnstatus, COB_STATUS_91_NOT_AVAILABLE);
 		}
 	}
-	cob_cache_file (f);
+	cob_cache_file (ctx, f);
 
 	f->flag_is_concat = 0;
 	if (file_setptr->cob_concat_name
@@ -7455,7 +7441,7 @@ cob_open_ctx (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, cons
 
 	/* Open the file */
 	cob_file_save_status (ctx, f, fnstatus,
-		     fileio_funcs[get_io_ptr (ctx, f)]->open (&file_api, f, file_open_name,
+		     fileio_funcs[get_io_ptr (ctx, f)]->open (ctx, &file_api, f, file_open_name,
 								mode, sharing));
 	if (f->file_status[0] == '0'
 	 && !f->flag_io_tran
@@ -7505,7 +7491,7 @@ cob_close_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int opt
 	}
 
 	if (remfil) {	/* Remove from cache - Needed for CANCEL */
-		cob_cache_del (f);
+		cob_cache_del (ctx, f);
 	}
 
 	if (f->open_mode == COB_OPEN_CLOSED
@@ -7530,7 +7516,7 @@ cob_close_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus, const int opt
 		return;
 	}
 
-	ret = fileio_funcs[get_io_ptr (ctx, f)]->close (&file_api, f, opt);
+	ret = fileio_funcs[get_io_ptr (ctx, f)]->close (ctx, &file_api, f, opt);
 	if (ret == COB_STATUS_00_SUCCESS) {
 		switch (opt) {
 		case COB_CLOSE_LOCK:
@@ -7596,9 +7582,9 @@ cob_start_ctx (cob_context *ctx, cob_file *f, const int cond, cob_field *key,
 		tempkey = *key;
 		tempkey.size = (size_t)size;
 		f->last_key = &tempkey;
-		ret = fileio_funcs[get_io_ptr (ctx, f)]->start (&file_api, f, cond, &tempkey);
+		ret = fileio_funcs[get_io_ptr (ctx, f)]->start (ctx, &file_api, f, cond, &tempkey);
 	} else {
-		ret = fileio_funcs[get_io_ptr (ctx, f)]->start (&file_api, f, cond, key);
+		ret = fileio_funcs[get_io_ptr (ctx, f)]->start (ctx, &file_api, f, cond, key);
 	}
 	if (ret == COB_STATUS_00_SUCCESS) {
 		f->flag_end_of_file = 0;
@@ -7669,9 +7655,9 @@ cob_read_ctx (cob_context *ctx, cob_file *f, cob_field *key, cob_field *fnstatus
 			cob_file_save_status (ctx, f, fnstatus, COB_STATUS_46_READ_ERROR);
 			return;
 		}
-		ret = fileio_funcs[get_io_ptr (ctx, f)]->read_next (&file_api, f, read_opts);
+		ret = fileio_funcs[get_io_ptr (ctx, f)]->read_next (ctx, &file_api, f, read_opts);
 	} else {
-		ret = fileio_funcs[get_io_ptr (ctx, f)]->read (&file_api, f, key, read_opts);
+		ret = fileio_funcs[get_io_ptr (ctx, f)]->read (ctx, &file_api, f, key, read_opts);
 	}
 
 	switch (ret) {
@@ -7753,7 +7739,7 @@ cob_chk_dups (cob_context *ctx, cob_file *f)
 			if (is_suppressed_key_value (f, k) > 0) {
 				continue;
 			}
-			ret = fileio_funcs[get_io_ptr (ctx, f)]->read (&file_api, f, f->keys[k].field, 0);
+			ret = fileio_funcs[get_io_ptr (ctx, f)]->read (ctx, &file_api, f, f->keys[k].field, 0);
 			if (ret == COB_STATUS_00_SUCCESS
 			 || ret == COB_STATUS_02_SUCCESS_DUPLICATE) {
 				ret = COB_STATUS_22_KEY_EXISTS;
@@ -7819,7 +7805,7 @@ Again:
 			f->cur_rec_num = cob_get_int_ctx (ctx, f->keys[0].field);
 		}
 	}
-	ret = fileio_funcs[get_io_ptr (ctx, f)]->read_next (&file_api, f, read_opts);
+	ret = fileio_funcs[get_io_ptr (ctx, f)]->read_next (ctx, &file_api, f, read_opts);
 
 	switch (ret) {
 	case COB_STATUS_00_SUCCESS:
@@ -8034,13 +8020,13 @@ cob_write_ctx (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob
 		}
 		f->record->data = converted_copy;
 		cob_file_save_status (ctx, f, fnstatus,
-				      fileio_funcs[get_io_ptr (ctx, f)]->write (&file_api, f, opt));
+				      fileio_funcs[get_io_ptr (ctx, f)]->write (ctx, &file_api, f, opt));
 		f->record->data = real_rec_data;
 		cob_free (converted_copy);
 
 	} else {
 		cob_file_save_status (ctx, f, fnstatus,
-			     fileio_funcs[get_io_ptr (ctx, f)]->write (&file_api, f, opt));
+			     fileio_funcs[get_io_ptr (ctx, f)]->write (ctx, &file_api, f, opt));
 	}
 
 	if (f->cur_rec_num > f->max_rec_num
@@ -8125,7 +8111,7 @@ cob_rewrite_ctx (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, c
 	 && (f->organization == COB_ORG_INDEXED
 	  || f->organization == COB_ORG_RELATIVE)) {
 		memcpy (qbl_tmp, f->record->data, f->record_max);
-		ret = fileio_funcs[get_io_ptr (ctx, f)]->read (&file_api, f, f->keys[0].field, 0);
+		ret = fileio_funcs[get_io_ptr (ctx, f)]->read (ctx, &file_api, f, f->keys[0].field, 0);
 		if (ret == 0)
 			cob_put_qbl (ctx, f, QBL_BEFORE);
 		memcpy (f->record->data, qbl_tmp, f->record_max);
@@ -8181,13 +8167,13 @@ cob_rewrite_ctx (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, c
 		}
 		f->record->data = converted_copy;
 		cob_file_save_status (ctx, f, fnstatus,
-			     fileio_funcs[get_io_ptr (ctx, f)]->rewrite (&file_api, f, opt));
+			     fileio_funcs[get_io_ptr (ctx, f)]->rewrite (ctx, &file_api, f, opt));
 		f->record->data = real_rec_data;
 		cob_free (converted_copy);
 
 	} else {
 		cob_file_save_status (ctx, f, fnstatus,
-			     fileio_funcs[get_io_ptr (ctx, f)]->rewrite (&file_api, f, opt));
+			     fileio_funcs[get_io_ptr (ctx, f)]->rewrite (ctx, &file_api, f, opt));
 	}
 
 	if (f->file_status[0] == '0'
@@ -8229,7 +8215,7 @@ cob_delete_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus)
 		  || f->organization == COB_ORG_RELATIVE)) {
 			set_qbl_buf (ctx, f->record_max);
 			memcpy (qbl_tmp, f->record->data, f->record_max);
-			if (fileio_funcs[get_io_ptr (ctx, f)]->read (&file_api, f, f->keys[0].field, 0) == 0)
+			if (fileio_funcs[get_io_ptr (ctx, f)]->read (ctx, &file_api, f, f->keys[0].field, 0) == 0)
 				cob_put_qbl (ctx, f, QBL_DELETE);
 			memcpy (f->record->data, qbl_tmp, f->record_max);
 		}
@@ -8237,7 +8223,7 @@ cob_delete_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus)
 
 	f->flag_was_updated = 1;
 	cob_file_save_status (ctx, f, fnstatus,
-		     fileio_funcs[get_io_ptr (ctx, f)]->recdelete (&file_api, f));
+		     fileio_funcs[get_io_ptr (ctx, f)]->recdelete (ctx, &file_api, f));
 }
 
 /* compatibility: cob_delete without context */
@@ -8260,10 +8246,10 @@ cob_commit_ctx (cob_context *ctx)
 		if (f->flag_was_updated) {
 			if (f->flag_io_tran) {
 				f->last_operation = COB_LAST_COMMIT;
-				fileio_funcs[get_io_ptr (ctx, f)]->commit (&file_api, f);
+				fileio_funcs[get_io_ptr (ctx, f)]->commit (ctx, &file_api, f);
 			} else if (f->flag_was_updated) {
 				f->last_operation = COB_LAST_COMMIT;
-				fileio_funcs[get_io_ptr (ctx, f)]->iosync (&file_api, f);
+				fileio_funcs[get_io_ptr (ctx, f)]->iosync (ctx, &file_api, f);
 			}
 			f->flag_was_updated = 0;
 		}
@@ -8312,7 +8298,7 @@ cob_rollback_ctx (cob_context *ctx)
 		if (f->flag_io_tran
 		 && f->flag_was_updated) {
 			f->last_operation = COB_LAST_ROLLBACK;
-			fileio_funcs[get_io_ptr (ctx, f)]->rollback (&file_api, f);
+			fileio_funcs[get_io_ptr (ctx, f)]->rollback (ctx, &file_api, f);
 			f->flag_was_updated = 0;
 		}
 		if (f->open_mode == COB_OPEN_CLOSED		/* Close pending commit/rollback */
@@ -8396,7 +8382,7 @@ cob_rollback_ctx (cob_context *ctx)
 						}
 					} else if (memcmp (qbl_hdr->type, QBL_BEFORE, 2) == 0) {
 						set_file_pos (f, filepos);
-						lineseq_read (NULL, f, COB_READ_NEXT);
+						lineseq_read (ctx, NULL, f, COB_READ_NEXT);
 						if (reclen > 0) {
 							memcpy (f->record->data, qbl_hdr->data, reclen);
 						}
@@ -8485,7 +8471,7 @@ cob_delete_file_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus, const i
 
 	/* Obtain the file name */
 	cob_field_to_string (f->assign, file_open_name, COB_FILE_MAX, CCM_NONE);
-	cob_chk_file_mapping (f, NULL);
+	cob_chk_file_mapping (ctx, f, NULL);
 	if (f->file_status[0] > '0') {
 		cob_file_save_status (ctx, f, fnstatus,
 				COB_D2I (f->file_status[0]) * 10 + COB_D2I(f->file_status[1]));
@@ -8498,7 +8484,7 @@ cob_delete_file_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus, const i
 		unlink (file_open_name);
 	} else {
 		cob_file_save_status (ctx, f, fnstatus,
-			fileio_funcs[get_io_ptr (ctx, f)]->fildelete (&file_api, f, file_open_name));
+			fileio_funcs[get_io_ptr (ctx, f)]->fildelete (ctx, &file_api, f, file_open_name));
 		delete_file_status = 0;
 		return;
 	}
@@ -8612,7 +8598,7 @@ cob_setup_filename (cob_context *ctx, const cob_field *file_name)
 	file_open_name[COB_FILE_MAX] = 0;
 	cob_free (fn);
 
-	cob_chk_file_mapping (NULL, NULL);
+	cob_chk_file_mapping (ctx, NULL, NULL);
 
 	return file_open_name;
 }
@@ -10326,7 +10312,7 @@ pathcmp (const char *s1, const char *s2)
 #endif
 
 char *
-cob_get_filename_print (cob_file* file, const int show_resolved_name)
+cob_get_filename_print (cob_context *ctx, cob_file* file, const int show_resolved_name)
 {
 	size_t offset = 0, len;
 	/* Obtain the file name */
@@ -10334,7 +10320,7 @@ cob_get_filename_print (cob_file* file, const int show_resolved_name)
 	if (show_resolved_name) {
 		strncpy (file_open_name, file_open_env, COB_FILE_MAX);
 		file_open_name[COB_FILE_MAX] = 0;
-		cob_chk_file_mapping (file, NULL);
+		cob_chk_file_mapping (ctx, file, NULL);
 	}
 
 	len = strlen (file->select_name);
@@ -10373,7 +10359,7 @@ cob_get_filename_print (cob_file* file, const int show_resolved_name)
 const char *implicit_close_of_msgid = NULL;
 
 void
-cob_exit_fileio_msg_only (void)
+cob_exit_fileio_msg_only (cob_context *ctx)
 {
 	struct file_list	*l;
 	static int output_done = 0;
@@ -10391,7 +10377,7 @@ cob_exit_fileio_msg_only (void)
 		 && !l->file->flag_nonexistent
 		 && !COB_FILE_SPECIAL (l->file)) {
 			if (cob_runtime_warning_ss (implicit_close_of_msgid,
-				cob_get_filename_print (l->file, 0))) {
+				cob_get_filename_print (ctx, l->file, 0))) {
 				return;
 			}
 		}
@@ -10409,7 +10395,7 @@ cob_exit_fileio_closeall (cob_context *ctx)
 	}
 	for (k=0; k < COB_IO_MAX; k++) {
 		if (fileio_funcs[k] != NULL) {
-			fileio_funcs[k]->ioexit (&file_api);
+			fileio_funcs[k]->ioexit (ctx, &file_api);
 		}
 	}
 }
@@ -10529,7 +10515,7 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 	}
 
 #if defined(WITH_STATIC_ISAM)
-	cob_isam_init_fileio (&file_api);
+	cob_isam_init_fileio (ctx, &file_api);
 #if defined(WITH_INDEXED)
 	io_rtns [WITH_INDEXED].loaded = 1;
 	io_rtns [WITH_INDEXED].config = 1;
@@ -10552,13 +10538,13 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 #endif
 
 #if defined(WITH_INDEX_EXTFH)
-	cob_index_init_fileio (&file_api);
+	cob_index_init_fileio (ctx, &file_api);
 	io_rtns [COB_IO_IXEXT].loaded = 1;
 	io_rtns [COB_IO_IXEXT].config = 1;
 #endif
 
 #if defined(WITH_SEQRA_EXTFH)
-	cob_seqra_init_fileio (&file_api);
+	cob_seqra_init_fileio (ctx, &file_api);
 	io_rtns [COB_IO_SQEXT].loaded = 1;
 	io_rtns [COB_IO_SQEXT].config = 1;
 	io_rtns [COB_IO_RAEXT].loaded = 1;
@@ -10593,7 +10579,7 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 
 /* Call this routine when a new process has been forked */
 void
-cob_fork_fileio (cob_global *lptr, cob_settings *sptr)
+cob_fork_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 {
 	int	k;
 	COB_UNUSED (lptr);
@@ -10601,7 +10587,7 @@ cob_fork_fileio (cob_global *lptr, cob_settings *sptr)
 	for (k=0; k < COB_IO_MAX; k++) {
 		if (fileio_funcs[k] != NULL
 		 && fileio_funcs[k]->iofork != NULL) {
-			fileio_funcs[k]->iofork (&file_api);
+			fileio_funcs[k]->iofork (ctx, &file_api);
 		}
 	}
 }
