@@ -9,7 +9,8 @@
 #   object  section  scope  size  symbol
 #
 # where scope is "l" (static) or "g" (exported) and section is one of
-# .bss, .data*, .tbss, .tdata.  Read-only data (.rodata*) is ignored.
+# .bss, .data*, .tbss, .tdata.  Read-only data (.rodata*, and .data.rel.ro*
+# which is read-only after relocation) is ignored.
 #
 # Usage: list-mutable-globals.sh file.o...
 #        (typically: libcob/.libs/*.o from the build directory)
@@ -34,7 +35,8 @@ for obj in "$@"; do
 			return n
 		}
 		# objdump -t: addr flags... section size name
-		NF >= 5 && $(NF-2) ~ /^\.(t?bss|t?data)/ && $NF !~ /^\./ {
+		NF >= 5 && $(NF-2) ~ /^\.(t?bss|t?data)/ && $(NF-2) !~ /^\.data\.rel\.ro/ \
+		 && $NF !~ /^\./ {
 			sect = $(NF-2); size = $(NF-1); name = $NF
 			scope = (substr($0, 18, 1) == "g") ? "g" : "l"
 			sub(/^\.data\..*/, ".data", sect)

@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* list-mutable-globals.sh: ignore .data.rel.ro
 	* list-mutable-globals.sh: new file, list mutable global data of
 	  objects
 
