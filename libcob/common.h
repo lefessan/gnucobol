@@ -1904,6 +1904,7 @@ typedef struct cob_runtime	cob_runtime;	/* opaque */
 struct cob_common_state;	/* opaque, common.c */
 struct cob_intrinsic_state;	/* opaque, intrinsic.c */
 struct cob_numeric_state;	/* opaque, numeric.c */
+struct cob_reportio_state;	/* opaque, reportio.c */
 struct cob_strings_state;	/* opaque, strings.c */
 
 typedef struct cob_context {
@@ -1913,6 +1914,7 @@ typedef struct cob_context {
 	struct cob_common_state		*common;	/* allocated with the context */
 	struct cob_numeric_state	*numeric;	/* allocated with the context */
 	struct cob_intrinsic_state	*intrinsic;	/* allocated with the context */
+	struct cob_reportio_state	*reportio;	/* allocated on first use */
 	struct cob_strings_state	*strings;	/* allocated on first use */
 } cob_context;
 
