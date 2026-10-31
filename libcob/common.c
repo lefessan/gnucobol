@@ -301,11 +301,6 @@ static int			cob_initialized = 0;
 static int			check_mainhandle = 1;
 static int			cob_argc = 0;
 static char			**cob_argv = NULL;
-static struct cob_alloc_cache	*cob_alloc_base = NULL;
-static struct cob_alloc_module	*cob_module_list = NULL;
-static cob_module		*cob_module_err = NULL;
-static const char		*cob_last_sfile = NULL;
-static const char		*cob_last_progid = NULL;
 
 static cob_settings		*cobsetptr = NULL;
 
@@ -319,7 +314,6 @@ COB_TLS cob_context		*cob_current_context = NULL;
 
 static enum cob_module_unload	module_unload = COB_IMMEDIATE;
 
-static int			last_exception_code;	/* Last exception: code */
 static int			active_error_handler = 0;
 static int			in_stop_run = 0;
 
@@ -329,13 +323,14 @@ static const cob_field_attr	const_bin_nano_attr =
 				{COB_TYPE_NUMERIC_BINARY, 20, 9,
 				 COB_FLAG_HAVE_SIGN, NULL};
 
-static struct cob_external	*basext = NULL;
 
 struct sort_state {
 	const unsigned char	*sort_collate;
 	size_t			sort_nkeys;
 	cob_file_key		*sort_keys;
 };
+
+#define	COB_SWITCH_MAX	36  /* maximum switches, must match cobc/tree.h! */
 
 /* State of common.c, one per context */
 struct cob_common_state {
@@ -347,6 +342,21 @@ struct cob_common_state {
 	struct sort_state	*share_sort_state;	/* table SORT */
 	const char		*cob_source_file;
 	unsigned int		cob_source_line;
+
+	/* run unit: activated modules, allocations, EXTERNAL items, switches */
+	struct cob_alloc_cache	*cob_alloc_base;
+	struct cob_alloc_module	*cob_module_list;
+	cob_module		*cob_module_err;
+	struct cob_external	*basext;
+	int			cob_switch[COB_SWITCH_MAX + 1];
+	struct dyn_attr		*dyn_attr_list;	/* dynamically allocated attributes */
+
+	/* trace, exceptions, runtime errors */
+	const char		*cob_last_sfile;
+	const char		*cob_last_progid;
+	int			last_exception_code;	/* Last exception: code */
+	unsigned int		last_runtime_error_line;
+	const char		*last_runtime_error_file;
 };
 
 /* used by the process level functions called without context
@@ -358,6 +368,18 @@ common_state (cob_context *ctx)
 {
 	return ctx ? ctx->common : &no_context_state;
 }
+
+#define cob_alloc_base		(common_state (ctx)->cob_alloc_base)
+#define cob_module_list		(common_state (ctx)->cob_module_list)
+#define cob_module_err		(common_state (ctx)->cob_module_err)
+#define basext			(common_state (ctx)->basext)
+#define cob_switch		(common_state (ctx)->cob_switch)
+#define dyn_attr_list		(common_state (ctx)->dyn_attr_list)
+#define cob_last_sfile		(common_state (ctx)->cob_last_sfile)
+#define cob_last_progid		(common_state (ctx)->cob_last_progid)
+#define last_exception_code	(common_state (ctx)->last_exception_code)
+#define last_runtime_error_line	(common_state (ctx)->last_runtime_error_line)
+#define last_runtime_error_file	(common_state (ctx)->last_runtime_error_file)
 
 int				is_test = 0;
 
@@ -393,14 +415,11 @@ static int		cob_process_id = 0;
 static int		cob_temp_iteration = 0;
 
 static unsigned int	conf_runtime_error_displayed = 0;
-static unsigned int	last_runtime_error_line = 0;
-static const char	*last_runtime_error_file = NULL;
-
 /* List of dynamically allocated field attributes */
-static struct dyn_attr {
+struct dyn_attr {
 	struct dyn_attr	*next;
 	cob_field_attr	attr;
-} *dyn_attr_list = NULL;
+};
 
 static char			runtime_err_str[COB_ERRBUF_SIZE] = {0};	/* emergency buffer */
 static int			exit_code = 0;	/* exit code when leaving libcob */
@@ -443,9 +462,7 @@ static const int		cob_exception_tab_code[] = {
 #define EXCEPTION_TAB_SIZE	sizeof (cob_exception_tab_code) / sizeof (int)
 
 /* Switches */
-#define	COB_SWITCH_MAX	36  /* maximum switches, must match cobc/tree.h! */
 
-static int		cob_switch[COB_SWITCH_MAX + 1];
 
 /* BCD to Integer translation (full byte -> 0 - 99) */
 static unsigned char   b2i[]= {
@@ -870,7 +887,7 @@ cob_exit_common (cob_context *ctx)
 }
 
 static void
-cob_exit_common_modules (void)
+cob_exit_common_modules (cob_context *ctx)
 {
 	cob_module	*mod;
 	struct cob_alloc_module	*ptr, *nxt;
@@ -997,7 +1014,7 @@ cob_terminate_routines (cob_context *ctx)
 	cob_exit_strings (ctx);
 	cob_exit_numeric (ctx);
 
-	cob_exit_common_modules ();
+	cob_exit_common_modules (ctx);
 	if (module_unload == COB_IMMEDIATE) {
 		cob_exit_call (ctx);
 		cob_exit_cobcapi (ctx);
@@ -2952,7 +2969,7 @@ cob_str_case_str (char *str1, const char *str2)					/* Like  strcasestr  */
 
 /* get last exception (or 0 if not active) */
 int
-cob_get_last_exception_code (void)
+cob_get_last_exception_code (cob_context *ctx)
 {
 	return last_exception_code;
 }
@@ -5346,7 +5363,7 @@ cob_check_ref_mod_minimal (const char* name, const int offset, const int length)
 
 /* check if already allocated, if yes returns its address and sets exlength */
 static void *
-cob_external_addr_lookup (const char *exname, int *exlength)
+cob_external_addr_lookup (cob_context *ctx, const char *exname, int *exlength)
 {
 	struct cob_external *eptr;
 
@@ -5364,7 +5381,7 @@ cob_external_addr_lookup (const char *exname, int *exlength)
 /* allocate new external entry;
    returns allocated pointer with requested size */
 static void *
-cob_external_addr_create (const char *exname, int exlength)
+cob_external_addr_create (cob_context *ctx, const char *exname, int exlength)
 {
 	struct cob_external *eptr;
 
@@ -5393,7 +5410,7 @@ cob_external_addr_ctx (cob_context *ctx, const char *exname, const int exlength)
 	}
 
 	/* Locate or allocate EXTERNAL item */
-	ret = cob_external_addr_lookup (exname, &stored_length);
+	ret = cob_external_addr_lookup (ctx, exname, &stored_length);
 	if (ret != NULL) {
 		if (exlength > stored_length) {
 			cob_runtime_error_ctx (ctx, _ ("EXTERNAL item '%s' previously allocated with size %d, requested size is %d"),
@@ -5406,7 +5423,7 @@ cob_external_addr_ctx (cob_context *ctx, const char *exname, const int exlength)
 		}
 		ctx->glob.cob_initial_external = 0;
 	} else {
-		ret = cob_external_addr_create (exname, exlength);
+		ret = cob_external_addr_create (ctx, exname, exlength);
 		ctx->glob.cob_initial_external = 1;
 	}
 	return ret;
@@ -11414,9 +11431,6 @@ cob_init (const int argc, char **argv)
 
 	cob_set_signal ();
 
-	cob_alloc_base = NULL;
-	cob_last_sfile = NULL;
-	basext = NULL;
 	exit_hdlrs = NULL;
 	hdlrs = NULL;
 

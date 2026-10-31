@@ -4566,7 +4566,7 @@ cob_intr_exception_status_ctx (cob_context *ctx)
 	make_field_entry (ctx, &field);
 
 	memset (curr_field->data, ' ', (size_t)31);
-	if (cob_get_last_exception_code() != 0) {
+	if (cob_get_last_exception_code(ctx) != 0) {
 		except_name = cob_get_last_exception_name (ctx);
 		if (except_name == NULL) {
 			except_name = "EXCEPTION-OBJECT";
