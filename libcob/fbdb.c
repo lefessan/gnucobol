@@ -100,17 +100,10 @@ static int		bdb_join = 1;
 	key.size = (cob_dbtsize_t) fld->size
 #define COB_MAX_BDB_LOCKS 32
 
-#if 0 /* while the fields are part of DBT since 4.1, and were made part of the
-         public API with 6.0 (DB_VERSION_FAMILY 12) this field is not always
-         copied when passed to custom compare functions, see bug 1032 */
-#define DBT_SET_APP_DATA(key,data)	((key)->app_data = (data))
-#define DBT_GET_APP_DATA(key)		((key)->app_data)
-#else
-/* Used to save the collating sequence function */
-COB_TLS void		*bdb_app_data = NULL;
-#define DBT_SET_APP_DATA(key,data)	((void)(key), bdb_app_data = (data))
-#define DBT_GET_APP_DATA(key)		((void)(key), bdb_app_data)
-#endif
+/* The collating sequence of a key is stored in the app_private field of
+   its DB handle, used by bdb_bt_compare (the app_data field of DBT, part
+   of the public API since 6.0, is not always copied when passed to custom
+   compare functions, see bug 1032) */
 
 struct indexed_file {
 	DB		**db;		/* Database handlers */
@@ -170,13 +163,6 @@ bdb_dupswap (cob_file *f, unsigned int value)
 #endif
 }
 
-static COB_INLINE void
-bdb_setkeycol (cob_file *f, int idx)
-{
-	struct indexed_file	*p = f->file;
-	DBT_SET_APP_DATA(&p->key, (void *)f->keys[idx].collating_sequence);
-}
-
 static void
 bdb_setkey (cob_file *f, int idx)
 {
@@ -187,7 +173,6 @@ bdb_setkey (cob_file *f, int idx)
 	memset(&p->key,0,sizeof(p->key));
 	p->key.data = p->savekey;
 	p->key.size = (cob_dbtsize_t) len;
-	bdb_setkeycol (f, idx);
 }
 
 /* Is given key data all SUPPRESS char,
@@ -276,8 +261,7 @@ bdb_bt_compare (DB *db, const DBT *k1, const DBT *k2
 )
 {
 	cob_context	*ctx = COB_CTX_TODO;
-	const unsigned char *col = (unsigned char *)DBT_GET_APP_DATA (k1);
-	COB_UNUSED (db);
+	const unsigned char *col = (const unsigned char *)db->app_private;
 #if DB_VERSION_MAJOR >= 6
 	locp = NULL;	/* docs: must be set to NULL or corruption can occur ... */
 #endif
@@ -1023,7 +1007,6 @@ ix_bdb_start_internal (cob_context *ctx, cob_file *f, const int cond, cob_field 
 		}
 		p->key.data = p->data.data;
 		p->key.size = p->primekeylen;
-		bdb_setkeycol (f, 0);
 		ret = DB_GET (p->db[0], &p->key, &p->data, 0);
 	}
 
@@ -1127,7 +1110,6 @@ ix_bdb_delete_internal (cob_context *ctx, cob_file *f, const int rewrite, int bd
 		len = db_savekey(f, p->savekey, p->saverec, i);
 		p->key.data = p->savekey;
 		p->key.size = (cob_dbtsize_t) len;
-		bdb_setkeycol (f, i);
 		/* rewrite: no delete if secondary key is unchanged */
 		if (rewrite) {
 			db_savekey(f, p->suppkey, p->saverec, i);
@@ -1427,6 +1409,7 @@ ix_bdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, con
 					p->db[i]->set_flags (p->db[i], DB_DUP);
 				}
 				/* TODO: add national compare function later */
+				p->db[i]->app_private = (void *)f->keys[i].collating_sequence;
 #ifdef USE_BDB_KEYDIFF
 				p->db[i]->set_bt_compare(p->db[i], bdb_bt_compare);
 #else
@@ -1764,7 +1747,6 @@ ix_bdb_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read
 		/* Check if previously read data still exists */
 		p->key.size = (cob_dbtsize_t) db_keylen (f, p->key_index);
 		p->key.data = p->last_readkey[p->key_index];
-		bdb_setkeycol (f, p->key_index);
 		ret = DB_SEQ (p->cursor[p->key_index], &p->key, &p->data, DB_SET);
 		if (!ret && p->key_index > 0) {
 			if (f->keys[p->key_index].tf_duplicates) {
@@ -1790,7 +1772,6 @@ ix_bdb_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read
 			if (!ret) {
 				p->key.size = (cob_dbtsize_t) p->primekeylen;
 				p->key.data = p->last_readkey[p->key_index + f->nkeys];
-				bdb_setkeycol (f, 0);
 				ret = DB_GET (p->db[0], &p->key, &p->data, 0);
 			}
 		}
@@ -1825,7 +1806,6 @@ ix_bdb_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read
 		} else {
 			p->key.size = (cob_dbtsize_t) db_keylen (f, p->key_index);
 			p->key.data = p->last_readkey[p->key_index];
-			bdb_setkeycol (f, p->key_index);
 			ret = DB_SEQ (p->cursor[p->key_index], &p->key, &p->data, DB_SET_RANGE);
 			/* ret != 0 possible, records may be deleted since last read */
 			if (ret != 0) {
@@ -1907,7 +1887,6 @@ ix_bdb_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read
 			}
 			p->key.data = p->data.data;
 			p->key.size = p->primekeylen;
-			bdb_setkeycol (f, 0);
 			ret = DB_GET (p->db[0], &p->key, &p->data, 0);
 			if (ret != 0) {
 				bdb_close_index (f, p->key_index);
@@ -2011,7 +1990,7 @@ ix_bdb_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 	 && f->open_mode == COB_OPEN_OUTPUT
 	 && !f->flag_set_isam
 	 && indexed_key_compare (p->last_key,  (unsigned char *)p->key.data, (size_t)p->key.size,
-				 (unsigned char *)DBT_GET_APP_DATA(&p->key)) > 0) {
+				 f->keys[0].collating_sequence) > 0) {
 		return COB_STATUS_21_KEY_INVALID;
 	}
 	memcpy (p->last_key, p->key.data, (size_t)p->key.size);
