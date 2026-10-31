@@ -398,7 +398,14 @@ Conséquences pour `cobc/codegen.c` :
    à faire). Puis l'état de `numeric.c`, `intrinsic.c`, `reportio.c`,
    `termio.c`, `cobcapi.c`, `fextfh.c`, `profiling.c` dans le contexte
    (une structure opaque par fichier). Variables globales modifiables :
-   362 au départ, 247 restent (2026-11-01).
+   362 au départ, 247 restent (2026-11-01). Puis `fileio.c`, état de
+   « run unit » de `common.c` (modules, EXTERNAL, SWITCH, trace…),
+   constantes (tables de configuration, `fsqlxfd.c`…), et le script
+   ignore `.data.rel.ro` : 187 restent. Ce qui reste demande surtout des
+   décisions de T1.4 / T2 : table des modules (`call.c`, verrou),
+   backends (BDB, LMDB, ODBC), terminal (`screenio.c`), réglages par
+   contexte, état lié aux signaux et à STOP RUN, tampons de retour
+   statiques, constantes calculées → `cob_runtime`.
    Reste : statiques de `common.c` (97), `fileio.c` (34), `screenio.c`
    (27, terminal unique), `fsqlxfd.c` (20), `call.c` (14), `fbdb.c`… ; réglages par
    contexte (et `cobsetptr` de `common.c`) ; callbacks de tri ; état
