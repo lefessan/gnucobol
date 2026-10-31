@@ -825,6 +825,7 @@ cob_exit_common (cob_context *ctx)
 			cob_current_context = NULL;
 		}
 		cob_free (cob_main_context->common);
+		cob_free (cob_main_context->termio);
 		cob_free (cob_main_context);
 		cob_main_context = NULL;
 	}

@@ -1906,6 +1906,7 @@ struct cob_intrinsic_state;	/* opaque, intrinsic.c */
 struct cob_numeric_state;	/* opaque, numeric.c */
 struct cob_reportio_state;	/* opaque, reportio.c */
 struct cob_strings_state;	/* opaque, strings.c */
+struct cob_termio_state;	/* opaque, termio.c */
 
 typedef struct cob_context {
 	cob_runtime		*rt;
@@ -1916,6 +1917,7 @@ typedef struct cob_context {
 	struct cob_intrinsic_state	*intrinsic;	/* allocated with the context */
 	struct cob_reportio_state	*reportio;	/* allocated on first use */
 	struct cob_strings_state	*strings;	/* allocated on first use */
+	struct cob_termio_state		*termio;	/* allocated on first use */
 } cob_context;
 
 #ifndef COB_WITHOUT_JMP

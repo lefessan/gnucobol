@@ -705,8 +705,43 @@ display_alnum_dump (cob_field *f, FILE *fp, unsigned int indent, unsigned int ma
 
 
 /* Output for DUMP purposes */
-static int	dump_null_adrs = 0;
-static void dump_pending_output (FILE*);
+
+#define IDX_HINT_MAX	3 + COB_MAX_SUBSCRIPTS * (7 + 1)
+#define VNAME_MAX	COB_MAX_WORDLEN + IDX_HINT_MAX + 1
+#define LVL_SIZE	16
+
+/* State of the DUMP output, one per context; accessed with the macros
+   below, using the context 'ctx' */
+struct cob_termio_state {
+	int			dump_null_adrs;
+	const unsigned char	*dump_prev_data[COB_MAX_SUBSCRIPTS + 1];
+	unsigned int		dump_index;
+	unsigned int		dump_idx[COB_MAX_SUBSCRIPTS + 1];
+	unsigned int		dump_idx_first[COB_MAX_SUBSCRIPTS + 1];
+	unsigned int		dump_idx_last[COB_MAX_SUBSCRIPTS + 1];
+	unsigned int		dump_skip[COB_MAX_SUBSCRIPTS + 1];
+	char			pending_dump_name[VNAME_MAX + LVL_SIZE + 1];
+};
+
+static struct cob_termio_state *
+termio_state (cob_context *ctx)
+{
+	if (ctx->termio == NULL) {
+		ctx->termio = cob_malloc (sizeof (struct cob_termio_state));
+	}
+	return ctx->termio;
+}
+
+#define dump_null_adrs		(termio_state (ctx)->dump_null_adrs)
+#define dump_prev_data		(termio_state (ctx)->dump_prev_data)
+#define dump_index		(termio_state (ctx)->dump_index)
+#define dump_idx		(termio_state (ctx)->dump_idx)
+#define dump_idx_first		(termio_state (ctx)->dump_idx_first)
+#define dump_idx_last		(termio_state (ctx)->dump_idx_last)
+#define dump_skip		(termio_state (ctx)->dump_skip)
+#define pending_dump_name	(termio_state (ctx)->pending_dump_name)
+
+static void dump_pending_output (cob_context *, FILE*);
 
 void
 cob_dump_output_ctx (cob_context *ctx, const char *str)
@@ -718,7 +753,7 @@ cob_dump_output_ctx (cob_context *ctx, const char *str)
 		return;
 	}
 
-	dump_pending_output (fp);
+	dump_pending_output (ctx, fp);
 
 	fprintf (fp, "\n%s\n**********************\n", str);
 }
@@ -742,7 +777,7 @@ cob_dump_file_ctx (cob_context *ctx, const char *name, cob_file *fl)
 		return;
 	}
 
-	dump_pending_output (fp);
+	dump_pending_output (ctx, fp);
 
 	switch (fl->open_mode) {
 	case COB_OPEN_CLOSED:
@@ -766,10 +801,6 @@ cob_dump_file (const char *name, cob_file *fl)
 {
 	cob_dump_file_ctx (COB_CTX_COMPAT, name, fl);
 }
-
-#define IDX_HINT_MAX	3 + COB_MAX_SUBSCRIPTS * (7 + 1)
-#define VNAME_MAX	COB_MAX_WORDLEN + IDX_HINT_MAX + 1
-#define LVL_SIZE	16
 
 
 /* storing dump name into provided buffer (minimal size: VNAME_MAX),
@@ -799,7 +830,7 @@ setup_varname_with_indices (char *buffer, cob_u32_t	*subscript,
 }
 
 static void
-setup_lvlwrk_and_dump_null_adrs (char *lvlwrk, const int level,
+setup_lvlwrk_and_dump_null_adrs (cob_context *ctx, char *lvlwrk, const int level,
 		const void *data_ptr)
 {
 	if (level == 77
@@ -825,18 +856,9 @@ setup_lvlwrk_and_dump_null_adrs (char *lvlwrk, const int level,
 	}
 }
 
-static const unsigned char *dump_prev_data[COB_MAX_SUBSCRIPTS + 1];
-static unsigned int	dump_index = 0;
-
-static unsigned int	dump_idx[COB_MAX_SUBSCRIPTS + 1];
-static unsigned int	dump_idx_first[COB_MAX_SUBSCRIPTS + 1];
-static unsigned int	dump_idx_last[COB_MAX_SUBSCRIPTS + 1];
-static unsigned int	dump_skip[COB_MAX_SUBSCRIPTS + 1];
-
-static char	pending_dump_name[VNAME_MAX + LVL_SIZE + 1] = "";
 
 static void
-dump_pending_output (FILE* fp)
+dump_pending_output (cob_context *ctx, FILE* fp)
 {
 	if (pending_dump_name[0] == 0) {
 		return;
@@ -908,7 +930,7 @@ cob_dump_field_va_ctx (cob_context *ctx, const int level, const char *name, cob_
 	   is less than in the last run */
 	if (calc_dump_index < dump_index
 	 || dump_idx[calc_dump_index] > subscript[calc_dump_index]) {
-		dump_pending_output (fp);
+		dump_pending_output (ctx, fp);
 		for (;;) {
 			dump_idx[dump_index] = 0;
 			dump_prev_data[dump_index] = NULL;
@@ -943,7 +965,7 @@ cob_dump_field_va_ctx (cob_context *ctx, const int level, const char *name, cob_
 					return;
 				}
 
-				setup_lvlwrk_and_dump_null_adrs (lvlwrk, level, data);
+				setup_lvlwrk_and_dump_null_adrs (ctx, lvlwrk, level, data);
 				pos = sprintf (pending_dump_name, "%-10s", lvlwrk);
 				setup_varname_with_indices (pending_dump_name + pos,
 					subscript, indexes, name, 0);
@@ -955,7 +977,7 @@ cob_dump_field_va_ctx (cob_context *ctx, const int level, const char *name, cob_
 			/* ... or handle possibly last output (special case with off by one)...*/
 			if (pending_dump_name[0]) {
 				dump_idx_last[dump_index]--;
-				dump_pending_output (fp);
+				dump_pending_output (ctx, fp);
 				dump_idx_last[dump_index]++;
 			}
 			/* ... and reset data for next comparision */
@@ -965,7 +987,7 @@ cob_dump_field_va_ctx (cob_context *ctx, const int level, const char *name, cob_
 		}
 	}
 
-	setup_lvlwrk_and_dump_null_adrs (lvlwrk, level, f->data);
+	setup_lvlwrk_and_dump_null_adrs (ctx, lvlwrk, level, f->data);
 	name_length = setup_varname_with_indices (vname, subscript, indexes, name, 1);
 
 	if (dump_null_adrs) {
