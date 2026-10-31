@@ -465,9 +465,23 @@ Toutes les fonctions exportées de libcob ont une variante `NOM_ctx`, sauf :
   En T1.3, celles qui ont un état le prennent dans `cob_runtime`.
 
 Dans libcob, les appels depuis une fonction qui n'a pas encore `ctx`
-passent `COB_CTX_TODO` (882 occurrences à la fin de T1.2) : leur
-élimination par propagation de `ctx` aux fonctions internes est le
-premier travail de T1.3.
+passent `COB_CTX_TODO` : 883 occurrences à la fin de T1.2, 102 après la
+propagation de `ctx` aux fonctions internes (début de T1.3). Les
+restantes sont surtout l'initialisation du contexte local de fonctions
+frontières à revoir :
+- fonctions de niveau processus (`cob_init`, `cob_temp_name`,
+  `cob_check_version`, `cob_load_config`, signaux…) : leur état ira dans
+  `cob_runtime` ;
+- callbacks sans argument utilisateur : comparateurs de tri
+  (`sort_compare`, `cob_file_sort_compare`, `comp_field` → tri interne
+  prenant `ctx`), callbacks BDB (`db->app_private`), handler d'erreurs
+  libxml2 (`user_data`) ;
+- fonctions des tables de gestionnaires de fichiers (`cob_file_open`,
+  `relative_*`, `ix_bdb_*`, `lmdb_*`, `odbc_*`, `oci_*`, `isam_*`…) :
+  l'API interne des gestionnaires (`cob_fileio_funcs`) devra recevoir
+  `ctx`.
+Les routines `cob_sys_*` et l'API Micro Focus (`cobcapi.c`) lisent le
+contexte courant une fois à l'entrée : c'est leur forme définitive.
 
 ## 11. Points ouverts
 

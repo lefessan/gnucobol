@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-T1-DESIGN.md: status of the context propagation
 	* TXSERIES-T1-DESIGN.md: _ctx names and compatibility functions
 	* TXSERIES-T1-DESIGN.md, TXSERIES-T1-EXTERNALS.md,
 	  TXSERIES-T1-INVENTORY.md: new files, plan and design of the reentrant
