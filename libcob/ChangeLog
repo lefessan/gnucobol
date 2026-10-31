@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* strings.c (strings_state, cob_update_low_value, inspect_common,
+	  cob_inspect_converting_intern, cob_init_strings): LOW-VALUE field in
+	  the state of the context
 	* move.c (cob_move_all, cob_set_llcon, cob_get_u64_comp6): constant
 	  tables and local scratch field
 	* coblocal.h (cob_exit_fileio), common.c (cob_terminate_routines),
