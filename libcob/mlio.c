@@ -180,7 +180,6 @@ enum json_code_status {
 };
 
 
-static cob_global		*cobglobptr;
 
 /* Local functions */
 
@@ -214,7 +213,7 @@ get_xml_code (cob_context *ctx)
 
 /* set special register XML-EVENT */
 static void
-set_xml_event (enum cob_xml_event event)
+set_xml_event (cob_context *ctx, enum cob_xml_event event)
 {
 	/* note: it is up to the compiler to ensure that this constant
 	   is read-only (and therefore no overwriting of const data happens) */
@@ -403,7 +402,7 @@ add_xml_event_data_tag (struct xml_state *state, const xmlChar *name, size_t siz
    the size is calculated if not explicit specified (size -> -1)
    if the state is given then the text is copied to its buffer */
 static void
-set_xml_text (const int ntext, const void *data, const size_t size)
+set_xml_text (cob_context *ctx, const int ntext, const void *data, const size_t size)
 {
 	if (ntext) {
 		/* TODO (later): convert input data (libxml2 uses UTF8) to UTF-16
@@ -427,7 +426,7 @@ set_xml_text (const int ntext, const void *data, const size_t size)
    as optional XML-NAMESPACE-PREFIX / XML-NNAMESPACE-PREFIX
    the size is auto-calculated  */
 static void
-set_xml_namespace (const int ntext, const void *nsdata, const size_t ns_size,
+set_xml_namespace (cob_context *ctx, const int ntext, const void *nsdata, const size_t ns_size,
 		const void *prefix, const size_t prefix_size)
 {
 	if (ntext) {
@@ -597,7 +596,7 @@ is_valid_xml_name (const cob_field * const f)
 #if defined (WITH_XML2) || defined (WITH_CJSON) || defined (WITH_JSON_C)
 
 static cob_pic_symbol *
-get_pic_for_num_field (const size_t num_int_digits, const size_t num_dec_digits)
+get_pic_for_num_field (cob_context *ctx, const size_t num_int_digits, const size_t num_dec_digits)
 {
 	size_t	num_pic_symbols = (size_t)2 + (2 * !!num_dec_digits) + 1;
 	cob_pic_symbol	*pic = cob_malloc (num_pic_symbols * sizeof (cob_pic_symbol));
@@ -649,7 +648,7 @@ get_num (cob_context *ctx, cob_field * const f, void * (*strndup_func)(const cha
 	if (num_integer_digits == 0)
 		attr.digits++;
 
-	attr.pic = get_pic_for_num_field (num_integer_digits,
+	attr.pic = get_pic_for_num_field (ctx, num_integer_digits,
 					  num_decimal_digits);
 
 	/* Initialize field for nicely edited version */
@@ -1319,8 +1318,8 @@ int cob_xml_parse_ctx (cob_context *ctx, cob_field *in, cob_field *encoding, cob
 
 	/* initial setup of registers, ensuring they are available in the
 		processing procedure */
-	set_xml_text (0, "", 0);
-	set_xml_namespace (0, "", 0, NULL, 0);
+	set_xml_text (ctx, 0, "", 0);
+	set_xml_namespace (ctx, 0, "", 0, NULL, 0);
 
 	/* no state yet ? first call */
 	if (*saved_state == NULL) {
@@ -1328,7 +1327,7 @@ int cob_xml_parse_ctx (cob_context *ctx, cob_field *in, cob_field *encoding, cob
 		if (!in) {
 #if 0	/* seems like a codegen error, which should not happen */
 			set_xml_exception (ctx, XML_INTERNAL_ERROR);
-			set_xml_event (EVENT_EXCEPTION);
+			set_xml_event (ctx, EVENT_EXCEPTION);
 			return -1;
 #else
 			cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
@@ -1345,14 +1344,14 @@ int cob_xml_parse_ctx (cob_context *ctx, cob_field *in, cob_field *encoding, cob
 	if (!in->data) {
 		state->last_xml_code = XML_INTERNAL_ERROR;
 		set_xml_exception (ctx, XML_INTERNAL_ERROR);
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		return 0;
 	}
 	/* likely a separate error case: emtpy item */
 	if (is_empty (in)) {
 		state->last_xml_code = XML_INTERNAL_ERROR;
 		set_xml_exception (ctx, XML_INTERNAL_ERROR);
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		return 0;
 	}
 
@@ -1399,7 +1398,7 @@ int cob_xml_parse_ctx (cob_context *ctx, cob_field *in, cob_field *encoding, cob
 	/* we reached "end of input" (xmlss only?) and were not told to go on */
 	if (state->state == XML_PARSER_HAD_END_OF_INPUT) {
 		if (xml_code == 0) {
-			set_xml_event (EVENT_END_OF_DOCUMENT);
+			set_xml_event (ctx, EVENT_END_OF_DOCUMENT);
 			set_xml_code (ctx, 0);
 			state->state = XML_PARSER_FINISHED;
 			return 1;
@@ -1571,7 +1570,7 @@ xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *co
 }
 
 static void
-set_xml_code_parsing_error (const int libxml2_err) {
+set_xml_code_parsing_error (cob_context *ctx, const int libxml2_err) {
 	int xml_err = 0x00000018 /* 24 COMP in split field per IBM doc */
 				+ (libxml2_err << 8); /* second part with error number */
 #ifdef WORDS_BIGENDIAN	/* CHECKME: is that correct? */
@@ -1626,18 +1625,18 @@ xml_error_handler (void *user_data, LIBXML_CONST_ERROR_PTR err) {
 			cob_runtime_warning_ctx (ctx, _("XML PARSE setup for VALIDATE FILE (%d): %s"),
 				err->code, err->message);
 		}		
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		parse_state->last_xml_code = XML_PARSE_ERROR_FATAL;
 		parse_state->state = XML_PARSER_HAD_FATAL_ERROR;
-		set_xml_code_parsing_error (err->code);
+		set_xml_code_parsing_error (ctx, err->code);
 		break;
 	case XML_PARSER_VALIDATION_SETUP_MEM:
 		cob_runtime_warning_ctx (ctx, _("XML PARSE setup for VALIDATE (%d): %s"),
 			err->code, err->message);
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		parse_state->last_xml_code = XML_PARSE_ERROR_FATAL;
 		parse_state->state = XML_PARSER_HAD_FATAL_ERROR;
-		set_xml_code_parsing_error (err->code);
+		set_xml_code_parsing_error (ctx, err->code);
 		break;
 	case XML_PARSER_JUST_STARTED:
 	case XML_PARSER_DOCUMENT_START:
@@ -1786,7 +1785,7 @@ void xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field 
 			} else {
 				set_xml_exception (ctx, XML_PARSE_ERROR_MISC_COMPAT);
 			}
-			set_xml_event (EVENT_EXCEPTION);
+			set_xml_event (ctx, EVENT_EXCEPTION);
 			return;
 		}
 
@@ -1917,7 +1916,7 @@ xml_process_next_event (cob_context *ctx, struct xml_state *state)
 
 	state->event = event->next;
 
-	set_xml_event (event->event);
+	set_xml_event (ctx, event->event);
 	set_xml_code (ctx, 0);
 
 	switch (event->event) {
@@ -1979,7 +1978,7 @@ xml_process_next_event (cob_context *ctx, struct xml_state *state)
 		   second data is the libxml2 error code */
 		data = data->next;
 		if (data && data->data_len == 4) {
-			set_xml_code_parsing_error (atoi (data->data_ptr));
+			set_xml_code_parsing_error (ctx, atoi (data->data_ptr));
 		}
 		break;
 	/* TODO */
@@ -1997,12 +1996,12 @@ xml_process_next_event (cob_context *ctx, struct xml_state *state)
 	default:
 		state->last_xml_code = XML_INTERNAL_ERROR;
 		set_xml_exception (ctx, XML_INTERNAL_ERROR);
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		state->state = XML_PARSER_HAD_NONFATAL_ERROR;
 		return;
 	}
 
-	set_xml_text (ntext, text_data , text_len);
+	set_xml_text (ctx, ntext, text_data , text_len);
 }
 
 void xml_free_parse_memory (struct xml_state* state)
@@ -2084,7 +2083,7 @@ void xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field 
 	state->last_xml_code = XML_INTERNAL_ERROR;
 	set_xml_exception (ctx, XML_INTERNAL_ERROR);
 	cob_add_exception (ctx, COB_EC_IMP_FEATURE_DISABLED);
-	set_xml_event (EVENT_EXCEPTION);
+	set_xml_event (ctx, EVENT_EXCEPTION);
 	state->state = XML_PARSER_HAD_FATAL_ERROR;
 }
 
@@ -2234,7 +2233,6 @@ cob_init_mlio (cob_global * const g)
 #ifndef	HAVE_DESIGNATED_INITS
 	init_xml_event_list ();
 #endif
-	cobglobptr = g;
 }
 
 

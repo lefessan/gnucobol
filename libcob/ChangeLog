@@ -1,6 +1,36 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (cob_resolve_internal, cob_resolve_ctx, cob_resolve_cobol_ctx,
+	  cob_resolve_func_ctx, cob_call_field_ctx, cob_cancel_ctx, ...),
+	  cobcapi.c (cob_init_cobcapi, cob_get_param_field, cob_get_num_params,
+	  cob_put_field_str, cob_setup_field, cob_get_field_value, ...),
+	  coblocal.h (cob_init_prof, free_extfh_fcd, cob_create_tmpfile,
+	  cob_check_numval_f, cob_decimal_move_temp, cob_screen_set_mode),
+	  common.c (cob_exit_common, ss_terminate_routines,
+	  cob_terminate_routines, cob_get_source_line, set_source_location,
+	  cob_sig_handler, ...), fextfh.c (cob_sys_extfh, EXTFH3), fileio.c
+	  (cob_set_file_format, cob_file_save_status, lineseq_read,
+	  cob_file_external_addr_ctx, cob_pre_open_ctx, cob_pre_open_def_ctx,
+	  ...), fileio.h, fisam.c (cob_isam_init_fileio), flmdb.c
+	  (cob_lmdb_init_fileio), fsqlxfd.c (bld_fields, cob_load_xfd),
+	  intrinsic.c (get_seconds_past_midnight, cob_mod_or_rem, locale_time,
+	  format_time, cob_intr_binop_ctx, cob_intr_exception_file_ctx, ...),
+	  mlio.c (get_num, cob_xml_parse_ctx, xml_error_handler, xml_parse,
+	  xml_process_next_event, cob_init_mlio), move.c (cob_move_ctx,
+	  cob_get_int_ctx, cob_get_llint_ctx, cob_init_move,
+	  cob_put_s64_pic9_ctx), numeric.c (cob_decimal_get_ieee64dec,
+	  cob_decimal_get_ieee128dec, cob_add_packed, cob_decimal_get_packed,
+	  cob_decimal_get_display, cob_decimal_set_field_ctx, ...), profiling.c
+	  (cob_init_prof), reportio.c (cob_add_fields, cob_init_reportio),
+	  screenio.c (init_cob_screen_if_needed, cob_screen_init,
+	  field_is_zero_or_no_zero_suppression, satisfied_full_clause,
+	  satisfied_required_clause, finalize_field_input, ...), strings.c
+	  (inspect_common, cob_inspect_init_common_intern,
+	  cob_inspect_init_intern, cob_inspect_init_ctx,
+	  cob_inspect_init_converting_intern, cob_inspect_init_converting_ctx,
+	  ...), termio.c (cob_display_va_ctx, cob_accept_ctx, cob_init_termio):
+	  per-file copies of the global pointer replaced by ctx->glob
 	* fbdb.c (bdb_dupswap, bdb_setkey, bdb_bt_compare,
 	  ix_bdb_start_internal, ix_bdb_delete_internal, ix_bdb_open, ...):
 	  collating sequence of BDB keys in the DB handle

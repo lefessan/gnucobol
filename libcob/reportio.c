@@ -32,7 +32,6 @@
 #define	COB_MAYSWAP_32(x)	(COB_BSWAP_32((unsigned int)(x)))
 #endif
 
-static	cob_global	*cobrpglobptr = NULL;
 static	cob_settings	*cobrpsetptr = NULL;
 
 #ifndef TRUE
@@ -283,7 +282,7 @@ cob_add_fields (cob_context *ctx, cob_field *op1, cob_field *op2, cob_field *rsl
 	attr1.type	= COB_TYPE_NUMERIC_DISPLAY;
 	fld1.data	= (unsigned char*)data1;
 	memset(data1,'0',fld1.size);
-	cobrpglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	cob_move_ctx(ctx, op1, &fld1);
 
 #ifdef COB_DEBUG_LOG
@@ -1396,7 +1395,6 @@ void
 cob_init_reportio (cob_global *gptr, cob_settings *sptr)
 {
 	int		k;
-	cobrpglobptr = gptr;
 	cobrpsetptr  = sptr;
 	for(k=0; k < MAX_ACTIVE_REPORTS; k++)
 		active_reports[k] = NULL;

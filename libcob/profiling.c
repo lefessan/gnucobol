@@ -76,7 +76,6 @@ static LONGLONG 	qpc_freq = 0;
 #endif
 
 /* Remember static and dynamic configuration */
-static cob_global			*cobglobptr = NULL;
 static cob_settings			*cobsetptr = NULL;
 
 
@@ -161,7 +160,6 @@ prof_init_static ()
 void
 cob_init_prof (cob_global *lptr, cob_settings *sptr)
 {
-	cobglobptr = lptr;
 	cobsetptr  = sptr;
 }
 

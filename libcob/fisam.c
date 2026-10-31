@@ -61,15 +61,10 @@
 #define ISRECLEN isreclen
 #define ISSTAT1 isstat1
 #define ISSTAT2 isstat2
-#ifdef cobglobptr
-#undef cobglobptr
-#endif
 #ifdef cobsetptr
 #undef cobsetptr
 #endif
-#define cobglobptr	isam_globptr
 #define cobsetptr	isam_setptr
-static	cob_global		*isam_globptr;
 static	cob_settings	*isam_setptr;
 #if defined(WITH_VBISAM) && defined(WITH_DISAM)
 #undef WITH_DISAM
@@ -2193,7 +2188,6 @@ cob_isam_init_fileio (cob_context *ctx, cob_file_api *a)
 	}
 #endif
 #endif
-	isam_globptr = a->glbptr;
 	isam_setptr = a->setptr;
 }
 

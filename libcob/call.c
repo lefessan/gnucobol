@@ -168,7 +168,6 @@ static struct call_hash		**call_table;
 static struct struct_handle	*base_preload_ptr;
 static struct struct_handle	*base_dynload_ptr;
 
-static cob_global		*cobglobptr = NULL;
 static cob_settings		*cobsetptr = NULL;
 
 static char			**resolve_path;
@@ -788,7 +787,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 	unsigned char call_module_buff[COB_MAX_NAMELEN + 1];
 	const unsigned char *s;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Search the cache */
 	if (cache_check) {
@@ -1097,7 +1096,7 @@ cob_resolve_ctx (cob_context *ctx, const char *name)
 	char	*dirent;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
@@ -1125,12 +1124,12 @@ cob_resolve_cobol_ctx (cob_context *ctx, const char *name, const int fold_case, 
 	char	*dirent;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	entry = cob_chk_call_path (name, &dirent);
 	p = cob_resolve_internal (ctx, entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 1);
@@ -1143,7 +1142,7 @@ cob_resolve_cobol_ctx (cob_context *ctx, const char *name, const int fold_case, 
 		}
 		cob_set_exception_ctx (ctx, COB_EC_PROGRAM_NOT_FOUND);
 	}
-	cobglobptr->cob_call_name_hash = cob_get_name_hash (name);
+	ctx->glob.cob_call_name_hash = cob_get_name_hash (name);
 	return p;
 }
 
@@ -1160,7 +1159,7 @@ cob_resolve_func_ctx (cob_context *ctx, const char *name)
 	void	*p;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
@@ -1240,7 +1239,7 @@ cob_call_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_
 	void		*p;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
@@ -1262,7 +1261,7 @@ cob_call_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_
 	}
 
 	entry = cob_chk_call_path (name, &dirent);
-	cobglobptr->cob_call_name_hash = cob_get_name_hash (entry);
+	ctx->glob.cob_call_name_hash = cob_get_name_hash (entry);
 
 	/* Check if contained program - which may override otherwise
 	   loaded programs */
@@ -1355,7 +1354,7 @@ cob_cancel_ctx (cob_context *ctx, const char *name)
 	struct call_hash	*r;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!name) {
@@ -1405,7 +1404,7 @@ cob_cancel_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_cal
 	int	(*cancel_func)(const int);
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
@@ -1531,7 +1530,7 @@ cob_call_ctx (cob_context *ctx, const char *name, const int argc, void **argv)
 			);
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!name) {
@@ -1545,9 +1544,9 @@ cob_call_ctx (cob_context *ctx, const char *name, const int argc, void **argv)
 	/* LCOV_EXCL_STOP */
 	unifunc.funcvoid = cob_resolve_cobol_ctx (ctx, name, 0, 1);
 	/* Set number of parameters */
-	cobglobptr->cob_call_params = argc;
-	cobglobptr->cob_call_from_c = 1;
-	cobglobptr->cob_call_name_hash = 0;
+	ctx->glob.cob_call_params = argc;
+	ctx->glob.cob_call_from_c = 1;
+	ctx->glob.cob_call_name_hash = 0;
 	for (i = 0; i < argc; ++i) {
 		pargv[i] = argv[i];
 	}	funcint = (int (*)(
@@ -1737,7 +1736,7 @@ cob_call_cobol_va_ctx (cob_context *ctx, const char *name, const int argc, va_li
 	int			i;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
@@ -1752,9 +1751,9 @@ cob_call_cobol_va_ctx (cob_context *ctx, const char *name, const int argc, va_li
 	unifunc.funcvoid = cob_resolve_cobol_ctx (ctx, name, 0, 1);
 	pargv = cob_malloc (MAX_CALL_FIELD_PARAMS * sizeof(void *));
 	/* Set number of parameters */
-	cobglobptr->cob_call_params = argc;
-	cobglobptr->cob_call_from_c = 1;
-	cobglobptr->cob_call_name_hash = 0;
+	ctx->glob.cob_call_params = argc;
+	ctx->glob.cob_call_from_c = 1;
+	ctx->glob.cob_call_name_hash = 0;
 	va_copy (ap, cob_va_args);
 	for (i = 0; i < argc; ++i) {
 		pargv[i] = va_arg (ap, void *);
@@ -1871,7 +1870,7 @@ cob_call_entry_va_ctx (cob_context *ctx, void *entry, const int argc, va_list co
 	int			i;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
@@ -1886,9 +1885,9 @@ cob_call_entry_va_ctx (cob_context *ctx, void *entry, const int argc, va_list co
 	unifunc.funcvoid = entry;
 	pargv = cob_malloc (MAX_CALL_FIELD_PARAMS * sizeof(void *));
 	/* Set number of parameters */
-	cobglobptr->cob_call_params = argc;
-	cobglobptr->cob_call_from_c = 1;
-	cobglobptr->cob_call_name_hash = 0;
+	ctx->glob.cob_call_params = argc;
+	ctx->glob.cob_call_from_c = 1;
+	ctx->glob.cob_call_name_hash = 0;
 	va_copy (ap, cob_va_args);
 	for (i = 0; i < argc; ++i) {
 		pargv[i] = va_arg (ap, void *);
@@ -2003,7 +2002,7 @@ void *
 cob_savenv_ctx (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!jbuf) {
@@ -2044,7 +2043,7 @@ void
 cob_longjmp_ctx (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!jbuf) {
@@ -2201,7 +2200,6 @@ cob_init_call (cob_context *ctx, cob_global *lptr, cob_settings* sptr, const int
 	const unsigned char		*pv;
 #endif
 
-	cobglobptr = lptr;
 	cobsetptr = sptr;
 
 	base_preload_ptr = NULL;

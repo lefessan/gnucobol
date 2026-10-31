@@ -172,14 +172,14 @@
 	COB_ATTR_INIT_A(attr,u,v,x,y,z)
 
 #define COB_GET_SIGN(f)		\
-	(COB_FIELD_HAVE_SIGN (f) ? cob_real_get_sign (f, 0) : 0)
+	(COB_FIELD_HAVE_SIGN (f) ? cob_real_get_sign (ctx, f, 0) : 0)
 #define COB_GET_SIGN_ADJUST(f)		\
-	(COB_FIELD_HAVE_SIGN (f) ? cob_real_get_sign (f, 1) : 0)
+	(COB_FIELD_HAVE_SIGN (f) ? cob_real_get_sign (ctx, f, 1) : 0)
 #define COB_PUT_SIGN(f,s)	\
-	do { if (COB_FIELD_HAVE_SIGN (f)) cob_real_put_sign (f, s); } ONCE_COB
+	do { if (COB_FIELD_HAVE_SIGN (f)) cob_real_put_sign (ctx, f, s); } ONCE_COB
 #define COB_PUT_SIGN_ADJUSTED(f,s)	\
-	do { if (s == -2 || s == 2) { if (s == 2) cob_real_put_sign (f, 1); \
-	     else cob_real_put_sign (f, -1); }} ONCE_COB
+	do { if (s == -2 || s == 2) { if (s == 2) cob_real_put_sign (ctx, f, 1); \
+	     else cob_real_put_sign (ctx, f, -1); }} ONCE_COB
 
 #ifdef	COB_PARAM_CHECK
 #define	COB_CHK_PARMS(x,z)	\
@@ -198,11 +198,11 @@
 #define COB_D2I(x)		((x) & 0x0F)
 #define COB_I2D(x)		(char) ('0' + (x))
 
-#define	COB_MODULE_PTR		cobglobptr->cob_current_module
-#define	COB_TERM_BUFF		cobglobptr->cob_term_buff
-#define	COB_ACCEPT_STATUS	cobglobptr->cob_accept_status
-#define	COB_MAX_Y_COORD		cobglobptr->cob_max_y
-#define	COB_MAX_X_COORD		cobglobptr->cob_max_x
+#define	COB_MODULE_PTR		ctx->glob.cob_current_module
+#define	COB_TERM_BUFF		ctx->glob.cob_term_buff
+#define	COB_ACCEPT_STATUS	ctx->glob.cob_accept_status
+#define	COB_MAX_Y_COORD		ctx->glob.cob_max_y
+#define	COB_MAX_X_COORD		ctx->glob.cob_max_x
 
 #define	COB_DISP_TO_STDERR	cobsetptr->cob_disp_to_stderr
 #define	COB_BEEP_VALUE		cobsetptr->cob_beep_value
@@ -459,7 +459,7 @@ COB_HIDDEN void		cob_init_intrinsic	(cob_global *);
 COB_HIDDEN void		cob_init_strings	(cob_global *);
 COB_HIDDEN void		cob_init_move		(cob_global *, cob_settings *);
 COB_HIDDEN void		cob_init_prof		(cob_global *, cob_settings *);
-COB_HIDDEN void		cob_init_screenio	(cob_global *, cob_settings *);
+COB_HIDDEN void		cob_init_screenio	(cob_context *, cob_global *, cob_settings *);
 COB_HIDDEN void		cob_init_mlio		(cob_global * const);
 
 COB_HIDDEN const char *cob_statement_name[STMT_MAX_ENTRY];
@@ -476,8 +476,8 @@ COB_HIDDEN void		cob_file_fcd_sync	(cob_context *, cob_file*);
 COB_HIDDEN void		cob_fcd_file_sync	(cob_context *, cob_file*, char*);
 COB_HIDDEN void		free_extfh_fcd		(cob_context *);
 
-COB_HIDDEN void		cob_exit_screen		(void);
-COB_HIDDEN void		cob_exit_screen_from_signal	(int);
+COB_HIDDEN void		cob_exit_screen		(cob_context *);
+COB_HIDDEN void		cob_exit_screen_from_signal	(cob_context *, int);
 COB_HIDDEN void		cob_exit_numeric	(void);
 COB_HIDDEN void		cob_exit_fileio_msg_only	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio		(cob_context *);
@@ -489,10 +489,10 @@ COB_HIDDEN void		cob_exit_strings	(cob_context *);
 COB_HIDDEN void		cob_exit_mlio		(void);
 
 COB_HIDDEN FILE		*cob_create_tmpfile	(const char *);
-COB_HIDDEN int		cob_check_numval_f	(const cob_field *);
+COB_HIDDEN int		cob_check_numval_f	(cob_context *, const cob_field *);
 
-COB_HIDDEN int		cob_real_get_sign	(cob_field *, const int);
-COB_HIDDEN void		cob_real_put_sign	(cob_field *, const int);
+COB_HIDDEN int		cob_real_get_sign	(cob_context *, cob_field *, const int);
+COB_HIDDEN void		cob_real_put_sign	(cob_context *, cob_field *, const int);
 
 #ifndef COB_WITHOUT_DECIMAL
 COB_HIDDEN void		cob_decimal_init2	(cob_decimal *, const cob_uli_t);
@@ -502,7 +502,7 @@ COB_HIDDEN void		cob_decimal_get_mpf (mpf_t, const cob_decimal *);
 COB_HIDDEN void		cob_decimal_setget_fld	(cob_context *, cob_field *, cob_field *,
 						 const int);
 COB_HIDDEN void		cob_decimal_move_temp	(cob_context *, cob_field *, cob_field *);
-COB_HIDDEN void		cob_move_display_to_packed (cob_field *, cob_field *);
+COB_HIDDEN void		cob_move_display_to_packed (cob_context *, cob_field *, cob_field *);
 COB_HIDDEN void		cob_move_packed_to_display (cob_context *, cob_field *, cob_field *);
 
 COB_HIDDEN void		cob_display_common	(cob_context *, const cob_field *, FILE *);
@@ -511,7 +511,7 @@ COB_HIDDEN void		cob_print_realbin	(cob_context *, const cob_field *, FILE *,
 						 const int);
 
 COB_HIDDEN void		cob_screen_set_mode	(cob_context *, const cob_u32_t);
-COB_HIDDEN void		cob_settings_screenio	(void);
+COB_HIDDEN void		cob_settings_screenio	(cob_context *);
 
 COB_HIDDEN int		cob_get_last_exception_code	(void);
 COB_HIDDEN void		cob_add_exception (cob_context *, const int);

@@ -157,7 +157,6 @@ enum screen_statement {
 
 /* Local variables */
 
-static cob_global		*cobglobptr;
 static cob_settings		*cobsetptr;
 
 /* Local variables when screenio activated */
@@ -322,10 +321,10 @@ GCC_POP()
 static COB_INLINE COB_A_INLINE void
 init_cob_screen_if_needed (cob_context *ctx)
 {
-	if (!cobglobptr) {
+	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
-	if (!cobglobptr->cob_screen_initialized) {
+	if (!ctx->glob.cob_screen_initialized) {
 		int ret = cob_screen_init (ctx);
 		if (ret) {
 			/* possibly adjust all callers to raise an exception */
@@ -1133,7 +1132,7 @@ cob_screen_attr (cob_context *ctx, cob_field *fgc, cob_field *bgc, cob_flags_t a
 static int
 cob_screen_init (cob_context *ctx)
 {
-	if (cobglobptr->cob_screen_initialized) {
+	if (ctx->glob.cob_screen_initialized) {
 		return 0;
 	}
 
@@ -1170,11 +1169,11 @@ cob_screen_init (cob_context *ctx)
 
 #if	0	/* RXWRXW - setlocale */
 #ifdef	HAVE_SETLOCALE
-	if (cobglobptr->cob_locale_orig) {
-		setlocale (LC_ALL, cobglobptr->cob_locale_orig);
+	if (ctx->glob.cob_locale_orig) {
+		setlocale (LC_ALL, ctx->glob.cob_locale_orig);
 	}
-	if (cobglobptr->cob_locale_ctype) {
-		setlocale (LC_CTYPE, cobglobptr->cob_locale_ctype);
+	if (ctx->glob.cob_locale_ctype) {
+		setlocale (LC_CTYPE, ctx->glob.cob_locale_ctype);
 	}
 #endif
 #endif
@@ -1191,15 +1190,15 @@ cob_screen_init (cob_context *ctx)
 	   still require this pointer */
 	mywin = stdscr;
 
-	cobglobptr->cob_screen_initialized = 1;
+	ctx->glob.cob_screen_initialized = 1;
 #ifdef	HAVE_USE_LEGACY_CODING
 	use_legacy_coding (2);
 #endif
 
 #if	0	/* RXWRXW - setlocale */
 #ifdef	HAVE_SETLOCALE
-	if (cobglobptr->cob_locale) {
-		setlocale (LC_ALL, cobglobptr->cob_locale);
+	if (ctx->glob.cob_locale) {
+		setlocale (LC_ALL, ctx->glob.cob_locale);
 		setlocale (LC_CTYPE, "C");
 	}
 #endif
@@ -1256,7 +1255,7 @@ cob_screen_init (cob_context *ctx)
 	wattrset (mywin, A_NORMAL);
 	getmaxyx (mywin, COB_MAX_Y_COORD, COB_MAX_X_COORD);
 
-	cob_settings_screenio ();
+	cob_settings_screenio (ctx);
 
 	/* Possible alternative definitions for ALT Keys */
 #ifndef ALT_DEL
@@ -2005,7 +2004,7 @@ field_is_empty (cob_screen *s)
 }
 
 static int
-field_is_zero (cob_screen *s)
+field_is_zero (cob_context *ctx, cob_screen *s)
 {
 	unsigned char	*data = s->field->data;
 	size_t		size = s->field->size;
@@ -2041,7 +2040,7 @@ pic_has_zero_suppression (const cob_pic_symbol *pic)
 }
 
 static int
-get_num_int_digits_for_no_zero_sup (const cob_pic_symbol *pic)
+get_num_int_digits_for_no_zero_sup (cob_context *ctx, const cob_pic_symbol *pic)
 {
 	int	i;
 	int	num_digits = 0;
@@ -2065,7 +2064,7 @@ get_num_int_digits_for_no_zero_sup (const cob_pic_symbol *pic)
 }
 
 static int
-field_is_zero_or_no_zero_suppression (cob_screen *s)
+field_is_zero_or_no_zero_suppression (cob_context *ctx, cob_screen *s)
 {
 	const cob_pic_symbol	*pic = COB_FIELD_PIC (s->field);
 	size_t		i;
@@ -2074,11 +2073,11 @@ field_is_zero_or_no_zero_suppression (cob_screen *s)
 	int		num_integer_digits;
 	int		num_digits_seen = 0;
 
-	if (field_is_zero (s) || !pic_has_zero_suppression (pic)) {
+	if (field_is_zero (ctx, s) || !pic_has_zero_suppression (pic)) {
 		return 1;
 	}
 
-	num_integer_digits = get_num_int_digits_for_no_zero_sup (pic);
+	num_integer_digits = get_num_int_digits_for_no_zero_sup (ctx, pic);
 
 	/*
 	  Verify there are sufficient non-zero digits before a decimal
@@ -2109,30 +2108,30 @@ field_is_full (cob_screen *s)
 }
 
 static int
-satisfied_full_clause (cob_screen *s)
+satisfied_full_clause (cob_context *ctx, cob_screen *s)
 {
 	if (!(s->attr & COB_SCREEN_FULL)) {
 		return 1;
 	}
 
 	if (COB_FIELD_IS_NUMERIC (s->field)) {
-		return !field_is_zero (s);
+		return !field_is_zero (ctx, s);
 	} else if (COB_FIELD_TYPE (s->field) == COB_TYPE_NUMERIC_EDITED) {
-		return field_is_zero_or_no_zero_suppression (s);
+		return field_is_zero_or_no_zero_suppression (ctx, s);
 	} else { /* field is alphanumeric */
 		return field_is_full (s) || field_is_empty (s);
 	}
 }
 
 static int
-satisfied_required_clause (cob_screen *s)
+satisfied_required_clause (cob_context *ctx, cob_screen *s)
 {
 	if (!(s->attr & COB_SCREEN_REQUIRED)) {
 		return 1;
 	}
 
 	if (cob_field_is_numeric_or_numeric_edited (s->field)) {
-		return !field_is_zero (s);
+		return !field_is_zero (ctx, s);
 	} else { /* field is alphanumeric */
 		return !field_is_empty (s);
 	}
@@ -2209,7 +2208,7 @@ finalize_field_input (cob_context *ctx, cob_screen *s)
 		format_field (ctx, s);
 	}
 
-	if (!satisfied_full_clause (s) || !satisfied_required_clause (s)) {
+	if (!satisfied_full_clause (ctx, s) || !satisfied_required_clause (ctx, s)) {
 		return 1;
 	}
 
@@ -2236,7 +2235,7 @@ finalize_all_fields (cob_context *ctx, struct cob_inp_struct *sptr, const size_t
    square cursor (off) - note: the cursor change may has no
    effect in all curses implementations / terminals */
 static void
-cob_toggle_insert ()
+cob_toggle_insert (cob_context *ctx)
 {
 	if (COB_INSERT_MODE == 0) {
 		COB_INSERT_MODE = 1;     /* on */
@@ -2244,7 +2243,7 @@ cob_toggle_insert ()
 	else {
 		COB_INSERT_MODE = 0;     /* off */
 	}
-	cob_settings_screenio ();
+	cob_settings_screenio (ctx);
 }
 
 #define SET_FLD_AND_DATA_REFS(curr_index,structure,scrdef,sline,scolumn,right_pos,field_data) \
@@ -2359,7 +2358,7 @@ is_number_with_pic_symbol (cob_field * const f, const char symbol)
 }
 
 static int
-has_decimal_point (cob_field * const f)
+has_decimal_point (cob_context *ctx, cob_field * const f)
 {
 	return is_number_with_pic_symbol (f, COB_MODULE_PTR->decimal_point);
 }
@@ -2378,7 +2377,7 @@ get_pic_symbol_offset (cob_field * const f, const char symbol)
 }
 
 static int
-get_decimal_point_offset (cob_field * const f)
+get_decimal_point_offset (cob_context *ctx, cob_field * const f)
 {
 	return get_pic_symbol_offset (f, COB_MODULE_PTR->decimal_point);
 }
@@ -2448,11 +2447,11 @@ shift_right (cob_context *ctx, cob_screen * const s, const int cline, const int 
 }
 
 static int
-at_offset_from_decimal_point (cob_field * const f, const int scolumn,
+at_offset_from_decimal_point (cob_context *ctx, cob_field * const f, const int scolumn,
 			      const int ccolumn, const int offset)
 {
-	return has_decimal_point (f)
-		&& ccolumn == offset + scolumn + get_decimal_point_offset (f);
+	return has_decimal_point (ctx, f)
+		&& ccolumn == offset + scolumn + get_decimal_point_offset (ctx, f);
 }
 
 /* Move cursor and data pointer to initial position when entering a field */
@@ -2466,13 +2465,13 @@ move_to_initial_field_pos (cob_context *ctx, cob_field * const f, const int slin
 	*data_ptr = f->data;
 
 	if (COB_INSERT_MODE && cob_field_is_numeric_or_numeric_edited (f)) {
-		if (has_decimal_point (f)) {
+		if (has_decimal_point (ctx, f)) {
 			if (to_right_side) {
 				/* At leftmost decimal digit */
-				offset = get_decimal_point_offset (f) + 1;
+				offset = get_decimal_point_offset (ctx, f) + 1;
 			} else {
 				/* At rightmost integer digit */
-				offset = get_decimal_point_offset (f) - 1;
+				offset = get_decimal_point_offset (ctx, f) - 1;
 			}
 			*data_ptr += offset;
 			return cob_move_cursor (ctx, sline, scolumn + offset);
@@ -2494,12 +2493,12 @@ move_to_initial_field_pos (cob_context *ctx, cob_field * const f, const int slin
 
 /* TO-DO: Unify with "Shift data to insert character" logic */
 static int
-can_insert_left (cob_field * const f, const unsigned char leftmost_char,
+can_insert_left (cob_context *ctx, cob_field * const f, const unsigned char leftmost_char,
 		 const int ccolumn)
 {
 	if (cob_field_is_numeric_or_numeric_edited (f)) {
-		if (has_decimal_point (f) &&
-		    ccolumn > get_decimal_point_offset (f)) {
+		if (has_decimal_point (ctx, f) &&
+		    ccolumn > get_decimal_point_offset (ctx, f)) {
 			return 0;
 		} else {
 			return leftmost_char == '0'
@@ -2707,7 +2706,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 			/* Backspace key. */
 			/* Don't allow backspacing over a decimal point */
 			if (ccolumn > scolumn
-			    && !at_offset_from_decimal_point (s->field, scolumn, ccolumn, 1)) {
+			    && !at_offset_from_decimal_point (ctx, s->field, scolumn, ccolumn, 1)) {
 				at_eof = 0;
 				/* Shift remainder left with cursor. */
 				for (count = ccolumn; count < right_pos + 1; count++) {
@@ -2776,12 +2775,12 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 			continue;
 		case KEY_IC:
 			/* Insert key toggle */
-			cob_toggle_insert();
+			cob_toggle_insert(ctx);
 			continue;
 		case KEY_DC:
 			/* Delete key. */
 			/* Don't allow deletion of decimal point */
-			if (at_offset_from_decimal_point (s->field, scolumn, ccolumn, 0)) {
+			if (at_offset_from_decimal_point (ctx, s->field, scolumn, ccolumn, 0)) {
 				cob_beep ();
 				continue;
 			}
@@ -2830,13 +2829,13 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 		case '.':
 		case ',':
 			if (keyp != COB_MODULE_PTR->decimal_point
-			    || !has_decimal_point (s->field)) {
+			    || !has_decimal_point (ctx, s->field)) {
 				break;
 			}
 
 			finalize_field_input (ctx, s);
 			/* Move cursor to character after decimal point */
-			ccolumn = scolumn + get_decimal_point_offset (s->field) + 1;
+			ccolumn = scolumn + get_decimal_point_offset (ctx, s->field) + 1;
 			cob_move_cursor (ctx, cline, ccolumn);
 			p = s->field->data + ccolumn - scolumn;
 			continue;
@@ -2923,7 +2922,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 			/* Numeric field check. */
 			if (cob_field_is_numeric_or_numeric_edited (s->field)
 			    && ((keyp != '+' && keyp != '-' && (keyp < '0' || keyp > '9'))
-				|| at_offset_from_decimal_point (s->field, scolumn, ccolumn, 0))) {
+				|| at_offset_from_decimal_point (ctx, s->field, scolumn, ccolumn, 0))) {
 				cob_beep ();
 				continue;
 			}
@@ -2938,9 +2937,9 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 			if (COB_INSERT_MODE) {
 				/* Shift data to insert character */
 				if (cob_field_is_numeric_or_numeric_edited (s->field)) {
-					has_dp = has_decimal_point (s->field);
+					has_dp = has_decimal_point (ctx, s->field);
 					if (has_dp) {
-						integer_part_end = scolumn + get_decimal_point_offset (s->field);
+						integer_part_end = scolumn + get_decimal_point_offset (ctx, s->field);
 					} else {
 						integer_part_end = right_pos;
 					}
@@ -3034,7 +3033,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 					cob_beep ();
 				} else {
 					at_eof = !COB_INSERT_MODE
-						|| !can_insert_left (s->field, *s->field->data, ccolumn);
+						|| !can_insert_left (ctx, s->field, *s->field->data, ccolumn);
 				}
 			} else if (fix_position) {
 				cob_move_cursor (ctx, cline, ccolumn);
@@ -3364,7 +3363,7 @@ screen_accept (cob_context *ctx, cob_screen *s, const int line, const int column
 	} else {
 		memset (cob_base_inp, 0, COB_INP_SIZE);
 	}
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	cob_current_y = 0;
 	cob_current_x = 0;
 	totl_index = 0;
@@ -3600,7 +3599,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 		scrollok (mywin, 0);
 		refresh_mywin (mywin);
 	}
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	status = cob_move_cursor (ctx, sline, scolumn);
 	if (status != ERR) {
@@ -4048,7 +4047,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 			continue;
 		case KEY_IC:
 			/* Insert key toggle */
-			cob_toggle_insert ();
+			cob_toggle_insert (ctx);
 			continue;
 		case KEY_DC:
 			/* Delete key. */
@@ -4614,13 +4613,13 @@ cob_screen_set_mode (cob_context *ctx, const cob_u32_t smode)
 	/* note: called internally only, so no need to check for cobglobptr */
 
 	if (!smode) {
-		if (cobglobptr->cob_screen_initialized) {
+		if (ctx->glob.cob_screen_initialized) {
 			refresh_mywin (mywin);
 			def_prog_mode ();
 			endwin ();
 		}
 	} else {
-		if (cobglobptr->cob_screen_initialized) {
+		if (ctx->glob.cob_screen_initialized) {
 			reset_prog_mode ();
 			refresh_mywin (mywin);
 		} else {
@@ -4742,15 +4741,15 @@ cob_display_formatted_text (const char *fmt, ...)
 }
 
 void
-cob_exit_screen (void)
+cob_exit_screen (cob_context *ctx)
 {
 	cob_flags_t	flags;
 	char		exit_msg[COB_MINI_BUFF];
 
-	if (!cobglobptr) {
+	if (!ctx) {
 		return;
 	}
-	if (cobglobptr->cob_screen_initialized) {
+	if (ctx->glob.cob_screen_initialized) {
 		if (pending_accept && cobsetptr->cob_exit_wait) {
 			/* FIXME: we likely should position to either the very last line or
 			          the last line since last cleanup + 1 before; problem:
@@ -4768,12 +4767,12 @@ cob_exit_screen (void)
 			if (COB_MOUSE_FLAGS & 1024) {
 				/* disable mouse movement to exit the following ACCEPT OMITTED */
 				COB_MOUSE_FLAGS &= ~1024;
-				cob_settings_screenio ();
+				cob_settings_screenio (ctx);
 			}
 			field_accept_from_curpos (NULL, NULL, NULL, NULL, NULL, NULL, NULL, flags);
 			mywin = savwin;
 		}
-		cobglobptr->cob_screen_initialized = 0;
+		ctx->glob.cob_screen_initialized = 0;
 #if 0 /* CHECKME: Shouldn't be necessary */
 		wclear (mywin);
 		cob_move_to_beg_of_last_line ();
@@ -4807,13 +4806,13 @@ cob_exit_screen (void)
 
 /* minimal exit from curses screen - without any cleanup */
 void
-cob_exit_screen_from_signal (int ss_only)
+cob_exit_screen_from_signal (cob_context *ctx, int ss_only)
 {
 	/* note: we don't care about memory cleanup here, as this may
 	   lead to a lock or otherwise issues when our memory is broken
 	   (=explicit when coming from SIGSEGV / SIGBUS / SIGABRT fom libc) */
 
-	if (!cobglobptr) {
+	if (!ctx) {
 		return;
 	}
 
@@ -4827,7 +4826,7 @@ cob_exit_screen_from_signal (int ss_only)
 	COB_UNUSED (ss_only);
 #endif
 
-	if (cobglobptr->cob_screen_initialized) {
+	if (ctx->glob.cob_screen_initialized) {
 		endwin ();
 	}
 }
@@ -4841,13 +4840,13 @@ cob_screen_init (cob_context *ctx)
 }
 
 void
-cob_exit_screen (void)
+cob_exit_screen (cob_context *ctx)
 {
 	/* nothing possible to do here */
 }
 
 void
-cob_exit_screen_from_signal (int signal_safe_only)
+cob_exit_screen_from_signal (cob_context *ctx, int signal_safe_only)
 {
 	/* nothing possible to do here */
 	COB_UNUSED (signal_safe_only);
@@ -5069,7 +5068,7 @@ cob_sys_sound_bell (void)
 		return 0;
 	}
 #ifdef	WITH_EXTENDED_SCREENIO
-	if (!cobglobptr->cob_screen_initialized
+	if (!ctx->glob.cob_screen_initialized
 	 && COB_BEEP_VALUE != 2) {
 		int ret = cob_screen_init (ctx);
 		if (ret) {
@@ -5155,6 +5154,7 @@ cob_sys_get_csr_pos (unsigned char *fld)
 int
 cob_sys_get_char (unsigned char *fld)
 {
+	cob_context	*ctx = cob_get_current_context ();
 #ifdef	WITH_EXTENDED_SCREENIO
 	int ret;
 #endif
@@ -5367,10 +5367,10 @@ cob_get_scr_lines (void)
 
 /* check and handle adjustments to settings concerning screenio */
 void
-cob_settings_screenio (void)
+cob_settings_screenio (cob_context *ctx)
 {
 #ifdef	WITH_EXTENDED_SCREENIO
-	if (!cobglobptr || !cobglobptr->cob_screen_initialized) {
+	if (!ctx || !ctx->glob.cob_screen_initialized) {
 		return;
 	}
 
@@ -5457,16 +5457,15 @@ cob_settings_screenio (void)
 }
 
 void
-cob_init_screenio (cob_global *lptr, cob_settings *sptr)
+cob_init_screenio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 {
-	cobglobptr = lptr;
 	cobsetptr  = sptr;
 	if (!cobsetptr->cob_exit_msg || !cobsetptr->cob_exit_msg[0]) {
 		cobsetptr->cob_exit_msg =
 			cob_strdup (_("end of program, please press a key to exit"));
 	}
 
-	cob_settings_screenio ();
+	cob_settings_screenio (ctx);
 }
 
 /* These functions are only defined if we have PANELS */

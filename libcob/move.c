@@ -37,7 +37,6 @@
 #define	COB_LIB_EXPIMP
 #include "coblocal.h"
 
-static cob_global	*cobglobptr;
 static cob_settings	*cobsetptr;
 
 #if	0	/* RXWRXW local edit symbols */
@@ -389,7 +388,7 @@ cob_move_display_to_display (cob_context *ctx, cob_field *f1, cob_field *f2)
 }
 
 static void
-cob_move_display_to_alphanum (cob_field *f1, cob_field *f2)
+cob_move_display_to_alphanum (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	unsigned char	*data1 = COB_FIELD_DATA (f1);
 	unsigned char	*data2 = f2->data;
@@ -482,7 +481,7 @@ cob_move_alphanum_to_alphanum (cob_field *f1, cob_field *f2)
 /* Binary Coded Decimal (BCD) - PACKED-DECIMAL (COMP-3) and COMP-6 */
 
 void
-cob_move_display_to_packed (cob_field *f1, cob_field *f2)
+cob_move_display_to_packed (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	/************************************************************/
 	/*                                                          */
@@ -1447,7 +1446,7 @@ cob_move_edited_to_display (cob_context *ctx, cob_field *f1, cob_field *f2)
 }
 
 static void
-cob_move_alphanum_to_edited (cob_field *f1, cob_field *f2)
+cob_move_alphanum_to_edited (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	const cob_pic_symbol	*p;
 	unsigned char	*dst = f2->data;
@@ -1715,7 +1714,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 			cob_move_display_to_display (ctx, src, dst);
 			return;
 		case COB_TYPE_NUMERIC_PACKED:
-			cob_move_display_to_packed (src, dst);
+			cob_move_display_to_packed (ctx, src, dst);
 			return;
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
@@ -1740,11 +1739,11 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 					       cob_max_int (0, COB_FIELD_SCALE (src)));
 				return;
 			} else {
-				cob_move_alphanum_to_edited (src, dst);
+				cob_move_alphanum_to_edited (ctx, src, dst);
 				return;
 			}
 		default:
-			cob_move_display_to_alphanum (src, dst);
+			cob_move_display_to_alphanum (ctx, src, dst);
 			return;
 		}
 
@@ -1918,7 +1917,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		case COB_TYPE_ALPHANUMERIC_EDITED:
-			cob_move_alphanum_to_edited (src, dst);
+			cob_move_alphanum_to_edited (ctx, src, dst);
 			return;
 		default:
 			cob_move_alphanum_to_alphanum (src, dst);
@@ -2077,7 +2076,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		case COB_TYPE_ALPHANUMERIC_EDITED:
-			cob_move_alphanum_to_edited (src, dst);
+			cob_move_alphanum_to_edited (ctx, src, dst);
 			return;
 		default:
 			cob_move_alphanum_to_alphanum (src, dst);
@@ -2343,7 +2342,7 @@ packed_get_long_long (cob_field *field)
 }
 
 static int
-cob_display_get_int (cob_field *f)
+cob_display_get_int (cob_context *ctx, cob_field *f)
 {
 	const short	scale = COB_FIELD_SCALE (f);
 	const unsigned char	*data = COB_FIELD_DATA (f);
@@ -2380,7 +2379,7 @@ cob_display_get_int (cob_field *f)
 }
 
 static cob_s64_t
-display_get_long_long (cob_field *f)
+display_get_long_long (cob_context *ctx, cob_field *f)
 {
 	const short	scale = COB_FIELD_SCALE (f);
 	const unsigned char	*data = COB_FIELD_DATA (f);
@@ -2437,7 +2436,7 @@ cob_get_int_ctx (cob_context *ctx, cob_field *f)
 {
 	switch (COB_FIELD_TYPE (f)) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		return cob_display_get_int (f);
+		return cob_display_get_int (ctx, f);
 	case COB_TYPE_NUMERIC_PACKED:
 		return cob_packed_get_int (f);
 	case COB_TYPE_NUMERIC_BINARY:
@@ -2478,7 +2477,7 @@ cob_get_llint_ctx (cob_context *ctx, cob_field *f)
 {
 	switch (COB_FIELD_TYPE (f)) {
 	case COB_TYPE_NUMERIC_DISPLAY:
-		return display_get_long_long (f);
+		return display_get_long_long (ctx, f);
 	case COB_TYPE_NUMERIC_BINARY:
 	case COB_TYPE_NUMERIC_COMP5:
 		{
@@ -2581,7 +2580,6 @@ cob_set_compx (cob_field *f, const cob_s64_t n)
 void
 cob_init_move (cob_global *lptr, cob_settings *sptr)
 {
-	cobglobptr = lptr;
 	cobsetptr  = sptr;
 }
 
@@ -3195,7 +3193,7 @@ cob_put_s64_pic9_ctx (cob_context *ctx, cob_s64_t val, void *mem, int len)
 	cob_s64_t	num;
 	cob_u8_t	*p = mem;
 
-	if (!cobglobptr || !COB_MODULE_PTR) {
+	if (!ctx || !COB_MODULE_PTR) {
 		return;
 	}
 
