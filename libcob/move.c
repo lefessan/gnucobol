@@ -37,7 +37,6 @@
 #define	COB_LIB_EXPIMP
 #include "coblocal.h"
 
-static cob_settings	*cobsetptr;
 
 #if	0	/* RXWRXW local edit symbols */
 static unsigned int	cob_locale_edit;
@@ -2580,7 +2579,6 @@ cob_set_compx (cob_field *f, const cob_s64_t n)
 void
 cob_init_move (cob_global *lptr, cob_settings *sptr)
 {
-	cobsetptr  = sptr;
 }
 
 /*

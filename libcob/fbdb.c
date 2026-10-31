@@ -375,18 +375,18 @@ join_environment (cob_context *ctx, cob_file_api *a)
 	cob_u32_t	flags;
 	int		ret, k;
 
-	if (file_setptr->bdb_home == NULL) {
+	if (ctx->settings->bdb_home == NULL) {
 		/* Default to the current directory */
-		file_setptr->bdb_home = strdup(".");
-	} else if (file_setptr->bdb_home[0] <= ' '
-	        || strcasecmp (file_setptr->bdb_home, "no") == 0
-	        || strcasecmp (file_setptr->bdb_home, "false") == 0) {
+		ctx->settings->bdb_home = strdup(".");
+	} else if (ctx->settings->bdb_home[0] <= ' '
+	        || strcasecmp (ctx->settings->bdb_home, "no") == 0
+	        || strcasecmp (ctx->settings->bdb_home, "false") == 0) {
 		/* This effectively disables record/file locking */
 		/* But prevents the BDB control files from being created */
 		return 0;
 	}
-	if (file_setptr->bdb_home) {
-		bdb_home_dir = cob_strdup(file_setptr->bdb_home);
+	if (ctx->settings->bdb_home) {
+		bdb_home_dir = cob_strdup(ctx->settings->bdb_home);
 	}
 	ret = db_env_create (&bdb_env, 0);
 	if (ret) {
@@ -406,7 +406,7 @@ join_environment (cob_context *ctx, cob_file_api *a)
 	bdb_env->set_cachesize (bdb_env, 0, 2*1024*1024, 0);
 	bdb_env->set_alloc (bdb_env, cob_malloc, realloc, cob_free);
 	flags = DB_CREATE | DB_INIT_MPOOL | DB_INIT_CDB;
-	ret = bdb_env->open (bdb_env, file_setptr->bdb_home, flags, 0);
+	ret = bdb_env->open (bdb_env, ctx->settings->bdb_home, flags, 0);
 	if (ret) {
 		cob_runtime_error_ctx (ctx, _("cannot join BDB environment (%s), error: %d %s"),
 				   "env->open", ret, db_strerror (ret));
@@ -444,12 +444,12 @@ bdb_lock_file (cob_context *ctx, cob_file *f, char *filename, int lock_mode)
 	if ((f->retry_mode & COB_RETRY_SECONDS)) {
 		retry = 1;
 		interval = f->retry_seconds>0?f->retry_seconds:
-			(file_setptr->cob_retry_seconds>0?file_setptr->cob_retry_seconds:1);
+			(ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1);
 	} else
 	if ((f->retry_mode & COB_RETRY_TIMES)) {
 		retry = f->retry_times>0?f->retry_times:
-			(file_setptr->cob_retry_times>0?file_setptr->cob_retry_times:1);
-		interval = file_setptr->cob_retry_seconds>0?file_setptr->cob_retry_seconds:1;
+			(ctx->settings->cob_retry_times>0?ctx->settings->cob_retry_times:1);
+		interval = ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1;
 	}
 
 	memset (&dbt, 0, sizeof (dbt));
@@ -523,12 +523,12 @@ bdb_lock_record (cob_context *ctx, cob_file *f, const char *key, const unsigned 
 	if ((f->retry_mode & COB_RETRY_SECONDS)) {
 		retry = 1;
 		interval = f->retry_seconds>0?f->retry_seconds:
-			(file_setptr->cob_retry_seconds>0?file_setptr->cob_retry_seconds:1);
+			(ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1);
 	} else
 	if ((f->retry_mode & COB_RETRY_TIMES)) {
 		retry = f->retry_times>0?f->retry_times:
-			(file_setptr->cob_retry_times>0?file_setptr->cob_retry_times:1);
-		interval = file_setptr->cob_retry_seconds>0?file_setptr->cob_retry_seconds:1;
+			(ctx->settings->cob_retry_times>0?ctx->settings->cob_retry_times:1);
+		interval = ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1;
 	}
 
 	set_dbt (p, &dbt, key, keylen);
@@ -609,12 +609,12 @@ bdb_test_record_lock (cob_context *ctx, cob_file *f, const char *key, const unsi
 	if ((f->retry_mode & COB_RETRY_SECONDS)) {
 		retry = 1;
 		interval = f->retry_seconds>0?f->retry_seconds:
-			(file_setptr->cob_retry_seconds>0?file_setptr->cob_retry_seconds:1);
+			(ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1);
 	} else
 	if ((f->retry_mode & COB_RETRY_TIMES)) {
 		retry = f->retry_times>0?f->retry_times:
-			(file_setptr->cob_retry_times>0?file_setptr->cob_retry_times:1);
-		interval = file_setptr->cob_retry_seconds>0?file_setptr->cob_retry_seconds:1;
+			(ctx->settings->cob_retry_times>0?ctx->settings->cob_retry_times:1);
+		interval = ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1;
 	}
 
 	memset(&test_lock,0,sizeof(test_lock));
@@ -1194,7 +1194,7 @@ is_absolute (const char *filename)
 
 /* Check if a file exists in bdb data dirs */
 static int
-bdb_nofile (const char *filename)
+bdb_nofile (cob_context *ctx, const char *filename)
 {
 	cob_u32_t	i;
 
@@ -1214,7 +1214,7 @@ bdb_nofile (const char *filename)
 				  bdb_data_dir[i], SLASH_CHAR, filename);
 		} else {
 			snprintf (bdb_buff, (size_t)COB_SMALL_MAX, "%s%c%s%c%s",
-				  file_setptr->bdb_home, SLASH_CHAR, bdb_data_dir[i], SLASH_CHAR, filename);
+				  ctx->settings->bdb_home, SLASH_CHAR, bdb_data_dir[i], SLASH_CHAR, filename);
 		}
 		bdb_buff[COB_SMALL_MAX] = 0;	/* silence analyzer */
 		errno = 0;
@@ -1224,7 +1224,7 @@ bdb_nofile (const char *filename)
 	}
 	if (i == 0) {
 		snprintf (bdb_buff, (size_t)COB_SMALL_MAX, "%s%c%s",
-			  file_setptr->bdb_home, SLASH_CHAR, filename);
+			  ctx->settings->bdb_home, SLASH_CHAR, filename);
 		bdb_buff[COB_SMALL_MAX] = 0; /* silence analyzer */
 		errno = 0;
 		if (access (bdb_buff, F_OK) == 0 || errno != ENOENT) {
@@ -1267,7 +1267,7 @@ ix_bdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, con
 	 && S_ISDIR(st.st_mode)) {	/* Filename is a directory */
 		return COB_XSTATUS_IS_DIR;
 	}
-	if (bdb_nofile (filename)) {
+	if (bdb_nofile (ctx, filename)) {
 		nonexistent = 1;
 		if (mode != COB_OPEN_OUTPUT && f->flag_optional == 0) {
 			return COB_STATUS_35_NOT_EXISTS;
@@ -1326,7 +1326,7 @@ ix_bdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, con
 	}
 
 	if (mode != COB_OPEN_OUTPUT) {
-		if (bdb_nofile(filename) == 0) {
+		if (bdb_nofile(ctx, filename) == 0) {
 			ret = a->cob_read_dict (ctx, f, bdb_buff, !f->flag_keycheck);
 		} else {
 			ret = a->cob_read_dict (ctx, f, filename, !f->flag_keycheck);
@@ -1385,7 +1385,7 @@ ix_bdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, con
 			}
 			if (mode == COB_OPEN_OUTPUT) {
 				if (bdb_env) {
-					if (!bdb_nofile(runtime_buffer)) {
+					if (!bdb_nofile(ctx, runtime_buffer)) {
 						ret = bdb_env->dbremove (bdb_env, NULL, runtime_buffer, NULL, 0);
 						if (ret == ENOENT) {
 							ret = 0;
@@ -1432,7 +1432,7 @@ ix_bdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, con
 			if (ret == 0
 			 && i == 0
 			 && mode == COB_OPEN_OUTPUT
-			 && bdb_nofile(runtime_buffer) == 0) {
+			 && bdb_nofile(ctx, runtime_buffer) == 0) {
 				a->cob_write_dict(ctx, f, bdb_buff);
 			}
 		}

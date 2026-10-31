@@ -547,7 +547,7 @@ copy_fcd_to_file (cob_context *ctx, FCD3* fcd, cob_file *f, struct fcd_file *fcd
 	} else if (fcd->fileOrg == ORG_LINE_SEQ) {
 		f->organization = COB_ORG_LINE_SEQUENTIAL;
 #ifdef	_WIN32
-		if (file_setptr->cob_unix_lf &&
+		if (ctx->settings->cob_unix_lf &&
 		  !(fcd->fstatusType & MF_FST_CRdelim)) {
 			f->file_features |= COB_FILE_LS_LF;
 		} else {

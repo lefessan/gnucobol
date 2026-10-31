@@ -57,7 +57,6 @@ static cob_field_attr	const_binull_attr =
 
 static size_t		capi_lastsize = 0;
 static void			*capi_buffer = NULL;
-static cob_settings	*cobsetptr = NULL;
 static struct watch_list {
 		struct watch_list	*next;
 		char				*field_ref;
@@ -84,7 +83,6 @@ cob_get_buff (const size_t buffsize)
 void
 cob_init_cobcapi (cob_global *lptr, cob_settings* sptr)
 {
-	cobsetptr = sptr;
 } 
 
 void

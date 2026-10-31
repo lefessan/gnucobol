@@ -198,7 +198,6 @@ struct cobsort {
 
 /* Local variables */
 
-cob_settings	*file_setptr = NULL;
 
 static unsigned int	delete_file_status = 0;
 unsigned int		eop_status = 0;
@@ -1431,13 +1430,13 @@ cob_write_dict (cob_context *ctx, cob_file *f, char *filename)
 	char	outdd[COB_FILE_MAX], outbuf[4096];
 	FILE	*fo;
 
-	if (file_setptr->cob_file_dict == COB_DICTIONARY_NO)
+	if (ctx->settings->cob_file_dict == COB_DICTIONARY_NO)
 		return 0;
 	if (*filename == '.'
 	 || *filename == SLASH_CHAR)
 		sprintf(outdd,"%s.%s",filename,dict_ext);
-	else if (file_setptr->cob_dictionary_path != NULL)
-		sprintf(outdd,"%s%c%s.%s",file_setptr->cob_dictionary_path,
+	else if (ctx->settings->cob_dictionary_path != NULL)
+		sprintf(outdd,"%s%c%s.%s",ctx->settings->cob_dictionary_path,
 					SLASH_CHAR,filename,dict_ext);
 	else
 		sprintf(outdd,"%s.%s",filename,dict_ext);
@@ -1462,13 +1461,13 @@ cob_read_dict (cob_context *ctx, cob_file *f, char *filename, int updt)
 	FILE	*fi;
 	int		line, ret;
 
-	if (file_setptr->cob_file_dict == COB_DICTIONARY_NO)
+	if (ctx->settings->cob_file_dict == COB_DICTIONARY_NO)
 		return 0;
 	if (*filename == '.'
 	 || *filename == SLASH_CHAR)
 		sprintf(inpdd,"%s.%s",filename,dict_ext);
-	else if (file_setptr->cob_dictionary_path != NULL)
-		sprintf(inpdd,"%s%c%s.%s",file_setptr->cob_dictionary_path,
+	else if (ctx->settings->cob_dictionary_path != NULL)
+		sprintf(inpdd,"%s%c%s.%s",ctx->settings->cob_dictionary_path,
 					SLASH_CHAR,filename,dict_ext);
 	else
 		sprintf(inpdd,"%s.%s",filename,dict_ext);
@@ -1536,7 +1535,7 @@ cob_chk_file_env (cob_context *ctx, cob_file *f, const char *src)
 
 	q = cob_strdup (src);
 	s = q;
-	if (file_setptr->cob_env_mangle) {
+	if (ctx->settings->cob_env_mangle) {
 		for (i = 0; s[i] != 0; ++i) {
 			if (!isalnum ((int)s[i])) {
 				s[i] = '_';
@@ -1979,7 +1978,7 @@ cob_cache_del (cob_context *ctx, cob_file *f)
 
 /* Set options for LINE SEQUENTIAL file */
 static void
-cob_set_ls_defaults (cob_file *f)
+cob_set_ls_defaults (cob_context *ctx, cob_file *f)
 {
 	if (f->organization == COB_ORG_SEQUENTIAL) {
 		f->io_routine = COB_IO_SEQUENTIAL;
@@ -2037,12 +2036,12 @@ cob_set_ls_defaults (cob_file *f)
 	 || f->file_format == COB_FILE_IS_GC) { 	/* Set GC defaults */
 		f->file_features |= COB_FILE_LS_VALIDATE;
 	}
-	if (file_setptr->cob_ls_fixed == 1)
+	if (ctx->settings->cob_ls_fixed == 1)
 		f->file_features |= COB_FILE_LS_FIXED;
-	else if (file_setptr->cob_ls_fixed == 0)
+	else if (ctx->settings->cob_ls_fixed == 0)
 		f->file_features &= ~COB_FILE_LS_FIXED;
 #ifdef	_WIN32
-	if (file_setptr->cob_unix_lf == 1) {
+	if (ctx->settings->cob_unix_lf == 1) {
 		f->file_features &= ~COB_FILE_LS_CRLF;
 		f->file_features |= COB_FILE_LS_LF;
 	} else {
@@ -2052,25 +2051,25 @@ cob_set_ls_defaults (cob_file *f)
 	f->file_features |= COB_FILE_LS_LF;
 #endif
 
-	if (file_setptr->cob_ls_instab == 1)
+	if (ctx->settings->cob_ls_instab == 1)
 		f->flag_ls_instab = 1;
 	else
 		f->flag_ls_instab = 0;
 
-	if (file_setptr->cob_ls_split == 1)
+	if (ctx->settings->cob_ls_split == 1)
 		f->file_features |= COB_FILE_LS_SPLIT;
-	else if (file_setptr->cob_ls_split == 0)
+	else if (ctx->settings->cob_ls_split == 0)
 		f->file_features &= ~COB_FILE_LS_SPLIT;
 
-	if (file_setptr->cob_ls_nulls == 1)
+	if (ctx->settings->cob_ls_nulls == 1)
 		f->file_features |= COB_FILE_LS_NULLS;
-	else if (file_setptr->cob_ls_nulls == 0)
+	else if (ctx->settings->cob_ls_nulls == 0)
 		f->file_features &= ~COB_FILE_LS_NULLS;
 
-	if (file_setptr->cob_ls_validate == 1
+	if (ctx->settings->cob_ls_validate == 1
 	 && !(f->flag_line_adv & COB_LINE_ADVANCE))
 		f->file_features |= COB_FILE_LS_VALIDATE;
-	else if (file_setptr->cob_ls_validate == 0)
+	else if (ctx->settings->cob_ls_validate == 0)
 		f->file_features &= ~COB_FILE_LS_VALIDATE;
 
 	if ((f->file_features & COB_FILE_LS_DEFAULT)) {
@@ -2090,7 +2089,7 @@ cob_set_file_defaults (cob_context *ctx, cob_file *f)
 	 */
 	if (f->organization == COB_ORG_INDEXED) {
 		f->io_routine = ix_routine;
-		if (file_setptr->cob_file_vbisam) {
+		if (ctx->settings->cob_file_vbisam) {
 			f->flag_vb_isam = 1;			/* Old VB-ISAM format wanted */
 #if defined(WITH_VBISAM)
 			f->io_routine = COB_IO_VBISAM;
@@ -2098,15 +2097,15 @@ cob_set_file_defaults (cob_context *ctx, cob_file *f)
 			f->io_routine = COB_IO_VISAM;
 #endif
 		}
-		if (file_setptr->cob_file_isnodat)
+		if (ctx->settings->cob_file_isnodat)
 			f->flag_isnodat = 1;			/* No '.dat' extension */
 		else
 			f->flag_isnodat = 0;
 		f->flag_read_chk_dups = 0;
 		f->flag_read_no_02 = 0;
-		if (file_setptr->cob_file_dups == COB_DUPS_ALWAYS) {
+		if (ctx->settings->cob_file_dups == COB_DUPS_ALWAYS) {
 			f->flag_read_chk_dups = 1;
-		} else if (file_setptr->cob_file_dups == COB_DUPS_NEVER) {
+		} else if (ctx->settings->cob_file_dups == COB_DUPS_NEVER) {
 			f->flag_read_no_02 = 1;
 		} else if (COB_MODULE_PTR->flag_file_format == COB_FILE_IS_MF) {/* MF format files */
 			f->flag_read_chk_dups = 1;
@@ -2160,29 +2159,29 @@ cob_set_file_defaults (cob_context *ctx, cob_file *f)
 	if (f->flag_updt_file)
 		return;
 
-	f->trace_io = file_setptr->cob_trace_io ? 1 : 0;
-	f->io_stats = file_setptr->cob_stats_record ? 1 : 0;
-	f->flag_keycheck = file_setptr->cob_keycheck ? 1 : 0;
+	f->trace_io = ctx->settings->cob_trace_io ? 1 : 0;
+	f->io_stats = ctx->settings->cob_stats_record ? 1 : 0;
+	f->flag_keycheck = ctx->settings->cob_keycheck ? 1 : 0;
 	f->flag_do_qbl = 0;
 	if (f->organization == COB_ORG_RELATIVE
 	 || f->organization == COB_ORG_INDEXED
 	 || f->organization == COB_ORG_SEQUENTIAL
 	 || f->organization == COB_ORG_LINE_SEQUENTIAL) {
-		f->flag_do_qbl = file_setptr->cob_file_rollback ? 1 : 0;
+		f->flag_do_qbl = ctx->settings->cob_file_rollback ? 1 : 0;
 	}
 	if ((f->lock_mode & COB_LOCK_ROLLBACK))		/* Had APPLY COMMIT */
 		f->flag_do_qbl = 1;
-	if (file_setptr->cob_do_sync)
+	if (ctx->settings->cob_do_sync)
 		f->file_features |= COB_FILE_SYNC;
 	else
 		f->file_features &= ~COB_FILE_SYNC;
-	f->dflt_times = file_setptr->cob_retry_times;
-	f->dflt_seconds = file_setptr->cob_retry_seconds;
-	f->dflt_share = (unsigned char)file_setptr->cob_share_mode;
-	f->dflt_retry = (unsigned short)file_setptr->cob_retry_mode;
-	if (file_setptr->cob_bdb_byteorder == COB_BDB_IS_BIG)
+	f->dflt_times = ctx->settings->cob_retry_times;
+	f->dflt_seconds = ctx->settings->cob_retry_seconds;
+	f->dflt_share = (unsigned char)ctx->settings->cob_share_mode;
+	f->dflt_retry = (unsigned short)ctx->settings->cob_retry_mode;
+	if (ctx->settings->cob_bdb_byteorder == COB_BDB_IS_BIG)
 		f->flag_big_endian = 1;
-	else if (file_setptr->cob_bdb_byteorder == COB_BDB_IS_LITTLE)
+	else if (ctx->settings->cob_bdb_byteorder == COB_BDB_IS_LITTLE)
 		f->flag_little_endian = 1;
 	if (f->dflt_retry == 0) {
 		if (f->dflt_times > 0)
@@ -2191,7 +2190,7 @@ cob_set_file_defaults (cob_context *ctx, cob_file *f)
 			f->dflt_retry |= COB_RETRY_SECONDS;
 	}
 
-	if (file_setptr->cob_file_format == COB_FILE_IS_MF
+	if (ctx->settings->cob_file_format == COB_FILE_IS_MF
 	 && !f->flag_set_type) {
 		f->file_format = COB_FILE_IS_MF;
 	}
@@ -2199,7 +2198,7 @@ cob_set_file_defaults (cob_context *ctx, cob_file *f)
 	 || f->file_format == COB_FILE_IS_GC) {
 		if (f->organization == COB_ORG_SEQUENTIAL) {
 			if (f->record_min != f->record_max) {
-				f->file_format = (unsigned char)file_setptr->cob_varseq_type;
+				f->file_format = (unsigned char)ctx->settings->cob_varseq_type;
 			} else {
 				f->file_format = COB_FILE_IS_GCVS0;
 			}
@@ -2209,14 +2208,14 @@ cob_set_file_defaults (cob_context *ctx, cob_file *f)
 		} else
 		if (f->organization == COB_ORG_RELATIVE) {
 			if (f->record_min != f->record_max) {
-				f->file_format = (unsigned char)file_setptr->cob_varrel_type;
+				f->file_format = (unsigned char)ctx->settings->cob_varrel_type;
 			} else {
-				f->file_format = (unsigned char)file_setptr->cob_fixrel_type;
+				f->file_format = (unsigned char)ctx->settings->cob_fixrel_type;
 			}
 		}
 	}
 
-	cob_set_ls_defaults (f);
+	cob_set_ls_defaults (ctx, f);
 }
 
 /*
@@ -2517,12 +2516,12 @@ cob_set_file_format (cob_context *ctx, cob_file *f, char *defstr, int updt)
 					} else if (strcasecmp (value, "mf") == 0) {
 						f->file_format = COB_FILE_IS_MF;
 						f->flag_set_type = 1;
-						cob_set_ls_defaults (f);
+						cob_set_ls_defaults (ctx, f);
 					} else if (strcasecmp (value, "gc") == 0
 							|| strcasecmp (value, "gc3") == 0) {
 						f->file_format = COB_FILE_IS_GC;
 						f->flag_set_type = 1;
-						cob_set_ls_defaults (f);
+						cob_set_ls_defaults (ctx, f);
 					} else if (strcasecmp (value, "0") == 0) {
 						f->file_format = COB_FILE_IS_GCVS0;
 					} else if (strcasecmp (value, "1") == 0) {
@@ -2676,14 +2675,14 @@ cob_set_file_format (cob_context *ctx, cob_file *f, char *defstr, int updt)
 				if (strcasecmp (option, "mf") == 0) {	/* LS file like MF would do */
 					f->flag_set_type = 1;
 					f->file_format = COB_FILE_IS_MF;
-					cob_set_ls_defaults (f);
+					cob_set_ls_defaults (ctx, f);
 					continue;
 				}
 				if (strcasecmp (option, "gc") == 0
 				 || strcasecmp (option, "gc3") == 0) {	/* LS file like GnuCOBOL used to do */
 					f->flag_set_type = 1;
 					f->file_format = COB_FILE_IS_GC;
-					cob_set_ls_defaults (f);
+					cob_set_ls_defaults (ctx, f);
 					continue;
 				}
 			}
@@ -2691,7 +2690,7 @@ cob_set_file_format (cob_context *ctx, cob_file *f, char *defstr, int updt)
 				if (settrue) {
 					f->file_format = COB_FILE_IS_MF;
 					f->flag_set_type = 1;
-					cob_set_ls_defaults (f);
+					cob_set_ls_defaults (ctx, f);
 					continue;
 				}
 				continue;
@@ -2706,7 +2705,7 @@ cob_set_file_format (cob_context *ctx, cob_file *f, char *defstr, int updt)
 						f->file_format = WITH_VARSEQ;
 #endif
 					f->flag_set_type = 1;
-					cob_set_ls_defaults (f);
+					cob_set_ls_defaults (ctx, f);
 					continue;
 				}
 				continue;
@@ -2974,7 +2973,7 @@ static void catch_alarm(int sig) { }
  * Issue File/Record lock
  */
 static int
-lock_record (cob_file *f, unsigned int recnum, int forwrite, int *errsts)
+lock_record (cob_context *ctx, cob_file *f, unsigned int recnum, int forwrite, int *errsts)
 {
 #if defined(HAVE_SIGACTION) && defined(SIGALRM)
 	struct sigaction sigact, prvact;
@@ -2997,12 +2996,12 @@ lock_record (cob_file *f, unsigned int recnum, int forwrite, int *errsts)
 	if ((f->retry_mode & COB_RETRY_SECONDS)) {
 		retry = 1;
 		interval = f->retry_seconds>0?f->retry_seconds:
-			(file_setptr->cob_retry_seconds>0?file_setptr->cob_retry_seconds:1);
+			(ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1);
 	} else
 	if ((f->retry_mode & COB_RETRY_TIMES)) {
 		retry = f->retry_times>0?f->retry_times:
-			(file_setptr->cob_retry_times>0?file_setptr->cob_retry_times:1);
-		interval = file_setptr->cob_retry_seconds>0?file_setptr->cob_retry_seconds:1;
+			(ctx->settings->cob_retry_times>0?ctx->settings->cob_retry_times:1);
+		interval = ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1;
 	}
 	if (recnum == 0) {			/* Lock entire file */
 		pos = 0;
@@ -3155,7 +3154,7 @@ unlock_record (cob_context *ctx, cob_file *f, unsigned int recnum)
 
 /*TODO: handle record-level locks*/
 static int
-lock_record(cob_file *f, unsigned int recnum, int forwrite, int *errsts)
+lock_record(cob_context *ctx, cob_file *f, unsigned int recnum, int forwrite, int *errsts)
 {
 	HANDLE osHandle;
 
@@ -3206,7 +3205,7 @@ unlock_record(cob_context *ctx, cob_file *f, unsigned int recnum)
 #else
 	/* System does not even have 'fcntl' so no explicit Record/File lock is used */
 static int
-lock_record(cob_file *f, unsigned int recnum, int forwrite, int *errsts)
+lock_record(cob_context *ctx, cob_file *f, unsigned int recnum, int forwrite, int *errsts)
 {
 	COB_UNUSED (f);
 	COB_UNUSED (recnum);
@@ -3229,7 +3228,7 @@ unlock_record(cob_context *ctx, cob_file *f, unsigned int recnum)
  * Determine if file should be locked
  */
 static int
-set_file_lock (cob_file *f, const char *filename, int open_mode)
+set_file_lock (cob_context *ctx, cob_file *f, const char *filename, int open_mode)
 {
 	int	lock_mode, ret;
 
@@ -3259,7 +3258,7 @@ set_file_lock (cob_file *f, const char *filename, int open_mode)
 		lock_mode = 0;
 	}
 
-	lock_record (f, 0, lock_mode, &ret);
+	lock_record (ctx, f, 0, lock_mode, &ret);
 	if (ret != 0
 #if defined _WIN32
 	/* normally that return value would not happen, we use it to
@@ -3371,10 +3370,10 @@ set_lock_opts (cob_context *ctx, cob_file *f, unsigned int read_opts)
 static COB_INLINE void
 cob_trace_record (cob_context *ctx, cob_file *f, int indent)
 {
-	fprintf (file_setptr->cob_trace_file, "%*s : ",
+	fprintf (ctx->settings->cob_trace_file, "%*s : ",
 		indent, "Record");
-	cob_print_field (ctx, file_setptr->cob_trace_file, f->record,
-		indent + 3, file_setptr->cob_dump_width);
+	cob_print_field (ctx, ctx->settings->cob_trace_file, f->record,
+		indent + 3, ctx->settings->cob_dump_width);
 }
 
 static COB_INLINE void
@@ -3383,10 +3382,10 @@ cob_trace_record_key (cob_context *ctx, cob_file *f, int indent)
 	if (!f->last_key) {
 		return;
 	}
-	fprintf (file_setptr->cob_trace_file, "%*s : ", indent,
+	fprintf (ctx->settings->cob_trace_file, "%*s : ", indent,
 		f->organization == COB_ORG_RELATIVE ? "Record#" : "Key");
-	cob_print_field (ctx, file_setptr->cob_trace_file, f->last_key,
-		indent + 3, file_setptr->cob_dump_width);
+	cob_print_field (ctx, ctx->settings->cob_trace_file, f->last_key,
+		indent + 3, ctx->settings->cob_dump_width);
 }
 
 static COB_INLINE void
@@ -3396,10 +3395,10 @@ cob_trace_record_number (cob_context *ctx, cob_file *f, int indent)
 	 || f->organization != COB_ORG_RELATIVE) {
 		return;
 	}
-	fprintf (file_setptr->cob_trace_file, "%*s : ",
+	fprintf (ctx->settings->cob_trace_file, "%*s : ",
 		indent, "Record#");
-	cob_print_field (ctx, file_setptr->cob_trace_file, f->last_key,
-		indent + 3, file_setptr->cob_dump_width);
+	cob_print_field (ctx, ctx->settings->cob_trace_file, f->last_key,
+		indent + 3, ctx->settings->cob_dump_width);
 }
 
 void
@@ -3503,30 +3502,30 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 	 && f->last_operation != COB_LAST_NONE) {
 		/* If necessary open, so that I/O can be traced by itself */
 		cob_check_trace_file ();
-		fprintf (file_setptr->cob_trace_file, "%*s", indent-3, "");
+		fprintf (ctx->settings->cob_trace_file, "%*s", indent-3, "");
 		switch (f->last_operation) {
 			default:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"Unknown I/O on %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_CLOSE:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"CLOSE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_COMMIT:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"COMMIT %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_ROLLBACK:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"ROLLBACK %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_OPEN:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"OPEN %s %s -> '%s' Status: %.2s\n",
 					f->open_mode == COB_OPEN_INPUT  ? "INPUT" :
 					f->open_mode == COB_OPEN_OUTPUT ? "OUTPUT" :
@@ -3537,12 +3536,12 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 					f->file_status);
 				break;
 			case COB_LAST_DELETE_FILE:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"DELETE FILE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_READ:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"READ %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				if (status == 0) {
@@ -3551,13 +3550,13 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 				cob_trace_record_key (ctx, f, indent);
 				break;
 			case COB_LAST_START:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"START %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				cob_trace_record_key (ctx, f, indent);
 				break;
 			case COB_LAST_READ_SEQ:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"READ Sequential %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				if (status == 0) {
@@ -3566,21 +3565,21 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 				cob_trace_record_number (ctx, f, indent);
 				break;
 			case COB_LAST_WRITE:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"WRITE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				cob_trace_record (ctx, f, indent);
 				cob_trace_record_number (ctx, f, indent);
 				break;
 			case COB_LAST_REWRITE:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"REWRITE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				cob_trace_record (ctx, f, indent);
 				cob_trace_record_number (ctx, f, indent);
 				break;
 			case COB_LAST_DELETE:
-				fprintf (file_setptr->cob_trace_file,
+				fprintf (ctx->settings->cob_trace_file,
 					"DELETE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 # if 1	/* CHECKME: We likely should print only the key here */
@@ -3594,7 +3593,7 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 	}
 
 	if (f->io_stats
-	 && file_setptr->cob_stats_filename
+	 && ctx->settings->cob_stats_filename
 	 && f->last_operation != COB_LAST_NONE) {
 		/* Gather stats for record related commands only */
 		if (f->last_operation < COB_LAST_OPEN) {
@@ -3609,8 +3608,8 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 		else if (f->last_operation == COB_LAST_CLOSE) {
 			FILE	*fo = NULL;
 			struct stat	st;
-			if (stat (file_setptr->cob_stats_filename, &st) == -1) {
-				fo = fopen (file_setptr->cob_stats_filename, "w");
+			if (stat (ctx->settings->cob_stats_filename, &st) == -1) {
+				fo = fopen (ctx->settings->cob_stats_filename, "w");
 				if (fo) {
 					const char	*iotype[11];
 					iotype[COB_LAST_READ]	 = "READ";
@@ -3631,7 +3630,7 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 					fo = NULL;
 				}
 			}
-			fo = fopen (file_setptr->cob_stats_filename, "a");
+			fo = fopen (ctx->settings->cob_stats_filename, "a");
 			if (fo) {
 				struct cob_time tod = cob_get_current_date_and_time ();
 				fprintf (fo, "%04d/%02d/%02d %02d:%02d:%02d,",
@@ -4299,7 +4298,7 @@ cob_fd_file_open (cob_context *ctx, cob_file *f, char *filename,
 			f->max_rec_num = 0;
 	}
 
-	if ((ret=set_file_lock(f, filename, mode)) != 0)
+	if ((ret=set_file_lock(ctx, f, filename, mode)) != 0)
 		return ret;
 	f->record_off = -1;
 #if 0	/* Simon: disabled, this function is expected to not use a FILE* */
@@ -4353,7 +4352,7 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 	f->flag_is_pipe = 0;
 	f->flag_is_std = 0;
 
-	if (file_setptr->cob_file_dict == COB_DICTIONARY_ALL
+	if (ctx->settings->cob_file_dict == COB_DICTIONARY_ALL
 	 && mode == COB_OPEN_OUTPUT)
 		a->cob_write_dict(ctx, f, filename);
 
@@ -4373,7 +4372,7 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 	if (filename[0] == '>') {
 		if (mode != COB_OPEN_OUTPUT)
 			return COB_STATUS_37_PERMISSION_DENIED;
-		if (!file_setptr->cob_unix_lf) {
+		if (!ctx->settings->cob_unix_lf) {
 			fmode = "w";
 		} else {
 			fmode = "wb";
@@ -4396,7 +4395,7 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 	if (filename[0] == '<') {
 		if (mode != COB_OPEN_INPUT)
 			return COB_STATUS_37_PERMISSION_DENIED;
-		if (!file_setptr->cob_unix_lf) {
+		if (!ctx->settings->cob_unix_lf) {
 			fmode = "r";
 		} else {
 			fmode = "rb";
@@ -4638,7 +4637,7 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 			fmode = "r+";
 #ifndef _WIN32
 		} else
-		if (!file_setptr->cob_unix_lf) {
+		if (!ctx->settings->cob_unix_lf) {
 			fmode = "r";
 #endif
 		} else {
@@ -4649,7 +4648,7 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 #ifdef _WIN32
 		fmode = "wb";
 #else
-		if (!file_setptr->cob_unix_lf) {
+		if (!ctx->settings->cob_unix_lf) {
 			fmode = "w";
 		} else {
 			fmode = "wb";
@@ -4660,7 +4659,7 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 #ifdef _WIN32
 		fmode = "rb+";
 #else
-		if (!file_setptr->cob_unix_lf) {
+		if (!ctx->settings->cob_unix_lf) {
 			fmode = "r+";
 		} else {
 			fmode = "rb+";
@@ -4678,7 +4677,7 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 #ifdef _WIN32
 		fmode = "ab+";
 #else
-		if (!file_setptr->cob_unix_lf) {
+		if (!ctx->settings->cob_unix_lf) {
 			fmode = "a+";
 		} else {
 			fmode = "ab+";
@@ -4775,7 +4774,7 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 		 && f->share_mode == 0)
 			return 0;
 	}
-	if ((ret = set_file_lock (f, filename, mode)) != 0) {
+	if ((ret = set_file_lock (ctx, f, filename, mode)) != 0) {
 		return ret;
 	}
 	if (f->flag_optional && nonexistent) {
@@ -4946,11 +4945,11 @@ cob_file_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 }
 
 static int
-open_next (cob_file *f)
+open_next (cob_context *ctx, cob_file *f)
 {
 	if (f->flag_is_concat
 	 && *f->nxt_filename != 0) {
-		char	*nx = strchr (f->nxt_filename,file_setptr->cob_concat_sep[0]);
+		char	*nx = strchr (f->nxt_filename,ctx->settings->cob_concat_sep[0]);
 		int fmode = O_BINARY;	/* without this ftell does not work on some systems */
 
 #ifdef _WIN32	/* win32 seems to resolve the file descriptor from the file handler
@@ -4987,7 +4986,7 @@ open_next (cob_file *f)
 			f->file = NULL;
 		} else {
 			const char *fopen_flags;
-			if (cobsetptr->cob_unix_lf) {
+			if (ctx->settings->cob_unix_lf) {
 				if (f->open_mode == COB_OPEN_INPUT) {
 					fopen_flags = "rb";
 				} else {
@@ -5037,7 +5036,7 @@ again:
 		/* Read record size */
 		bytesread = read (f->fd, recsize.sbuff, f->record_prefix);
 		if (bytesread == 0
-		 && open_next (f)) {
+		 && open_next (ctx, f)) {
 			goto again;
 		}
 		if (bytesread != (int)f->record_prefix) {
@@ -5084,7 +5083,7 @@ again:
 	/* Read record */
 	bytesread = read (f->fd, f->record->data, f->record->size);
 	if (bytesread == 0
-	 && open_next (f)) {
+	 && open_next (ctx, f)) {
 		goto again;
 	}
 
@@ -5326,7 +5325,7 @@ lineseq_read (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opt
 #if defined (COB_EXPERIMENTAL) && defined (HAVE_SETLOCALE)
 	char	*previous_locale = NULL;
 
-	if (file_setptr->cob_ls_validate
+	if (ctx->settings->cob_ls_validate
 	 && ctx->glob.cob_locale_ctype) {
 		previous_locale = setlocale (LC_CTYPE, NULL);
 		setlocale (LC_CTYPE, ctx->glob.cob_locale_ctype);
@@ -5351,7 +5350,7 @@ again:
 		n = getc (fp);
 		if (n == EOF) {
 			if (!i) {
-				if (open_next (f)) {
+				if (open_next (ctx, f)) {
 					goto again;
 				}
 				sts = COB_STATUS_10_END_OF_FILE;
@@ -5384,7 +5383,7 @@ again:
 			if (IS_BAD_CHAR (n)) {
 				sts = COB_STATUS_09_READ_DATA_BAD;
 #if defined (COB_EXPERIMENTAL)
-			} else if (file_setptr->cob_ls_validate > 1
+			} else if (ctx->settings->cob_ls_validate > 1
 			        && IS_NOT_PRINTABLE (n)) {
 				sts = COB_STATUS_0P_NOT_PRINTABLE;
 #endif
@@ -5465,7 +5464,7 @@ again:
 					if (IS_BAD_CHAR (n)) {
 						sts = COB_STATUS_09_READ_DATA_BAD;
 #if defined (COB_EXPERIMENTAL) && defined (HAVE_SETLOCALE)
-					} else if (file_setptr->cob_ls_validate > 1
+					} else if (ctx->settings->cob_ls_validate > 1
 							&& IS_NOT_PRINTABLE (n)) {
 						sts = COB_STATUS_0P_NOT_PRINTABLE;
 #endif
@@ -6119,7 +6118,7 @@ relative_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *k, con
 	}
 	set_lock_opts (ctx, f, read_opts);
 	if (f->flag_lock_rec) {
-		lock_record (f, relnum+1, f->flag_lock_mode, &errsts);
+		lock_record (ctx, f, relnum+1, f->flag_lock_mode, &errsts);
 		if (errsts != 0) {
 			switch (errsts) {
 			case EACCES:
@@ -6202,7 +6201,7 @@ relative_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int re
 		set_lock_opts (ctx, f, read_opts);
 		if (f->flag_lock_rec) {
 			relnum = ((curroff - f->file_header) / f->record_slot) + 1;
-			lock_record (f, relnum, f->flag_lock_mode, &errsts);
+			lock_record (ctx, f, relnum, f->flag_lock_mode, &errsts);
 			if (errsts != 0) {
 				switch (errsts) {
 				case EACCES:
@@ -6435,7 +6434,7 @@ relative_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
 	if (f->flag_record_lock) {
-		lock_record (f, relnum+1, 1, &errsts);
+		lock_record (ctx, f, relnum+1, 1, &errsts);
 		if (errsts != 0) {
 			switch (errsts) {
 			case EACCES:
@@ -6516,7 +6515,7 @@ relative_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 	if ( (f->record_off = set_file_pos (f, off)) == -1 )
 		return -1;
 	if (f->flag_record_lock) {
-		lock_record (f, relnum+1, 1, &errsts);
+		lock_record (ctx, f, relnum+1, 1, &errsts);
 		if (errsts != 0) {
 			switch (errsts) {
 			case EACCES:
@@ -7406,18 +7405,18 @@ cob_open_ctx (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, cons
 	cob_cache_file (ctx, f);
 
 	f->flag_is_concat = 0;
-	if (file_setptr->cob_concat_name
+	if (ctx->settings->cob_concat_name
 	 && (f->organization == COB_ORG_SEQUENTIAL
 	  || f->organization == COB_ORG_LINE_SEQUENTIAL)
 	 && (mode == COB_OPEN_INPUT
 	  || mode == COB_OPEN_I_O)
-	 && (cp = strchr (file_open_name, file_setptr->cob_concat_sep[0])) != NULL
+	 && (cp = strchr (file_open_name, ctx->settings->cob_concat_sep[0])) != NULL
 	 && file_open_name[0] != '>'
 	 && file_open_name[0] != '<'
 	 && file_open_name[0] != '|') {
 		f->flag_is_concat = 1;
 		f->org_filename = cob_strdup (file_open_name);
-		f->nxt_filename = strchr(f->org_filename,file_setptr->cob_concat_sep[0]);
+		f->nxt_filename = strchr(f->org_filename,ctx->settings->cob_concat_sep[0]);
 		*f->nxt_filename++ = 0;
 		strcpy (file_open_name, f->org_filename);
 	}
@@ -7969,7 +7968,7 @@ cob_write_ctx (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, cob
 		   not part of the record [= fixed length] */
 		const size_t size = lineseq_size (ctx, f);
 		/* early pre-validation for data we'd otherwise convert */
-		if (file_setptr->cob_ls_validate
+		if (ctx->settings->cob_ls_validate
 		 && !f->flag_line_adv
 		 && f->sort_collating) {
 			const unsigned char *p = f->record->data;
@@ -8122,7 +8121,7 @@ cob_rewrite_ctx (cob_context *ctx, cob_file *f, cob_field *rec, const int opt, c
 		   not part of the record [= fixed length] */
 		size_t size = lineseq_size (ctx, f);
 		/* early pre-validation for data we'd otherwise convert */
-		if (file_setptr->cob_ls_validate
+		if (ctx->settings->cob_ls_validate
 		 && !f->flag_line_adv
 		 && f->sort_collating) {
 			const unsigned char *p = f->record->data;
@@ -9341,7 +9340,7 @@ cob_free_list (struct cobsort *hp)
 }
 
 static struct cobitem *
-cob_new_item (struct cobsort *hp, const size_t size)
+cob_new_item (cob_context *ctx, struct cobsort *hp, const size_t size)
 {
 	struct cobitem		*q;
 
@@ -9368,7 +9367,7 @@ cob_new_item (struct cobsort *hp, const size_t size)
 	}
 	q = (struct cobitem *)(hp->mem_base->mem_ptr + hp->mem_used);
 	hp->mem_used += hp->alloc_size;
-	if (hp->mem_total >= file_setptr->cob_sort_memory) {
+	if (hp->mem_total >= ctx->settings->cob_sort_memory) {
 		if ((hp->mem_used + hp->alloc_size) > hp->mem_size) {
 			hp->switch_to_file = 1;
 		}
@@ -9705,7 +9704,7 @@ cob_file_sort_submit (cob_context *ctx, struct cobsort *hp, const unsigned char 
 		/* LCOV_EXCL_STOP */
 		hp->destination_file ^= 1;
 	}
-	q = cob_new_item (hp, sizeof (struct cobitem) + hp->size);
+	q = cob_new_item (ctx, hp, sizeof (struct cobitem) + hp->size);
 	q->end_of_block = 1;
 	unique_copy (q->unique, (const unsigned char *)&(hp->unique));
 	hp->unique++;
@@ -9798,7 +9797,7 @@ cob_file_sort_init_ctx (cob_context *ctx, cob_file *f, const unsigned int nkeys,
 	if (p->alloc_size % sizeof (void *)) {
 		p->alloc_size += sizeof (void *) - (p->alloc_size % sizeof (void *));
 	}
-	p->chunk_size = file_setptr->cob_sort_chunk;
+	p->chunk_size = ctx->settings->cob_sort_chunk;
 	if (p->chunk_size % p->alloc_size) {
 		p->chunk_size += p->alloc_size - (p->chunk_size % p->alloc_size);
 	}
@@ -10364,7 +10363,7 @@ cob_exit_fileio_msg_only (cob_context *ctx)
 	static int output_done = 0;
 
 	if (output_done
-	 || (cobsetptr && !cobsetptr->cob_display_warn)) {
+	 || (ctx && !ctx->settings->cob_display_warn)) {
 		return;
 	}
 	output_done = 1;
@@ -10447,7 +10446,7 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 	implicit_close_of_msgid = _("implicit CLOSE of ");
 
 	file_api.glbptr = lptr;
-	file_api.setptr = file_setptr  = sptr;
+	file_api.setptr = sptr;
 	file_api.add_file_cache = cob_cache_file;
 	file_api.del_file_cache = cob_cache_del;
 	file_api.cob_write_dict = cob_write_dict;
@@ -10459,14 +10458,14 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 
 	if (chk_file_path) {
 		chk_file_path = 0;
-		if (file_setptr->cob_file_path) {
-			for (i=k=0; file_setptr->cob_file_path[i] != 0; i++) {
-				if (file_setptr->cob_file_path[i] == PATHSEP_CHAR)
+		if (ctx->settings->cob_file_path) {
+			for (i=k=0; ctx->settings->cob_file_path[i] != 0; i++) {
+				if (ctx->settings->cob_file_path[i] == PATHSEP_CHAR)
 					k++;
 			}
 			/* Split list of paths apart */
 			file_paths = cob_malloc (sizeof(void*) * (k+2));
-			p = cob_strdup (file_setptr->cob_file_path);
+			p = cob_strdup (ctx->settings->cob_file_path);
 			file_paths[0] = p;
 			for (i=k=0; p[i] != 0; i++) {
 				if (p[i] == PATHSEP_CHAR) {
@@ -10491,26 +10490,26 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 	file_cache = NULL;
 	eop_status = 0;
 	check_eop_status = 0;
-	if (file_setptr->cob_sort_chunk > (file_setptr->cob_sort_memory / 2)) {
-		file_setptr->cob_sort_chunk = file_setptr->cob_sort_memory / 2;
+	if (ctx->settings->cob_sort_chunk > (ctx->settings->cob_sort_memory / 2)) {
+		ctx->settings->cob_sort_chunk = ctx->settings->cob_sort_memory / 2;
 	}
 
-	if (file_setptr->cob_file_format == COB_FILE_IS_MF) {	/* all MF format files */
-		if (file_setptr->cob_varseq_type == COB_FILE_IS_GC
-		 || file_setptr->cob_varseq_type == 0)
-			file_setptr->cob_varseq_type = COB_FILE_IS_MF;
-		if (file_setptr->cob_varrel_type == COB_FILE_IS_GC)
-			file_setptr->cob_varrel_type = COB_FILE_IS_MF;
-		if (file_setptr->cob_fixrel_type == COB_FILE_IS_GC)
-			file_setptr->cob_fixrel_type = COB_FILE_IS_MF;
+	if (ctx->settings->cob_file_format == COB_FILE_IS_MF) {	/* all MF format files */
+		if (ctx->settings->cob_varseq_type == COB_FILE_IS_GC
+		 || ctx->settings->cob_varseq_type == 0)
+			ctx->settings->cob_varseq_type = COB_FILE_IS_MF;
+		if (ctx->settings->cob_varrel_type == COB_FILE_IS_GC)
+			ctx->settings->cob_varrel_type = COB_FILE_IS_MF;
+		if (ctx->settings->cob_fixrel_type == COB_FILE_IS_GC)
+			ctx->settings->cob_fixrel_type = COB_FILE_IS_MF;
 	} else
-	if (file_setptr->cob_file_format == COB_FILE_IS_GC) {	/* all GC3 format files */
-		if (file_setptr->cob_varseq_type == COB_FILE_IS_MF)
-			file_setptr->cob_varseq_type = COB_FILE_IS_GC;
-		if (file_setptr->cob_varrel_type == COB_FILE_IS_MF)
-			file_setptr->cob_varrel_type = COB_FILE_IS_GC;
-		if (file_setptr->cob_fixrel_type == COB_FILE_IS_MF)
-			file_setptr->cob_fixrel_type = COB_FILE_IS_GC;
+	if (ctx->settings->cob_file_format == COB_FILE_IS_GC) {	/* all GC3 format files */
+		if (ctx->settings->cob_varseq_type == COB_FILE_IS_MF)
+			ctx->settings->cob_varseq_type = COB_FILE_IS_GC;
+		if (ctx->settings->cob_varrel_type == COB_FILE_IS_MF)
+			ctx->settings->cob_varrel_type = COB_FILE_IS_GC;
+		if (ctx->settings->cob_fixrel_type == COB_FILE_IS_MF)
+			ctx->settings->cob_fixrel_type = COB_FILE_IS_GC;
 	}
 
 #if defined(WITH_STATIC_ISAM)
@@ -10711,7 +10710,7 @@ open_vfile (cob_context *ctx, cob_u16_ptr heap_id, unsigned char status[2], cons
 	}
 
 	*heap_id = heap + 1;
-	ptr_heap->alloc_size = gc_ext ? cobsetptr->cob_heap_memory_64 : cobsetptr->cob_heap_memory;
+	ptr_heap->alloc_size = gc_ext ? ctx->settings->cob_heap_memory_64 : ctx->settings->cob_heap_memory;
 	
 	return_code = create_first_segment (ptr_heap);
 	if (return_code == 0) {

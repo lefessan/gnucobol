@@ -997,7 +997,7 @@ cob_terminate_routines (cob_context *ctx)
 
 	cob_exit_common_modules ();
 	if (module_unload == COB_IMMEDIATE) {
-		cob_exit_call ();
+		cob_exit_call (ctx);
 		cob_exit_cobcapi ();
 		cob_exit_common (ctx);
         /* If module unloading has been postponed, "remember" unloading has indeed been requested */
@@ -11285,7 +11285,7 @@ cob_call_with_exception_check_ctx (cob_context *ctx, const char *name, const int
 		return_jmp_buffer_set = 0;
 		/* Module unloading has been requested (after being postponed): perform it */
 		if (module_unload == COB_REQUESTED) {
-			cob_exit_call ();
+			cob_exit_call (ctx);
 			cob_exit_cobcapi ();
 			cob_exit_common (ctx);
 		}
@@ -11437,6 +11437,8 @@ cob_init (const int argc, char **argv)
 
 	/* Get settings structure */
 	cobsetptr = cob_malloc (sizeof (cob_settings));
+	/* TODO (T1.3): per-context copy of the settings */
+	cob_main_context->settings = cobsetptr;
 
 	cob_initialized = 1;
 

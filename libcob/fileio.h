@@ -21,7 +21,6 @@
 
 #include "config.h"
 
-#define cobsetptr file_setptr
 
 #define _LFS64_LARGEFILE		1
 #define _LFS64_STDIO			1
@@ -164,7 +163,6 @@ struct cob_fileio_funcs {
 	char * (*ioversion)	(void);
 };
 
-COB_EXPIMP	cob_settings	*file_setptr;
 
 static const int	status_exception[] = {
 	0,				/* 0x */

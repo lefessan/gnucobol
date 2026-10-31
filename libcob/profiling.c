@@ -76,7 +76,6 @@ static LONGLONG 	qpc_freq = 0;
 #endif
 
 /* Remember static and dynamic configuration */
-static cob_settings			*cobsetptr = NULL;
 
 
 
@@ -149,18 +148,17 @@ prof_setup_clock ()
 }
 
 static void
-prof_init_static ()
+prof_init_static (cob_context *ctx)
 {
-	if (is_active == -1 && cobsetptr) {
+	if (is_active == -1 && ctx) {
 		prof_setup_clock ();
-		is_active = cobsetptr->cob_prof_enable;
+		is_active = ctx->settings->cob_prof_enable;
 	}
 }
 
 void
 cob_init_prof (cob_global *lptr, cob_settings *sptr)
 {
-	cobsetptr  = sptr;
 }
 
 struct cob_prof_module *
@@ -170,7 +168,7 @@ cob_prof_init_module_ctx (cob_context *ctx, cob_module *module,
 {
 	COB_UNUSED (module);
 
-	prof_init_static ();
+	prof_init_static (ctx);
 	if (is_active){
 		struct cob_prof_module *info;
 		struct cob_prof_module_list *item;
@@ -203,8 +201,8 @@ cob_prof_realloc_arrays (cob_context *ctx)
 {
 	int new_size = max_prof_depth * 2 + 16;
 
-	if (new_size > cobsetptr->cob_prof_max_depth)
-		new_size = cobsetptr->cob_prof_max_depth;
+	if (new_size > ctx->settings->cob_prof_max_depth)
+		new_size = ctx->settings->cob_prof_max_depth;
 
 	if (max_prof_depth >= new_size){
 		int i;
@@ -397,7 +395,7 @@ print_monotonic_time (FILE *file, cob_ns_time t) {
 
 /* Default format is: "%m,%s,%p,%e,%w,%k,%t,%h,%n" (in common.c) */
 static void
-cob_prof_print_line (
+cob_prof_print_line (cob_context *ctx,
 	FILE *file,
 	struct cob_prof_module *info,
 	int proc_idx)
@@ -474,10 +472,10 @@ cob_prof_print_line (
 		ncalls = line = 0;
 	}
 
-	for (i = 0; cobsetptr->cob_prof_format[i] != 0; i++) {
-		if (cobsetptr->cob_prof_format[i] == '%') {
+	for (i = 0; ctx->settings->cob_prof_format[i] != 0; i++) {
+		if (ctx->settings->cob_prof_format[i] == '%') {
 			i++;
-			switch (cobsetptr->cob_prof_format[i]) {
+			switch (ctx->settings->cob_prof_format[i]) {
 			case 'M':
 			case 'm':
 				fputs (module, file);
@@ -556,10 +554,10 @@ cob_prof_print_line (
 				break;
 			default:
 				fputc ('%', file);
-				fputc (cobsetptr->cob_prof_format[i], file);
+				fputc (ctx->settings->cob_prof_format[i], file);
 			}
 		} else {
-			fputc (cobsetptr->cob_prof_format[i], file);
+			fputc (ctx->settings->cob_prof_format[i], file);
 		}
 	}
 	fputc ('\n', file);
@@ -573,16 +571,16 @@ cob_prof_end (cob_context *ctx)
 	FILE *file;
 	struct cob_prof_module_list *l;
 
-	prof_init_static ();
+	prof_init_static (ctx);
 
-	if (!cobsetptr || !is_active || !prof_info_list) return;
+	if (!ctx || !is_active || !prof_info_list) return;
 
 	while (current_idx >= 0) {
 		cob_prof_exit_procedure_ctx (ctx, called_runtimes[current_idx],
 					 called_procedures[current_idx]);
 	}
 
-	file = cob_open_logfile (cobsetptr->cob_prof_filename);
+	file = cob_open_logfile (ctx->settings->cob_prof_filename);
 
 	if (!!file) {
 
@@ -600,21 +598,21 @@ cob_prof_end (cob_context *ctx)
 			}
 		}
 
-		cob_prof_print_line (file, NULL, 0);
+		cob_prof_print_line (ctx, file, NULL, 0);
 		for (l = prof_info_list ; l != NULL; l=l->next){
 
 			struct cob_prof_module *info = l->info;
 			int i;
 
 			for (i = 0; i < info->procedure_count; i++) {
-				cob_prof_print_line (file, info, i);
+				cob_prof_print_line (ctx, file, info, i);
 			}
 		}
 		fclose (file);
-		fprintf(stderr, "File %s generated\n", cobsetptr->cob_prof_filename);
+		fprintf(stderr, "File %s generated\n", ctx->settings->cob_prof_filename);
 	} else {
 		cob_runtime_warning_ctx (ctx, _("error '%s' opening COB_PROF_FILE '%s'"),
-				     cob_get_strerror (), cobsetptr->cob_prof_filename);
+				     cob_get_strerror (), ctx->settings->cob_prof_filename);
 	}
 	current_idx = -1;
 	is_active = 0;
