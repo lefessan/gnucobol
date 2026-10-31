@@ -139,7 +139,7 @@ static const unsigned char pack_to_bin [] = {
 };
 
 static void
-store_common_region (cob_field *f, const unsigned char *data,
+store_common_region (cob_context *ctx, cob_field *f, const unsigned char *data,
 		     const size_t size, const int scale, const int verified_data)
 {
 	const int	fsize = (int) COB_FIELD_SIZE (f);
@@ -159,7 +159,7 @@ store_common_region (cob_field *f, const unsigned char *data,
 	while (p < end) {
 		if ((COB_FIELD_IS_NUMERIC (f) && (*p != '0'))
 		 || (COB_FIELD_IS_ANY_ALNUM (f) && (*p != ' '))) {
-			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_DATA_TRUNCATION);
+			cob_set_exception_ctx (ctx, COB_EC_DATA_TRUNCATION);
 			break;
 		}
 		++p;
@@ -379,9 +379,10 @@ error:
 static void
 cob_move_display_to_display (cob_field *f1, cob_field *f2)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	const int	sign = COB_GET_SIGN (f1);
 
-	store_common_region (f2, COB_FIELD_DATA (f1), COB_FIELD_SIZE (f1),
+	store_common_region (ctx, f2, COB_FIELD_DATA (f1), COB_FIELD_SIZE (f1),
 			     COB_FIELD_SCALE (f1), 0);
 
 	COB_PUT_SIGN (f1, sign);
@@ -677,6 +678,7 @@ cob_move_display_to_packed (cob_field *f1, cob_field *f2)
 void
 cob_move_packed_to_display (cob_field *f1, cob_field *f2)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	unsigned char		buff[COB_MAX_DIGITS + 1];
 	register unsigned char	*b = buff;
 	register unsigned char	*d = f1->data;
@@ -724,7 +726,7 @@ cob_move_packed_to_display (cob_field *f1, cob_field *f2)
 		}
 
 		/* Store */
-		store_common_region (f2, buff, digits, COB_FIELD_SCALE (f1), 1);
+		store_common_region (ctx, f2, buff, digits, COB_FIELD_SCALE (f1), 1);
 		COB_PUT_SIGN (f2, 0);
 	} else {
 		/* Unpack PACKED-DECIMAL / COMP-3 to string */
@@ -757,7 +759,7 @@ cob_move_packed_to_display (cob_field *f1, cob_field *f2)
 		*b++ = COB_I2D (*d >> 4);
 
 		/* Store */
-		store_common_region (f2, buff, digits, COB_FIELD_SCALE (f1), 1);
+		store_common_region (ctx, f2, buff, digits, COB_FIELD_SCALE (f1), 1);
 		COB_PUT_SIGN (f2, ((*d & 0x0F) == 0x0D) ? -1 : 1);
 	}
 
@@ -857,7 +859,7 @@ cob_move_binary_to_binary (cob_field *f1, cob_field *f2)
 }
 
 static void
-cob_move_display_to_binary (cob_field *f1, cob_field *f2)
+cob_move_display_to_binary (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	const unsigned char	*data1 = COB_FIELD_DATA (f1);
 	const size_t		size1 = COB_FIELD_SIZE (f1);
@@ -869,7 +871,7 @@ cob_move_display_to_binary (cob_field *f1, cob_field *f2)
 
 	if (f1->size > 18
 	 || f2->size > sizeof (val)) {	/* Large Binary field */
-	 	cob_decimal_setget_fld (f1, f2, 0);
+	 	cob_decimal_setget_fld (ctx, f1, f2, 0);
 		return;
 	}
 
@@ -906,7 +908,7 @@ cob_move_display_to_binary (cob_field *f1, cob_field *f2)
 		 && !COB_FIELD_REAL_BINARY (f2)) {
 			opt = COB_STORE_TRUNC_ON_OVERFLOW;
 		}
-		cob_decimal_setget_fld (f1, f2, opt);
+		cob_decimal_setget_fld (ctx, f1, f2, opt);
 		return;
 	}
 
@@ -938,6 +940,7 @@ cob_move_display_to_binary (cob_field *f1, cob_field *f2)
 static void
 cob_move_binary_to_display (cob_field *f1, cob_field *f2)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	cob_u64_t	val;
 	int			i;
 	int			sign;
@@ -946,7 +949,7 @@ cob_move_binary_to_display (cob_field *f1, cob_field *f2)
 	sign = 1;
 	if (f2->size > 18
 	 || f1->size > sizeof (val)) {	/* Large Binary field */
-	 	cob_decimal_setget_fld (f1, f2, 0);
+	 	cob_decimal_setget_fld (ctx, f1, f2, 0);
 		return;
 	}
 
@@ -972,7 +975,7 @@ cob_move_binary_to_display (cob_field *f1, cob_field *f2)
 	}
 
 	/* Store */
-	store_common_region (f2, buff + i, (size_t)20 - i, COB_FIELD_SCALE (f1), 1);
+	store_common_region (ctx, f2, buff + i, (size_t)20 - i, COB_FIELD_SCALE (f1), 1);
 
 	COB_PUT_SIGN (f2, sign);
 }
@@ -983,7 +986,7 @@ cob_move_binary_to_display (cob_field *f1, cob_field *f2)
    get "unpacked" first via indirect_move, then be edited
    from display using this function */
 static void
-optimized_move_display_to_edited (cob_field *f1, cob_field *f2)
+optimized_move_display_to_edited (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	/************************************************************/
 	/*  this is a special "optimized" version of the            */
@@ -1042,7 +1045,7 @@ optimized_move_display_to_edited (cob_field *f1, cob_field *f2)
 	if (!(COB_FIELD_TYPE (f2) == COB_TYPE_NUMERIC_EDITED
 	 && COB_FIELD_DIGITS (f1) == COB_FIELD_DIGITS (f2)
 	 && COB_FIELD_SCALE (f1) == COB_FIELD_SCALE (f2))) {
-		cob_runtime_error_ctx (COB_CTX_TODO, "optimized_move_display_to_edited: invalid argument");
+		cob_runtime_error_ctx (ctx, "optimized_move_display_to_edited: invalid argument");
 	}
 #endif
 
@@ -1122,7 +1125,7 @@ optimized_move_display_to_edited (cob_field *f1, cob_field *f2)
 			unsigned int src_num;
 #ifndef NDEBUG
 			if (dst >= dst_end) {
-				cob_runtime_error_ctx (COB_CTX_TODO, "optimized_move_display_to_edited: overflow in destination field");
+				cob_runtime_error_ctx (ctx, "optimized_move_display_to_edited: overflow in destination field");
 				break;
 			}
 #endif
@@ -1285,7 +1288,7 @@ optimized_move_display_to_edited (cob_field *f1, cob_field *f2)
 				/* LCOV_EXCL_START */
 				if (c != currency) {
 					/* should never happen, consider remove [also the reason for not translating that] */
-					cob_runtime_error_ctx (COB_CTX_TODO, "optimized_move_display_to_edited: invalid PIC character %c", c);
+					cob_runtime_error_ctx (ctx, "optimized_move_display_to_edited: invalid PIC character %c", c);
 					*dst = '?';    /* Invalid PIC */
 					break;
 				} else
@@ -1370,6 +1373,7 @@ optimized_move_display_to_edited (cob_field *f1, cob_field *f2)
 static void
 cob_move_edited_to_display (cob_field *f1, cob_field *f2)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	unsigned char	*p;
 	unsigned char	*buff;
 	size_t		i;
@@ -1440,7 +1444,7 @@ cob_move_edited_to_display (cob_field *f1, cob_field *f2)
 	}
 
 	/* Store */
-	store_common_region (f2, buff, (size_t)(p - buff), scale, 0);
+	store_common_region (ctx, f2, buff, (size_t)(p - buff), scale, 0);
 
 	COB_PUT_SIGN (f2, sign);
 	cob_free (buff);
@@ -1486,7 +1490,7 @@ cob_move_alphanum_to_edited (cob_field *f1, cob_field *f2)
 /* MOVE dispatcher */
 
 static void
-indirect_move (void (*func) (cob_field *src, cob_field *dst),
+indirect_move (cob_context *ctx, void (*func) (cob_field *src, cob_field *dst),
 	       cob_field *src, cob_field *dst,
 	       const size_t size, const int scale)
 {
@@ -1534,26 +1538,26 @@ indirect_move (void (*func) (cob_field *src, cob_field *dst),
 				       NULL);
 		}
 		func (src, &field);
-		optimized_move_display_to_edited (&field, dst);
+		optimized_move_display_to_edited (ctx, &field, dst);
 	} else if (size <= 2 * COB_MAX_DIGITS) {
 		unsigned char buff[2 * COB_MAX_DIGITS] = { 0 };
 		COB_FIELD_INIT (size, buff, &attr);
 		COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, (unsigned short) size, (short) scale,
 			       COB_FLAG_HAVE_SIGN, NULL);
 		func (src, &field);
-		cob_move_ctx (COB_CTX_TODO, &field, dst);
+		cob_move_ctx (ctx, &field, dst);
 	} else {
 		COB_FIELD_INIT (size, cob_malloc (size), &attr);
 		COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, (unsigned short) size, (short) scale,
 			       COB_FLAG_HAVE_SIGN, NULL);
 		func (src, &field);
-		cob_move_ctx (COB_CTX_TODO, &field, dst);
+		cob_move_ctx (ctx, &field, dst);
 		cob_free (field.data);
 	}
 }
 
 static void
-cob_move_all (cob_field *src, cob_field *dst)
+cob_move_all (cob_context *ctx, cob_field *src, cob_field *dst)
 {
 	unsigned char		*p;
 	size_t			digcount;
@@ -1578,7 +1582,7 @@ cob_move_all (cob_field *src, cob_field *dst)
 		digcount = dst->size;
 	} else if (src->size == 1) {
 		memset (all_numeric_data, src->data[0], COB_MAX_DIGITS);
-		cob_move_ctx (COB_CTX_TODO, (cob_field *)&all_numeric_field, dst);
+		cob_move_ctx (ctx, (cob_field *)&all_numeric_field, dst);
 		return;
 	} else {
 		temp.attr = &all_numeric_display_attr;
@@ -1599,7 +1603,7 @@ cob_move_all (cob_field *src, cob_field *dst)
 		}
 	}
 
-	cob_move_ctx (COB_CTX_TODO, &temp, dst);
+	cob_move_ctx (ctx, &temp, dst);
 	cob_free (p);
 }
 
@@ -1678,7 +1682,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		src = &temp;
 	}
 	if (COB_FIELD_TYPE (src) == COB_TYPE_ALPHANUMERIC_ALL) {
-		cob_move_all (src, dst);
+		cob_move_all (ctx, src, dst);
 		return;
 	}
 
@@ -1709,7 +1713,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		case COB_TYPE_NUMERIC_DISPLAY:
 			cob_move_display_to_display (src, dst);
@@ -1719,14 +1723,14 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 			return;
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
-			cob_move_display_to_binary (src, dst);
+			cob_move_display_to_binary (ctx, src, dst);
 			return;
 		case COB_TYPE_NUMERIC_EDITED:
 			if (COB_FIELD_DIGITS (src) == COB_FIELD_DIGITS (dst)
 			 && COB_FIELD_SCALE (src) == COB_FIELD_SCALE (dst)) {
-				optimized_move_display_to_edited (src, dst);
+				optimized_move_display_to_edited (ctx, src, dst);
 			} else {
-				indirect_move (cob_move_display_to_display, src, dst,
+				indirect_move (ctx, cob_move_display_to_display, src, dst,
 					       (size_t)(COB_FIELD_DIGITS (src)),
 					       COB_FIELD_SCALE (src));
 			}
@@ -1735,7 +1739,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 			if (COB_FIELD_SCALE (src) < 0
 			 || COB_FIELD_SCALE (src) > COB_FIELD_DIGITS (src)) {
 				/* Expand P's */
-				indirect_move (cob_move_display_to_display, src, dst,
+				indirect_move (ctx, cob_move_display_to_display, src, dst,
 					       (size_t)cob_max_int (COB_FIELD_DIGITS (src), COB_FIELD_SCALE (src)),
 					       cob_max_int (0, COB_FIELD_SCALE (src)));
 				return;
@@ -1758,14 +1762,14 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 #if 0		/* indirect move is more expensive, check it for improvements */
 			if (opt == COB_STORE_TRUNC_ON_OVERFLOW) {
 				/* note: "dst" is only possible when binary-trunc */
-				indirect_move (cob_move_packed_to_display, src, dst,
+				indirect_move (ctx, cob_move_packed_to_display, src, dst,
 					       COB_FIELD_DIGITS (dst), COB_FIELD_SCALE (dst));
 			} else {
-				indirect_move (cob_move_packed_to_display, src, dst,
+				indirect_move (ctx, cob_move_packed_to_display, src, dst,
 					       COB_FIELD_DIGITS (src), COB_FIELD_SCALE (src));
 			}
 #else
-			cob_decimal_setget_fld (src, dst, opt);
+			cob_decimal_setget_fld (ctx, src, dst, opt);
 #endif
 			return;
 		case COB_TYPE_NUMERIC_PACKED:
@@ -1783,10 +1787,10 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		default:
-			indirect_move (cob_move_packed_to_display, src, dst,
+			indirect_move (ctx, cob_move_packed_to_display, src, dst,
 				       (size_t)(COB_FIELD_DIGITS(src)),
 				       COB_FIELD_SCALE (src));
 			return;
@@ -1834,16 +1838,16 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 					} else {
 						if (opt == COB_STORE_TRUNC_ON_OVERFLOW) {
 							/* note: "dst" is only possible when binary-trunc */
-							indirect_move (cob_move_binary_to_display, src, dst,
+							indirect_move (ctx, cob_move_binary_to_display, src, dst,
 								       COB_FIELD_DIGITS (dst), COB_FIELD_SCALE (dst));
 						} else {
-							indirect_move (cob_move_binary_to_display, src, dst,
+							indirect_move (ctx, cob_move_binary_to_display, src, dst,
 								       COB_FIELD_DIGITS (src), COB_FIELD_SCALE (src));
 						}
 #endif
 					}
 				}
-				cob_decimal_setget_fld (src, dst, opt);
+				cob_decimal_setget_fld (ctx, src, dst, opt);
 				return;
 			}
 		case COB_TYPE_NUMERIC_DISPLAY:
@@ -1870,7 +1874,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 					}
 				}
 			}
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		case COB_TYPE_NUMERIC_DOUBLE:
 		case COB_TYPE_NUMERIC_FLOAT:
@@ -1880,15 +1884,15 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		case COB_TYPE_NUMERIC_EDITED:
-			indirect_move (cob_move_binary_to_display, src, dst,
+			indirect_move (ctx, cob_move_binary_to_display, src, dst,
 				       (size_t)COB_MAX_DIGITS,
 				       COB_FIELD_SCALE (src));
 			return;
 		default:
-			indirect_move (cob_move_binary_to_display, src, dst,
+			indirect_move (ctx, cob_move_binary_to_display, src, dst,
 				       (size_t)(COB_FIELD_DIGITS(src)),
 				       COB_FIELD_SCALE (src));
 			return;
@@ -1903,7 +1907,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
 		case COB_TYPE_NUMERIC_EDITED:
-			indirect_move (cob_move_edited_to_display, src, dst,
+			indirect_move (ctx, cob_move_edited_to_display, src, dst,
 				       (size_t)(2 * COB_MAX_DIGITS),
 				       COB_MAX_DIGITS);
 			return;
@@ -1915,7 +1919,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		case COB_TYPE_ALPHANUMERIC_EDITED:
 			cob_move_alphanum_to_edited (src, dst);
@@ -1936,7 +1940,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 			return;
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
-			cob_decimal_setget_fld (src, dst, opt);
+			cob_decimal_setget_fld (ctx, src, dst, opt);
 			return;
 		case COB_TYPE_NUMERIC_PACKED:
 		case COB_TYPE_NUMERIC_DISPLAY:
@@ -1945,10 +1949,10 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		default:
-			cob_decimal_move_temp (src, dst);
+			cob_decimal_move_temp (ctx, src, dst);
 			return;
 		}
 
@@ -1963,7 +1967,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 			return;
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
-			cob_decimal_setget_fld (src, dst, opt);
+			cob_decimal_setget_fld (ctx, src, dst, opt);
 			return;
 		case COB_TYPE_NUMERIC_PACKED:
 		case COB_TYPE_NUMERIC_DISPLAY:
@@ -1972,10 +1976,10 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		default:
-			cob_decimal_move_temp (src, dst);
+			cob_decimal_move_temp (ctx, src, dst);
 			return;
 		}
 
@@ -1990,7 +1994,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 			return;
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
-			cob_decimal_setget_fld (src, dst, opt);
+			cob_decimal_setget_fld (ctx, src, dst, opt);
 			return;
 		case COB_TYPE_NUMERIC_PACKED:
 		case COB_TYPE_NUMERIC_DISPLAY:
@@ -1999,10 +2003,10 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		default:
-			cob_decimal_move_temp (src, dst);
+			cob_decimal_move_temp (ctx, src, dst);
 			return;
 		}
 
@@ -2010,7 +2014,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		switch (COB_FIELD_TYPE (dst)) {
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
-			cob_decimal_setget_fld (src, dst, opt);
+			cob_decimal_setget_fld (ctx, src, dst, opt);
 			return;
 		case COB_TYPE_NUMERIC_FP_DEC64:
 			memmove (dst->data, src->data, (size_t)8);
@@ -2023,17 +2027,17 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN32:
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		default:
-			cob_decimal_move_temp (src, dst);
+			cob_decimal_move_temp (ctx, src, dst);
 			return;
 		}
 	case COB_TYPE_NUMERIC_FP_DEC128:
 		switch (COB_FIELD_TYPE (dst)) {
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
-			cob_decimal_setget_fld (src, dst, opt);
+			cob_decimal_setget_fld (ctx, src, dst, opt);
 			return;
 		case COB_TYPE_NUMERIC_FP_DEC128:
 			memmove (dst->data, src->data, (size_t)16);
@@ -2047,10 +2051,10 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN64:
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		default:
-			cob_decimal_move_temp (src, dst);
+			cob_decimal_move_temp (ctx, src, dst);
 			return;
 		}
 	default:
@@ -2062,7 +2066,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_BINARY:
 		case COB_TYPE_NUMERIC_COMP5:
 		case COB_TYPE_NUMERIC_EDITED:
-			indirect_move (cob_move_alphanum_to_display, src, dst,
+			indirect_move (ctx, cob_move_alphanum_to_display, src, dst,
 				       (size_t)(2 * COB_MAX_DIGITS),
 				       COB_MAX_DIGITS);
 			return;
@@ -2074,7 +2078,7 @@ cob_move_ctx (cob_context *ctx, cob_field *src, cob_field *dst)
 		case COB_TYPE_NUMERIC_FP_BIN128:
 		case COB_TYPE_NUMERIC_FP_DEC64:
 		case COB_TYPE_NUMERIC_FP_DEC128:
-			cob_decimal_setget_fld (src, dst, 0);
+			cob_decimal_setget_fld (ctx, src, dst, 0);
 			return;
 		case COB_TYPE_ALPHANUMERIC_EDITED:
 			cob_move_alphanum_to_edited (src, dst);

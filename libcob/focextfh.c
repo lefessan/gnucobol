@@ -47,10 +47,10 @@ static const char *io_rtn_name[COB_IO_MAX+1] = {
 };
 
 static COB_INLINE int
-get_io_ptr (cob_file *f)
+get_io_ptr (cob_context *ctx, cob_file *f)
 {
 	if (fileio_funcs[f->io_routine] == NULL) {
-		cob_runtime_error_ctx (COB_CTX_TODO, _("ERROR I/O routine %s is not present"),
+		cob_runtime_error_ctx (ctx, _("ERROR I/O routine %s is not present"),
 							io_rtn_name[f->io_routine]);
 	}
 	return f->io_routine;
@@ -264,7 +264,7 @@ static int relative_read	(cob_file_api *, cob_file *, cob_field *, const int);
 static int relative_read_next	(cob_file_api *, cob_file *, const int);
 static int relative_write	(cob_file_api *, cob_file *, const int);
 static int relative_rewrite	(cob_file_api *, cob_file *, const int);
-static int relative_delete	(cob_file_api *, cob_file *);
+static int relative_delete	(cob_context *, cob_file_api *, cob_file *);
 
 
 static struct cob_fileio_funcs ext_sequential_funcs = {
@@ -364,6 +364,7 @@ seqra_close (cob_file_api *a, cob_file *f, const int opt)
 static int
 sequential_read (cob_file_api *a, cob_file *f, const int read_opts)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_sequential_read (f, read_opts);
@@ -374,13 +375,14 @@ sequential_read (cob_file_api *a, cob_file *f, const int read_opts)
 		f->io_routine = COB_IO_LINE_SEQUENTIAL;
 	else
 		f->io_routine = COB_IO_SEQUENTIAL;
-	return fileio_funcs[get_io_ptr (f)]->read_next (a, f, read_opts);
+	return fileio_funcs[get_io_ptr (ctx, f)]->read_next (a, f, read_opts);
 }
 
 /* WRITE */
 static int
 sequential_write (cob_file_api *a, cob_file *f, const int opt)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_sequential_write (f, opt);
@@ -391,13 +393,14 @@ sequential_write (cob_file_api *a, cob_file *f, const int opt)
 		f->io_routine = COB_IO_LINE_SEQUENTIAL;
 	else
 		f->io_routine = COB_IO_SEQUENTIAL;
-	return fileio_funcs[get_io_ptr (f)]->write (a, f, opt);
+	return fileio_funcs[get_io_ptr (ctx, f)]->write (a, f, opt);
 }
 
 /* REWRITE */
 static int
 sequential_rewrite (cob_file_api *a, cob_file *f, const int opt)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_sequential_rewrite (f, opt);
@@ -408,13 +411,14 @@ sequential_rewrite (cob_file_api *a, cob_file *f, const int opt)
 		f->io_routine = COB_IO_LINE_SEQUENTIAL;
 	else
 		f->io_routine = COB_IO_SEQUENTIAL;
-	return fileio_funcs[get_io_ptr (f)]->rewrite (a, f, opt);
+	return fileio_funcs[get_io_ptr (ctx, f)]->rewrite (a, f, opt);
 }
 
 /* RELATIVE  START */
 static int
 relative_start (cob_file_api *a, cob_file *f, const int cond, cob_field *k)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_relative_start (f, cond, k);
@@ -425,13 +429,14 @@ relative_start (cob_file_api *a, cob_file *f, const int cond, cob_field *k)
 		f->io_routine = COB_IO_LINE_SEQUENTIAL;
 	else
 		f->io_routine = COB_IO_SEQUENTIAL;
-	return fileio_funcs[get_io_ptr (f)]->start (a, f, cond, k);
+	return fileio_funcs[get_io_ptr (ctx, f)]->start (a, f, cond, k);
 }
 
 /* RELATIVE  READ */
 static int
 relative_read (cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_relative_read (f, k, read_opts);
@@ -439,13 +444,14 @@ relative_read (cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (f)]->read (a, f, k, read_opts);
+	return fileio_funcs[get_io_ptr (ctx, f)]->read (a, f, k, read_opts);
 }
 
 /* RELATIVE  READ NEXT */
 static int
 relative_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int		extfh_ret;
 
 	extfh_ret = extfh_relative_read_next (f, read_opts);
@@ -453,13 +459,14 @@ relative_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (f)]->read_next (a, f, read_opts);
+	return fileio_funcs[get_io_ptr (ctx, f)]->read_next (a, f, read_opts);
 }
 
 /* RELATIVE  WRITE */
 static int
 relative_write (cob_file_api *a, cob_file *f, const int opt)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_relative_write (f, opt);
@@ -467,13 +474,14 @@ relative_write (cob_file_api *a, cob_file *f, const int opt)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (f)]->write (a, f, opt);
+	return fileio_funcs[get_io_ptr (ctx, f)]->write (a, f, opt);
 }
 
 /* RELATIVE  REWRITE */
 static int
 relative_rewrite (cob_file_api *a, cob_file *f, const int opt)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_relative_rewrite (f, opt);
@@ -481,12 +489,12 @@ relative_rewrite (cob_file_api *a, cob_file *f, const int opt)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (f)]->rewrite (a, f, opt);
+	return fileio_funcs[get_io_ptr (ctx, f)]->rewrite (a, f, opt);
 }
 
 /* RELATIVE  DELETE */
 static int
-relative_delete (cob_file_api *a, cob_file *f)
+relative_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	int	extfh_ret;
 
@@ -495,7 +503,7 @@ relative_delete (cob_file_api *a, cob_file *f)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (f)]->recdelete (a, f);
+	return fileio_funcs[get_io_ptr (ctx, f)]->recdelete (a, f);
 }
 
 static void

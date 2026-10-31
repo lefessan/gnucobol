@@ -60,7 +60,7 @@ static const cob_field_attr	const_alpha_attr =
 /* DISPLAY */
 
 static void
-display_numeric (cob_field *f, FILE *fp)
+display_numeric (cob_context *ctx, cob_field *f, FILE *fp)
 {
 	const unsigned short	digits = COB_FIELD_DIGITS (f);
 	const signed short	scale = COB_FIELD_SCALE (f);
@@ -90,7 +90,7 @@ display_numeric (cob_field *f, FILE *fp)
 		}
 		COB_FIELD_INIT (size, COB_TERM_BUFF, &attr);
 
-		cob_move_ctx (COB_CTX_TODO, f, &field);
+		cob_move_ctx (ctx, f, &field);
 	}
 
 	/* output of data to viewport */
@@ -106,7 +106,7 @@ display_numeric (cob_field *f, FILE *fp)
 }
 
 static void
-pretty_display_numeric (cob_field *f, FILE *fp)
+pretty_display_numeric (cob_context *ctx, cob_field *f, FILE *fp)
 {
 	unsigned short		digits;
 	signed short		scale = COB_FIELD_SCALE (f);
@@ -185,7 +185,7 @@ pretty_display_numeric (cob_field *f, FILE *fp)
 				has_sign ? (COB_FLAG_HAVE_SIGN | COB_FLAG_SIGN_SEPARATE): 0,
 				(const cob_pic_symbol*)pic);
 
-			cob_move_ctx (COB_CTX_TODO, f, &field);
+			cob_move_ctx (ctx, f, &field);
 		}
 
 		/* output of data to viewport */
@@ -248,7 +248,7 @@ clean_double (char *wrk)
 }
 
 void
-cob_display_common (const cob_field *f, FILE *fp)
+cob_display_common (cob_context *ctx, const cob_field *f, FILE *fp)
 {
 	if (f->size == 0) {
 		return;
@@ -284,7 +284,7 @@ cob_display_common (const cob_field *f, FILE *fp)
 	}
 	case COB_TYPE_NUMERIC_FP_DEC64:
 	case COB_TYPE_NUMERIC_FP_DEC128:
-		cob_print_ieeedec (f, fp);
+		cob_print_ieeedec (ctx, f, fp);
 		return;
 	default:
 		break;
@@ -307,20 +307,20 @@ cob_display_common (const cob_field *f, FILE *fp)
 	if (COB_FIELD_IS_NUMERIC (f)) {
 		/* CHECKME: consider to check for pretty-printing first */
 		if (COB_FIELD_TYPE (f) == COB_TYPE_NUMERIC_COMP5) {
-			cob_print_realbin (f, fp, f->attr->digits);
+			cob_print_realbin (ctx, f, fp, f->attr->digits);
 			return;
 		}
 		if ( COB_FIELD_REAL_BINARY (f)
 		 || (COB_FIELD_TYPE(f) == COB_TYPE_NUMERIC_BINARY
 		   && !COB_MODULE_PTR->flag_pretty_display)) {
-			cob_print_realbin (f, fp, bin_digits[f->size]);
+			cob_print_realbin (ctx, f, fp, bin_digits[f->size]);
 			return;
 		}
 		if (COB_MODULE_PTR->flag_pretty_display) {
-			pretty_display_numeric ((cob_field *)f, fp);
+			pretty_display_numeric (ctx, (cob_field *)f, fp);
 			return;
 		}
-		display_numeric ((cob_field *)f, fp);
+		display_numeric (ctx, (cob_field *)f, fp);
 		return;
 	}
 	display_alnum (f, fp);
@@ -409,7 +409,7 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 			}
 			fp = fopen (cobsetptr->cob_display_punch_filename, mode);
 			if (fp == NULL) {
-				cob_runtime_warning_ctx (COB_CTX_TODO, _("cannot open %s (=%s)"),
+				cob_runtime_warning_ctx (ctx, _("cannot open %s (=%s)"),
 					"COB_DISPLAY_PUNCH_FILE", cobsetptr->cob_display_punch_filename);
 				cob_free (cobsetptr->cob_display_punch_filename);
 				cobsetptr->cob_display_punch_filename = NULL;
@@ -421,10 +421,10 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 		if (cobsetptr->cob_display_punch_file) {
 			fp = cobsetptr->cob_display_punch_file;
 		} else {
-			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_DISPLAY);	/* come back to this later... */
+			cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);	/* come back to this later... */
 			if (!no_syspunch_error_raised) {
 				no_syspunch_error_raised = 1;
-				cob_runtime_warning_ctx (COB_CTX_TODO, _("COB_DISPLAY_PUNCH_FILE is invalid, output to SYSPUNCH skipped"));
+				cob_runtime_warning_ctx (ctx, _("COB_DISPLAY_PUNCH_FILE is invalid, output to SYSPUNCH skipped"));
 			}
 			return;
 		}
@@ -448,7 +448,7 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 		int		i;
 		for (i = 0; i < varcnt; ++i) {
 			cob_field	*f = va_arg (args, cob_field *);
-			cob_display_common (f, fp);
+			cob_display_common (ctx, f, fp);
 		}
 		if (newline) {
 			putc ('\n', fp);
@@ -1007,7 +1007,7 @@ cob_dump_field_va_ctx (cob_context *ctx, const int level, const char *name, cob_
 			display_alnum_dump (f, fp, 41, cobsetptr->cob_dump_width);
 		} else {
 			fprintf (fp, " ");
-			cob_display_common (f, fp);
+			cob_display_common (ctx, f, fp);
 		}
 		fprintf (fp, "\n");
 		f->data = sav_data;
@@ -1036,7 +1036,7 @@ cob_dump_field (const int level, const char *name, cob_field *f_addr, const cob_
 }
 
 void
-cob_print_field (FILE *fp, cob_field *f, int indent, int width)
+cob_print_field (cob_context *ctx, FILE *fp, cob_field *f, int indent, int width)
 {
 	if (f->data == NULL) {
 		fprintf(fp," <NULL> address");
@@ -1051,7 +1051,7 @@ cob_print_field (FILE *fp, cob_field *f, int indent, int width)
 		display_alnum_dump (f, fp, indent, width);
 	} else {
 		fprintf (fp," ");
-		cob_display_common (f, fp);
+		cob_display_common (ctx, f, fp);
 	}
 	fprintf(fp,"\n");
 }
@@ -1074,7 +1074,7 @@ cob_accept_ctx (cob_context *ctx, cob_field *f)
 	}
 	if (COB_MODULE_PTR->crt_status) {
 		if (COB_FIELD_IS_NUMERIC (COB_MODULE_PTR->crt_status)) {
-			cob_set_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->crt_status, 0);
+			cob_set_int_ctx (ctx, COB_MODULE_PTR->crt_status, 0);
 		} else if (COB_MODULE_PTR->crt_status->size == 3) {
 			memcpy (COB_MODULE_PTR->crt_status->data, "0\0\0", (size_t)3);
 		} else {
@@ -1105,7 +1105,7 @@ cob_accept_ctx (cob_context *ctx, cob_field *f)
 	for (; size < COB_MEDIUM_MAX; ) {
 		ipchr = getchar ();
 		if (ipchr == EOF) {
-			cob_set_exception_ctx (COB_CTX_TODO, COB_EC_IMP_ACCEPT);
+			cob_set_exception_ctx (ctx, COB_EC_IMP_ACCEPT);
 			if (!size) {
 				size = 1;
 				p[0] = ' ';
@@ -1125,7 +1125,7 @@ cob_accept_ctx (cob_context *ctx, cob_field *f)
 			temp.size = f->size;
 		}
 	}
-	cob_move_ctx (COB_CTX_TODO, &temp, f);
+	cob_move_ctx (ctx, &temp, f);
 }
 
 /* compatibility: cob_accept without context */

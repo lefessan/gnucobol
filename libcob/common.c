@@ -712,14 +712,14 @@ const char *more_stack_frames_msgid = "(more COBOL runtime elements follow...)";
 
 /* Local functions */
 static int		translate_boolean_to_int	(const char *ptr);
-static cob_s64_t	get_sleep_nanoseconds	(cob_field *nano_seconds);
-static cob_s64_t	get_sleep_nanoseconds_from_seconds	(cob_field *decimal_seconds);
+static cob_s64_t	get_sleep_nanoseconds	(cob_context *, cob_field *nano_seconds);
+static cob_s64_t	get_sleep_nanoseconds_from_seconds	(cob_context *, cob_field *decimal_seconds);
 static void		internal_nanosleep	(cob_s64_t nsecs, int round_to_minmal);
 
-static int		set_config_val	(char *value, int pos);
+static int		set_config_val	(cob_context *, char *value, int pos);
 static char		*get_config_val	(char *value, int pos, char *orgvalue);
 
-static void		cob_dump_module (char *reason);
+static void		cob_dump_module (cob_context *, char *reason);
 static char		abort_reason[COB_MINI_BUFF] = "";
 static unsigned int 	dump_trace_started;	/* ensures that we dump/stacktrace only once */
 #define 		DUMP_TRACE_DONE_DUMP 		(1U << 0)
@@ -728,7 +728,7 @@ static unsigned int 	dump_trace_started;	/* ensures that we dump/stacktrace only
 static void		cob_stack_trace_internal (FILE *target, int verbose, int count);
 
 #ifdef COB_DEBUG_LOG
-static void		cob_debug_open	(void);
+static void		cob_debug_open	(cob_context *);
 #endif
 static void		conf_runtime_error_value	(const char *value, const int conf_pos);
 static void		conf_runtime_error	(const int finish_error, const char *fmt, ...);
@@ -906,14 +906,14 @@ ss_terminate_routines (void)
 }
 
 static void
-cob_terminate_routines (void)
+cob_terminate_routines (cob_context *ctx)
 {
 	if (!cob_initialized || !cobglobptr) {
 		return;
 	}
 	fflush (stderr);
 
-	cob_prof_end ();
+	cob_prof_end (ctx);
 	cob_exit_fileio_msg_only ();
 
 	if (COB_MODULE_PTR && abort_reason[0] != 0) {
@@ -927,7 +927,7 @@ cob_terminate_routines (void)
 		}
 		if (!(dump_trace_started & DUMP_TRACE_DONE_DUMP)) {
 			dump_trace_started |= DUMP_TRACE_DONE_DUMP;
-			cob_dump_module (abort_reason);
+			cob_dump_module (ctx, abort_reason);
 		}
 	}
 
@@ -956,7 +956,7 @@ cob_terminate_routines (void)
 	}
 
 	cob_exit_screen ();
-	cob_exit_fileio ();
+	cob_exit_fileio (ctx);
 #ifdef COB_DEBUG_LOG
 	/* close debug log (delete file if empty) */
 	if (cob_debug_file
@@ -1028,6 +1028,7 @@ cob_get_source_line ()
 char *
 cob_get_strerror (void)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	size_t size;
 	char *ret;
 #ifdef HAVE_STRERROR
@@ -1042,7 +1043,7 @@ cob_get_strerror (void)
 		size = COB_ERRBUF_SIZE - 1;
 	}
 #endif
-	ret = cob_cache_malloc_ctx (COB_CTX_TODO, size + 1);
+	ret = cob_cache_malloc_ctx (ctx, size + 1);
 	memcpy (ret, msg, size + 1);
 	return ret;
 }
@@ -1206,6 +1207,7 @@ create_dumpfile (void)
 static void
 cob_sig_handler (int sig)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	char buff [COB_MEDIUM_BUFF];
 	char signal_text[COB_MINI_BUFF];
 	const char *signal_name;
@@ -1275,7 +1277,7 @@ cob_sig_handler (int sig)
 
 	if (cobsetptr
 	&& !in_stop_run)
-		cob_rollback_ctx (COB_CTX_TODO);
+		cob_rollback_ctx (ctx);
 	in_stop_run = 1;
 
 	/* Skip dumping for SIGTERM, SIGINT and "other process" issue's SIGHUP, SIGPIPE */
@@ -1368,7 +1370,7 @@ cob_sig_handler (int sig)
 		}
 		/* Fall-through */
 	default:
-		cob_terminate_routines ();
+		cob_terminate_routines (ctx);
 		break;
 	}
 
@@ -2219,6 +2221,7 @@ cob_cmp_alnum (cob_field *f1, cob_field *f2)
 static int
 sort_compare (const void *data1, const void *data2)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	size_t		i;
 	int		res;
 	cob_field	f1;
@@ -2232,7 +2235,7 @@ sort_compare (const void *data1, const void *data2)
 		f1.data = (unsigned char *)data1 + sort_key.offset;
 		f2.data = (unsigned char *)data2 + sort_key.offset;
 		if (COB_FIELD_IS_NUMERIC (&f1)) {
-			res = cob_numeric_cmp_ctx (COB_CTX_TODO, &f1, &f2);
+			res = cob_numeric_cmp_ctx (ctx, &f1, &f2);
 		} else {
 			res = memcmp (f1.data, f2.data, f1.size);
 		}
@@ -2248,6 +2251,7 @@ sort_compare (const void *data1, const void *data2)
 static int
 sort_compare_collate (const void *data1, const void *data2)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	size_t		i;
 	int		res;
 	cob_field	f1;
@@ -2261,7 +2265,7 @@ sort_compare_collate (const void *data1, const void *data2)
 		f1.data = (unsigned char *)data1 + sort_key.offset;
 		f2.data = (unsigned char *)data2 + sort_key.offset;
 		if (COB_FIELD_IS_NUMERIC (&f1)) {
-			res = cob_numeric_cmp_ctx (COB_CTX_TODO, &f1, &f2);
+			res = cob_numeric_cmp_ctx (ctx, &f1, &f2);
 		} else {
 			res = cob_cmps (f1.data, f2.data, f1.size, share_sort_state->sort_collate);
 		}
@@ -2275,7 +2279,7 @@ sort_compare_collate (const void *data1, const void *data2)
 /* intermediate move using USAGE DISPLAY field to 'dst' using
    buffer 'src' with given 'size' as source */
 static void
-cob_move_intermediate (cob_field *dst, const void *src, const size_t size)
+cob_move_intermediate (cob_context *ctx, cob_field *dst, const void *src, const size_t size)
 {
 	cob_field	intermediate;
 	intermediate.size = size;
@@ -2283,13 +2287,13 @@ cob_move_intermediate (cob_field *dst, const void *src, const size_t size)
 	/* note: if the target is numeric then cob_move will convert
 	         on the fly to numeric as necessary */
 	intermediate.attr = &const_alpha_attr;
-	cob_move_ctx (COB_CTX_TODO, &intermediate, dst);
+	cob_move_ctx (ctx, &intermediate, dst);
 }
 
 /* intermediate move from 'src' to 'dst'
    as if it would be of COB_TYPE_ALPANUMERIC */
 static void
-cob_move_to_group_as_alnum (cob_field *src, cob_field *dst)
+cob_move_to_group_as_alnum (cob_context *ctx, cob_field *src, cob_field *dst)
 {
 	cob_field	intermediate;
 	cob_field_attr	attr;
@@ -2300,7 +2304,7 @@ cob_move_to_group_as_alnum (cob_field *src, cob_field *dst)
 	intermediate.attr = &attr;
 	attr = *dst->attr;
 	attr.type = COB_TYPE_ALPHANUMERIC;
-	cob_move_ctx (COB_CTX_TODO, src, &intermediate);
+	cob_move_ctx (ctx, src, &intermediate);
 }
 
 /* open file using mode according to cob_unix_lf and
@@ -2835,7 +2839,7 @@ cob_relocate_string (const char *str)
 }
 
 static void
-cob_rescan_env_vals (void)
+cob_rescan_env_vals (cob_context *ctx)
 {
 	int	i;
 	int	j;
@@ -2854,11 +2858,11 @@ cob_rescan_env_vals (void)
 			old_type = gc_conf[i].data_type;
 			gc_conf[i].data_type |= STS_ENVSET;
 
-			if (*env != '\0' && set_config_val (env, i)) {
+			if (*env != '\0' && set_config_val (ctx, env, i)) {
 				gc_conf[i].data_type = old_type;
 
 				/* Remove invalid setting */
-				(void)cob_unsetenv_ctx (COB_CTX_TODO, gc_conf[i].env_name);
+				(void)cob_unsetenv_ctx (ctx, gc_conf[i].env_name);
 			} else if (gc_conf[i].env_group == GRP_HIDE) {
 				/* Any alias present? */
 				for (j = 0; j < NUM_CONFIG; j++) {
@@ -2947,7 +2951,7 @@ cob_get_last_exception_code (void)
 
 /* get exception name for last raised exception */
 const char *
-cob_get_last_exception_name (void)
+cob_get_last_exception_name (cob_context *ctx)
 {
 	size_t	n;
 
@@ -2959,10 +2963,10 @@ cob_get_last_exception_name (void)
 	}
 	/* any match (last to first to get most specific one,
 	   checking missing/not supported first) */
-	if (cob_last_exception_is_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_MISSING)) {
+	if (cob_last_exception_is_ctx (ctx, COB_EC_IMP_FEATURE_MISSING)) {
 		return cob_exception_tab_name[COB_EC_IMP_FEATURE_MISSING];
 	}
-	if (cob_last_exception_is_ctx (COB_CTX_TODO, COB_EC_IMP_FEATURE_DISABLED)) {
+	if (cob_last_exception_is_ctx (ctx, COB_EC_IMP_FEATURE_DISABLED)) {
 		return cob_exception_tab_name[COB_EC_IMP_FEATURE_DISABLED];
 	}
 	for (n = EXCEPTION_TAB_SIZE - 1; n != 0; --n) {
@@ -3076,10 +3080,10 @@ cob_set_exception (const int id)
 
 /* add to last exception, set if empty */
 void
-cob_add_exception (const int id)
+cob_add_exception (cob_context *ctx, const int id)
 {
 	if (!cobglobptr->cob_exception_code) {
-		cob_set_exception_ctx (COB_CTX_TODO, id);
+		cob_set_exception_ctx (ctx, id);
 		return;
 	}
 	cobglobptr->cob_exception_code |= cob_exception_tab_code[id];
@@ -3105,7 +3109,7 @@ cob_accept_exception_status_ctx (cob_context *ctx, cob_field *f)
 			exception = 128;
 		}
 	}
-	cob_set_int_ctx (COB_CTX_TODO, f, exception);
+	cob_set_int_ctx (ctx, f, exception);
 }
 
 /* compatibility: cob_accept_exception_status without context */
@@ -3119,10 +3123,10 @@ void
 cob_accept_user_name_ctx (cob_context *ctx, cob_field *f)
 {
 	if (cobsetptr->cob_user_name) {
-		cob_move_intermediate (f, cobsetptr->cob_user_name,
+		cob_move_intermediate (ctx, f, cobsetptr->cob_user_name,
 			    strlen (cobsetptr->cob_user_name));
 	} else {
-		cob_move_intermediate (f, " ", (size_t)1);
+		cob_move_intermediate (ctx, f, " ", (size_t)1);
 	}
 }
 
@@ -3136,12 +3140,13 @@ cob_accept_user_name (cob_field *f)
 void *
 cob_malloc (const size_t size)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	void	*mptr;
 
 	mptr = calloc ((size_t)1, size);
 	/* LCOV_EXCL_START */
 	if (!mptr) {
-		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_MEMORY);
+		cob_fatal_error_ctx (ctx, COB_FERROR_MEMORY);
 	}
 	/* LCOV_EXCL_STOP */
 	return mptr;
@@ -3150,11 +3155,12 @@ cob_malloc (const size_t size)
 void *
 cob_realloc (void * optr, const size_t osize, const size_t nsize)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	void	*mptr;
 
 	/* LCOV_EXCL_START */
 	if (!optr) {
-		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_FREE);
+		cob_fatal_error_ctx (ctx, COB_FERROR_FREE);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -3168,7 +3174,7 @@ cob_realloc (void * optr, const size_t osize, const size_t nsize)
 	mptr = calloc ((size_t)1, nsize);	/* New memory, past old is cleared */
 	/* LCOV_EXCL_START */
 	if (!mptr) {
-		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_MEMORY);
+		cob_fatal_error_ctx (ctx, COB_FERROR_MEMORY);
 	}
 	/* LCOV_EXCL_STOP */
 	memcpy (mptr, optr, osize);
@@ -3179,10 +3185,11 @@ cob_realloc (void * optr, const size_t osize, const size_t nsize)
 void
 cob_free (void * mptr)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 #ifdef _DEBUG
 	/* LCOV_EXCL_START */
 	if (!mptr) {
-		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_FREE);
+		cob_fatal_error_ctx (ctx, COB_FERROR_FREE);
 	}
 	/* LCOV_EXCL_STOP */
 #endif
@@ -3193,12 +3200,13 @@ cob_free (void * mptr)
 void *
 cob_fast_malloc (const size_t size)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	void	*mptr;
 
 	mptr = malloc (size);
 	/* LCOV_EXCL_START */
 	if (!mptr) {
-		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_MEMORY);
+		cob_fatal_error_ctx (ctx, COB_FERROR_MEMORY);
 	}
 	/* LCOV_EXCL_STOP */
 	return mptr;
@@ -3626,14 +3634,14 @@ cob_get_pointer (const void *srcptr)
 }
 
 static void
-call_exit_handlers_and_terminate (void)
+call_exit_handlers_and_terminate (cob_context *ctx)
 {
 	if (cobsetptr
 	 && !in_stop_run) {
 		if (cobsetptr->cob_stop_run_commit > 0) 
-			cob_commit_ctx (COB_CTX_TODO);
+			cob_commit_ctx (ctx);
 		else
-			cob_rollback_ctx (COB_CTX_TODO);
+			cob_rollback_ctx (ctx);
 	}
 	in_stop_run = 1;
 	if (exit_hdlrs != NULL) {
@@ -3643,7 +3651,7 @@ call_exit_handlers_and_terminate (void)
 			h = h->next;
 		}
 	}
-	cob_terminate_routines ();
+	cob_terminate_routines (ctx);
 }
 
 void
@@ -3652,7 +3660,7 @@ cob_stop_run_ctx (cob_context *ctx, const int status)
 	if (!cob_initialized) {
 		cob_hard_failure ();
 	}
-	call_exit_handlers_and_terminate ();
+	call_exit_handlers_and_terminate (ctx);
 	exit_code = status;
 #ifndef COB_WITHOUT_JMP
 	if (return_jmp_buffer_set) {
@@ -3713,13 +3721,14 @@ cob_stop_error (void)
 void
 cob_hard_failure ()
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	unsigned int core_on_error = handle_core_on_error ();
 	if (core_on_error != 4) {
 		if (core_on_error == 2 && cob_initialized) {
 			/* prevent unloading modules */
 			cobsetptr->cob_physical_cancel = -1;
 		}
-		call_exit_handlers_and_terminate ();
+		call_exit_handlers_and_terminate (ctx);
 	}
 	/* the internal exit code can, in theory, also
 	   be queried by installed signal handlers */
@@ -3744,6 +3753,7 @@ cob_hard_failure ()
 void
 cob_hard_failure_internal (const char *prefix)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	unsigned int core_on_error;
 	if (prefix) {
 		fprintf (stderr, "\n%s: ", prefix);
@@ -3758,7 +3768,7 @@ cob_hard_failure_internal (const char *prefix)
 			/* prevent unloading modules */
 			cobsetptr->cob_physical_cancel = -1;
 		}
-		call_exit_handlers_and_terminate ();
+		call_exit_handlers_and_terminate (ctx);
 	}
 	exit_code = -2;
 #ifndef COB_WITHOUT_JMP
@@ -3814,9 +3824,10 @@ cob_is_initialized (void)
 cob_global *
 cob_get_global_ptr (void)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	/* LCOV_EXCL_START */
 	if (!cob_initialized) {
-		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 	return cobglobptr;
@@ -3854,14 +3865,14 @@ cob_module_global_enter_ctx (cob_context **ctx, cob_module **module,
 		if (auto_init) {
 			cob_init (0, NULL);
 		} else {
-			cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_INITIALIZED);
+			cob_fatal_error_ctx (*ctx, COB_FERROR_INITIALIZED);
 		}
 	}
 
 	/* Get the context of the thread */
 	*ctx = cob_current_context;
 	if (*ctx == NULL) {
-		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_INITIALIZED);
+		cob_fatal_error_ctx (*ctx, COB_FERROR_INITIALIZED);
 	}
 
 	/* Set global pointer */
@@ -3884,7 +3895,7 @@ cob_module_global_enter_ctx (cob_context **ctx, cob_module **module,
 	if (!*module) {
 		struct cob_alloc_module *mod_ptr;
 
-		*module = cob_cache_malloc_ctx (COB_CTX_TODO, sizeof (cob_module));
+		*module = cob_cache_malloc_ctx (*ctx, sizeof (cob_module));
 		/* Add to list of all modules activated */
 		mod_ptr = cob_malloc (sizeof (struct cob_alloc_module));
 		mod_ptr->cob_mod_ptr = *module;
@@ -3902,17 +3913,17 @@ cob_module_global_enter_ctx (cob_context **ctx, cob_module **module,
 				   a _static_ variable ? */
 				if (cobglobptr->cob_stmt_exception) {
 					/* CALL has ON EXCEPTION so return to caller */
-					cob_set_exception_ctx (COB_CTX_TODO, COB_EC_PROGRAM_RECURSIVE_CALL);
+					cob_set_exception_ctx (*ctx, COB_EC_PROGRAM_RECURSIVE_CALL);
 					cobglobptr->cob_stmt_exception = 0;
 					return 1;
 				}
 				cob_module_err = mod;
-				cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_RECURSIVE);
+				cob_fatal_error_ctx (*ctx, COB_FERROR_RECURSIVE);
 			}
 			/* LCOV_EXCL_START */
 			if (k++ == MAX_MODULE_ITERS) {	/* prevent endless loop in case of broken list */
 				/* not translated as highly unexpected */
-				cob_runtime_warning_ctx (COB_CTX_TODO, "max module iterations exceeded, possible broken chain");
+				cob_runtime_warning_ctx (*ctx, "max module iterations exceeded, possible broken chain");
 				break;
 			}
 			/* LCOV_EXCL_STOP */
@@ -4172,6 +4183,7 @@ void
 cob_check_version (const char *prog,
 		   const char *packver_prog, const int patchlev_prog)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int nparts;
 	struct ver_t lib, app;
 
@@ -4215,20 +4227,20 @@ cob_check_version (const char *prog,
 
 err:
 	/* TODO: when CALLed - raise exception so program can go ON EXCEPTION */
-	cob_runtime_error_ctx (COB_CTX_TODO, _("version mismatch"));
-	cob_runtime_hint_ctx (COB_CTX_TODO, _("%s has version %s.%d"), prog,
+	cob_runtime_error_ctx (ctx, _("version mismatch"));
+	cob_runtime_hint_ctx (ctx, _("%s has version %s.%d"), prog,
 			   packver_prog, patchlev_prog);
-	cob_runtime_hint_ctx (COB_CTX_TODO, _("%s has version %s.%d"), "libcob",
+	cob_runtime_hint_ctx (ctx, _("%s has version %s.%d"), "libcob",
 			   PACKAGE_VERSION, PATCH_LEVEL);
 	cob_hard_failure ();
 }
 
 void
-cob_parameter_check (const char *func_name, const int num_arguments)
+cob_parameter_check (cob_context *ctx, const char *func_name, const int num_arguments)
 {
 	if (cobglobptr->cob_call_params < num_arguments) {
 		/* TODO: raise exception */
-		cob_runtime_error_ctx (COB_CTX_TODO, _("CALL to %s requires %d arguments"),
+		cob_runtime_error_ctx (ctx, _("CALL to %s requires %d arguments"),
 				   func_name, num_arguments);
 		cob_hard_failure ();
 	}
@@ -4648,14 +4660,14 @@ cob_cmp_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
 	if (f2_type == COB_TYPE_ALPHANUMERIC_ALL) {
 		if (f2->size == 1 && f2->data[0] == '0'
 		 && f1_is_numeric) {
-			return cob_cmp_int_ctx (COB_CTX_TODO, f1, 0);
+			return cob_cmp_int_ctx (ctx, f1, 0);
 		}
 		return cob_cmp_all (f1, f2);
 	}
 	if (f1_type == COB_TYPE_ALPHANUMERIC_ALL) {
 		if (f1->size == 1 && f1->data[0] == '0'
 		 && f2_is_numeric) {
-			return -cob_cmp_int_ctx (COB_CTX_TODO, f2, 0);
+			return -cob_cmp_int_ctx (ctx, f2, 0);
 		}
 		return -cob_cmp_all (f2, f1);
 	}
@@ -4691,7 +4703,7 @@ cob_cmp_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
 			attr = *f1->attr;
 			attr.type = COB_TYPE_NUMERIC_DISPLAY;
 			attr.flags &= ~COB_FLAG_HAVE_SIGN;
-			cob_move_ctx (COB_CTX_TODO, f1, &field);
+			cob_move_ctx (ctx, f1, &field);
 			f1 = &field;
 		}
 		if (f2_is_numeric
@@ -4700,7 +4712,7 @@ cob_cmp_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
 			attr = *f2->attr;
 			attr.type = COB_TYPE_NUMERIC_DISPLAY;
 			attr.flags &= ~COB_FLAG_HAVE_SIGN;
-			cob_move_ctx (COB_CTX_TODO, f2, &field);
+			cob_move_ctx (ctx, f2, &field);
 			f2 = &field;
 		}
 
@@ -5715,7 +5727,7 @@ cob_set_date_from_epoch (struct cob_time *cb_time, const unsigned char *p)
 }
 
 static void
-check_current_date ()
+check_current_date (cob_context *ctx)
 {
 	int		yr, mm, dd, hh, mi, ss, ns;
 	int		offset = 9999;
@@ -5741,7 +5753,7 @@ check_current_date ()
 		/* @sssssssss   seconds since epoch */
 		ret = cob_set_date_from_epoch (&cobsetptr->cob_time_constant, ++p);
 		if (ret) {
-			cob_runtime_warning_ctx (COB_CTX_TODO, _("COB_CURRENT_DATE '%s' is invalid"), cobsetptr->cob_date);
+			cob_runtime_warning_ctx (ctx, _("COB_CURRENT_DATE '%s' is invalid"), cobsetptr->cob_date);
 		}
 		return;
 	}
@@ -5981,7 +5993,7 @@ check_current_date ()
 	}
 
 	if (ret != 0) {
-		cob_runtime_warning_ctx (COB_CTX_TODO, _("COB_CURRENT_DATE '%s' is invalid"), cobsetptr->cob_date);
+		cob_runtime_warning_ctx (ctx, _("COB_CURRENT_DATE '%s' is invalid"), cobsetptr->cob_date);
 		return;
 	}
 
@@ -6089,9 +6101,9 @@ cob_accept_date_ctx (cob_context *ctx, cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move_ctx (COB_CTX_TODO, &field, f);
+		cob_move_ctx (ctx, &field, f);
 	} else {
-		cob_move_to_group_as_alnum (&field, f);
+		cob_move_to_group_as_alnum (ctx, &field, f);
 	}
 }
 
@@ -6118,9 +6130,9 @@ cob_accept_date_yyyymmdd_ctx (cob_context *ctx, cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move_ctx (COB_CTX_TODO, &field, f);
+		cob_move_ctx (ctx, &field, f);
 	} else {
-		cob_move_to_group_as_alnum (&field, f);
+		cob_move_to_group_as_alnum (ctx, &field, f);
 	}
 }
 
@@ -6145,9 +6157,9 @@ cob_accept_day_ctx (cob_context *ctx, cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move_ctx (COB_CTX_TODO, &field, f);
+		cob_move_ctx (ctx, &field, f);
 	} else {
-		cob_move_to_group_as_alnum (&field, f);
+		cob_move_to_group_as_alnum (ctx, &field, f);
 	}
 }
 
@@ -6172,9 +6184,9 @@ cob_accept_day_yyyyddd_ctx (cob_context *ctx, cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move_ctx (COB_CTX_TODO, &field, f);
+		cob_move_ctx (ctx, &field, f);
 	} else {
-		cob_move_to_group_as_alnum (&field, f);
+		cob_move_to_group_as_alnum (ctx, &field, f);
 	}
 }
 
@@ -6192,7 +6204,7 @@ cob_accept_day_of_week_ctx (cob_context *ctx, cob_field *f)
 	const struct cob_time		time = cob_get_current_datetime (DTR_DATE);
 	const unsigned char		day = (unsigned char)(time.day_of_week + '0');
 	const unsigned short		digits = 1;
-	cob_move_intermediate (f, &day, digits);
+	cob_move_intermediate (ctx, f, &day, digits);
 }
 
 /* compatibility: cob_accept_day_of_week without context */
@@ -6221,9 +6233,9 @@ cob_accept_time_ctx (cob_context *ctx, cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move_ctx (COB_CTX_TODO, &field, f);
+		cob_move_ctx (ctx, &field, f);
 	} else {
-		cob_move_to_group_as_alnum (&field, f);
+		cob_move_to_group_as_alnum (ctx, &field, f);
 	}
 }
 
@@ -6251,9 +6263,9 @@ cob_accept_microsecond_time_ctx (cob_context *ctx, cob_field *f)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
 
 	if (COB_FIELD_TYPE (f) != COB_TYPE_GROUP) {
-		cob_move_ctx (COB_CTX_TODO, &field, f);
+		cob_move_ctx (ctx, &field, f);
 	} else {
-		cob_move_to_group_as_alnum (&field, f);
+		cob_move_to_group_as_alnum (ctx, &field, f);
 	}
 }
 
@@ -6293,12 +6305,12 @@ cob_accept_command_line_ctx (cob_context *ctx, cob_field *f)
 	size_t	len;
 
 	if (commlnptr) {
-		cob_move_intermediate (f, commlnptr, commlncnt);
+		cob_move_intermediate (ctx, f, commlnptr, commlncnt);
 		return;
 	}
 
 	if (cob_argc <= 1) {
-		cob_move_intermediate (f, " ", (size_t)1);
+		cob_move_intermediate (ctx, f, " ", (size_t)1);
 		return;
 	}
 
@@ -6323,7 +6335,7 @@ cob_accept_command_line_ctx (cob_context *ctx, cob_field *f)
 			break;
 		}
 	}
-	cob_move_intermediate (f, buff, size);
+	cob_move_intermediate (ctx, f, buff, size);
 	cob_free (buff);
 }
 
@@ -6346,7 +6358,7 @@ cob_display_arg_number_ctx (cob_context *ctx, cob_field *f)
 
 	COB_FIELD_INIT (4, (unsigned char *)&n, &attr);
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
-	cob_move_ctx (COB_CTX_TODO, f, &field);
+	cob_move_ctx (ctx, f, &field);
 	if (n < 0 || n >= cob_argc) {
 		cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);
 		return;
@@ -6371,7 +6383,7 @@ cob_accept_arg_number_ctx (cob_context *ctx, cob_field *f)
 
 	COB_FIELD_INIT (sizeof (cob_u32_t), (unsigned char *)&n, &attr);
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, digits, 0, 0, NULL);
-	cob_move_ctx (COB_CTX_TODO, &field, f);
+	cob_move_ctx (ctx, &field, f);
 }
 
 /* compatibility: cob_accept_arg_number without context */
@@ -6388,7 +6400,7 @@ cob_accept_arg_value_ctx (cob_context *ctx, cob_field *f)
 		cob_set_exception_ctx (ctx, COB_EC_IMP_ACCEPT);
 		return;
 	}
-	cob_move_intermediate (f, cob_argv[current_arg],
+	cob_move_intermediate (ctx, f, cob_argv[current_arg],
 		    strlen (cob_argv[current_arg]));
 	current_arg++;
 }
@@ -6488,7 +6500,7 @@ cob_putenv_ctx (cob_context *ctx, char *name)
 	if (name && strchr (name, '=')) {
 		ret = putenv (cob_strdup (name));
 		if (!ret) {
-			cob_rescan_env_vals ();
+			cob_rescan_env_vals (ctx);
 		}
 		return ret;
 	}
@@ -6562,7 +6574,7 @@ cob_display_env_value_ctx (cob_context *ctx, const cob_field *f)
 		return;
 	}
 	/* Rescan term/screen variables */
-	cob_rescan_env_vals ();
+	cob_rescan_env_vals (ctx);
 }
 
 /* compatibility: cob_display_env_value without context */
@@ -6615,10 +6627,10 @@ cob_get_environment_ctx (cob_context *ctx, const cob_field *envname, cob_field *
 	}
 	p = getenv (buff);
 	if (p) {
-		cob_move_intermediate (envval, p, strlen (p));
+		cob_move_intermediate (ctx, envval, p, strlen (p));
 	} else {
 		cob_set_exception_ctx (ctx, COB_EC_IMP_ACCEPT);
-		cob_move_intermediate (envval, " ", 1);
+		cob_move_intermediate (ctx, envval, " ", 1);
 	}
 }
 
@@ -6638,10 +6650,10 @@ cob_accept_environment_ctx (cob_context *ctx, cob_field *f)
 		p = getenv (cob_local_env);
 	}
 	if (p) {
-		cob_move_intermediate (f, p, strlen (p));
+		cob_move_intermediate (ctx, f, p, strlen (p));
 	} else {
 		cob_set_exception_ctx (ctx, COB_EC_IMP_ACCEPT);
-		cob_move_intermediate (f, " ", 1);
+		cob_move_intermediate (ctx, f, " ", 1);
 	}
 }
 
@@ -6678,7 +6690,7 @@ cob_chain_setup (void *data, const size_t parm, const size_t size)
 void
 cob_continue_after_ctx (cob_context *ctx, cob_field *decimal_seconds)
 {
-	cob_s64_t	nanoseconds = get_sleep_nanoseconds_from_seconds (decimal_seconds);
+	cob_s64_t	nanoseconds = get_sleep_nanoseconds_from_seconds (ctx, decimal_seconds);
 
 	if (nanoseconds < 0) {
 		cob_set_exception_ctx (ctx, COB_EC_CONTINUE_LESS_THAN_ZERO);
@@ -6703,7 +6715,7 @@ void
 cob_allocate_ctx (cob_context *ctx, unsigned char **dataptr, cob_field *retptr,
 	      cob_field *sizefld, cob_field *initialize)
 {
-	const cob_s64_t		fsize = cob_get_llint_ctx (COB_CTX_TODO, sizefld);
+	const cob_s64_t		fsize = cob_get_llint_ctx (ctx, sizefld);
 	void			*mptr = NULL;
 
 	cobglobptr->cob_exception_code = 0;
@@ -6727,7 +6739,7 @@ cob_allocate_ctx (cob_context *ctx, unsigned char **dataptr, cob_field *retptr,
 				temp.size = memsize;
 				temp.data = mptr;
 				temp.attr = &const_alpha_attr;
-				cob_move_ctx (COB_CTX_TODO, initialize, &temp);
+				cob_move_ctx (ctx, initialize, &temp);
 			}
 #if 0
 			else {
@@ -6881,7 +6893,7 @@ check_valid_dir (const char *dir)
 }
 
 static const char *
-check_valid_env_tmpdir (const char *envname)
+check_valid_env_tmpdir (cob_context *ctx, const char *envname)
 {
 	const char *dir;
 
@@ -6890,8 +6902,8 @@ check_valid_env_tmpdir (const char *envname)
 		return NULL;
 	}
 	if (check_valid_dir (dir)) {
-		cob_runtime_warning_ctx (COB_CTX_TODO, "Temporary directory %s is invalid, adjust TMPDIR!", envname);
-		(void)cob_unsetenv_ctx (COB_CTX_TODO, envname);
+		cob_runtime_warning_ctx (ctx, "Temporary directory %s is invalid, adjust TMPDIR!", envname);
+		(void)cob_unsetenv_ctx (ctx, envname);
 		return NULL;
 	}
 	return dir;
@@ -6900,7 +6912,7 @@ check_valid_env_tmpdir (const char *envname)
 
 /* return pointer to TMPDIR without trailing slash */
 static const char *
-cob_gettmpdir (void)
+cob_gettmpdir (cob_context *ctx)
 {
 	static const char	*tmpdir = NULL;
 	char	*tmp;
@@ -6911,15 +6923,15 @@ cob_gettmpdir (void)
 
 	tmp = NULL;
 	/* target directory, also used by most called external tools*/
-	if ((tmpdir = check_valid_env_tmpdir ("TMPDIR")) == NULL
+	if ((tmpdir = check_valid_env_tmpdir (ctx, "TMPDIR")) == NULL
 	/* OS specific temporary paths */
 #ifdef	_WIN32
-	 && (tmpdir = check_valid_env_tmpdir ("TEMP")) == NULL
-	 && (tmpdir = check_valid_env_tmpdir ("TMP")) == NULL
-	 && (tmpdir = check_valid_env_tmpdir ("USERPROFILE")) == NULL) {
+	 && (tmpdir = check_valid_env_tmpdir (ctx, "TEMP")) == NULL
+	 && (tmpdir = check_valid_env_tmpdir (ctx, "TMP")) == NULL
+	 && (tmpdir = check_valid_env_tmpdir (ctx, "USERPROFILE")) == NULL) {
 #else
-	 && (tmpdir = check_valid_env_tmpdir ("TMP")) == NULL
-	 && (tmpdir = check_valid_env_tmpdir ("TEMP")) == NULL) {
+	 && (tmpdir = check_valid_env_tmpdir (ctx, "TMP")) == NULL
+	 && (tmpdir = check_valid_env_tmpdir (ctx, "TEMP")) == NULL) {
 		if (!check_valid_dir ("/tmp")) {
 			tmp = cob_fast_malloc (5U);
 			strcpy (tmp, "/tmp");
@@ -6960,6 +6972,7 @@ cob_gettmpdir (void)
 void
 cob_temp_name (char *filename, const char *ext)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int pid = cob_sys_getpid ();
 #ifndef HAVE_8DOT3_FILENAMES
 #define TEMP_EXT_SCHEMA	"%s%ccob%d_%d%s"
@@ -6972,10 +6985,10 @@ cob_temp_name (char *filename, const char *ext)
 #endif
 	if (ext) {
 		snprintf (filename, (size_t)COB_FILE_MAX, TEMP_EXT_SCHEMA,
-			cob_gettmpdir (), SLASH_CHAR, pid, cob_temp_iteration, ext);
+			cob_gettmpdir (ctx), SLASH_CHAR, pid, cob_temp_iteration, ext);
 	} else {
 		snprintf (filename, (size_t)COB_FILE_MAX, TEMP_SORT_SCHEMA,
-			cob_gettmpdir (), SLASH_CHAR, pid, cob_temp_iteration);
+			cob_gettmpdir (ctx), SLASH_CHAR, pid, cob_temp_iteration);
 	}
 #undef TEMP_EXT_SCHEMA
 #undef TEMP_SORT_SCHEMA
@@ -7042,12 +7055,13 @@ cob_command_line (int flags, int *pargc, char ***pargv, char ***penvp, char **pn
 int
 cob_tidy (void)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	if (!cob_initialized) {
 		exit_code = -1;
 		return 1;
 	}
 	exit_code = 0;
-	call_exit_handlers_and_terminate ();
+	call_exit_handlers_and_terminate (ctx);
 	return 0;
 }
 
@@ -7056,6 +7070,7 @@ cob_tidy (void)
 int
 cob_sys_exit_proc (const void *dispo, const void *pptr)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	struct exit_handlerlist *hp;
 	struct exit_handlerlist *h;
 	unsigned char	install_flag;
@@ -7072,7 +7087,7 @@ cob_sys_exit_proc (const void *dispo, const void *pptr)
 	   furthermore the second parameter is a mixed priority + install_flag */
 	if (something) {
 		const char *name = (char *)pptr;
-		pptr = cob_resolve_cobol_ctx (COB_CTX_TODO, name, 0, 0);
+		pptr = cob_resolve_cobol_ctx (ctx, name, 0, 0);
 
 		if (!p) {
 			return -1;
@@ -7178,6 +7193,7 @@ cob_sys_exit_proc (const void *dispo, const void *pptr)
 int
 cob_sys_error_proc (const void *dispo, const void *pptr)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	struct handlerlist	*hp;
 	struct handlerlist	*h;
 	const unsigned char	*x;
@@ -7191,7 +7207,7 @@ cob_sys_error_proc (const void *dispo, const void *pptr)
 	   maybe resolve here and return -1 if not possible */
 	if (something) {
 		const char *name = (char *)pptr;
-		pptr = cob_resolve_cobol_ctx (COB_CTX_TODO, name, 0, 0);
+		pptr = cob_resolve_cobol_ctx (ctx, name, 0, 0);
 		if (!p) {
 			return -1;
 		}
@@ -7257,16 +7273,17 @@ cob_sys_error_proc (const void *dispo, const void *pptr)
 int
 cob_sys_runtime_error_proc (const void *err_flags, const void *err_msg)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	const char *msg = (const char*)err_msg;
 
 	COB_CHK_PARMS (CBL_RUNTIME_ERROR, 2);
 	COB_UNUSED (err_flags);
 
 	if (msg && msg[0]) {
-		cob_runtime_error_ctx (COB_CTX_TODO, "%s: %s",
+		cob_runtime_error_ctx (ctx, "%s: %s",
 			_("Program abandoned at user request"), msg);
 	} else {
-		cob_runtime_error_ctx (COB_CTX_TODO, "%s",
+		cob_runtime_error_ctx (ctx, "%s",
 			_("Program abandoned at user request"));
 	}
 	cob_hard_failure ();
@@ -7275,6 +7292,7 @@ cob_sys_runtime_error_proc (const void *err_flags, const void *err_msg)
 int
 cob_sys_system (const void *cmdline)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	COB_CHK_PARMS (SYSTEM, 1);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
@@ -7291,7 +7309,7 @@ cob_sys_system (const void *cmdline)
 			char	*command;
 			/* LCOV_EXCL_START */
 			if (i > COB_MEDIUM_MAX) {
-				cob_runtime_warning_ctx (COB_CTX_TODO, _("parameter to SYSTEM call is larger than %d characters"),
+				cob_runtime_warning_ctx (ctx, _("parameter to SYSTEM call is larger than %d characters"),
 					COB_MEDIUM_MAX);
 				return 1;
 			}
@@ -7322,19 +7340,19 @@ cob_sys_system (const void *cmdline)
 			{
 				int status;
 				if (cobglobptr->cob_screen_initialized) {
-					cob_screen_set_mode (0);
+					cob_screen_set_mode (ctx, 0);
 				}
 				/* note: if the command cannot be executed _WIN32 always returns 1
 				   while GNU/Linux returns -1 */
 				status = system (command);
 				if (cobglobptr->cob_screen_initialized) {
-					cob_screen_set_mode (1);
+					cob_screen_set_mode (ctx, 1);
 				}
 #ifdef	WIFSIGNALED
 				if (WIFSIGNALED (status)) {
 					int sig = WTERMSIG (status);
 					const char *signal_name = cob_get_sig_name (sig);
-					cob_runtime_warning_ctx (COB_CTX_TODO, _("external process \"%s\" ended with signal %s (%d)"),
+					cob_runtime_warning_ctx (ctx, _("external process \"%s\" ended with signal %s (%d)"),
 						command, signal_name, sig);
 				}
 #endif
@@ -7677,6 +7695,7 @@ cob_sys_xf5 (const void *p1, void *p2)
 int
 cob_sys_x91 (void *p1, const void *p2, void *p3)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	cob_u8_ptr		result = p1;
 	const cob_u8_ptr	func = p2;
 	cob_u8_ptr		parm = p3;
@@ -7755,7 +7774,7 @@ cob_sys_x91 (void *p1, const void *p2, void *p3)
 		{
 			char name[256];
 			strncpy (name, p, *parm);
-			void * func = cob_resolve_ctx (COB_CTX_TODO, name);
+			void * func = cob_resolve_ctx (ctx, name);
 			/* TODO: the full name should be copied back into p */
 			return (func != NULL);
 		}
@@ -7786,7 +7805,7 @@ cob_sys_x91 (void *p1, const void *p2, void *p3)
 			{
 				cob_field field;
 				COB_FIELD_INIT (*parm, p, NULL);
-				cob_display_command_line_ctx (COB_CTX_TODO, &field);
+				cob_display_command_line_ctx (ctx, &field);
 			}
 		}
 		{
@@ -7882,9 +7901,9 @@ cob_sys_tolower (void *p1, const int length)
 #define NANOSECONDS_PER_MILISECOND 1000000
 
 static cob_s64_t
-get_sleep_nanoseconds (cob_field *nano_seconds) {
+get_sleep_nanoseconds (cob_context *ctx, cob_field *nano_seconds) {
 
-	cob_s64_t	nanoseconds = cob_get_llint_ctx (COB_CTX_TODO, nano_seconds);
+	cob_s64_t	nanoseconds = cob_get_llint_ctx (ctx, nano_seconds);
 
 	if (nanoseconds < 0) {
 		return -1;
@@ -7897,10 +7916,10 @@ get_sleep_nanoseconds (cob_field *nano_seconds) {
 }
 
 static cob_s64_t
-get_sleep_nanoseconds_from_seconds (cob_field *decimal_seconds) {
+get_sleep_nanoseconds_from_seconds (cob_context *ctx, cob_field *decimal_seconds) {
 
 #define MAX_SLEEP_TIME 3600*24*7
-	cob_s64_t	seconds = cob_get_llint_ctx (COB_CTX_TODO, decimal_seconds);
+	cob_s64_t	seconds = cob_get_llint_ctx (ctx, decimal_seconds);
 
 	if (seconds < 0) {
 		return -1;
@@ -7913,7 +7932,7 @@ get_sleep_nanoseconds_from_seconds (cob_field *decimal_seconds) {
 		temp.size = 8;
 		temp.data = (unsigned char *)&nanoseconds;
 		temp.attr = &const_bin_nano_attr;
-		cob_move_ctx (COB_CTX_TODO, decimal_seconds, &temp);
+		cob_move_ctx (ctx, decimal_seconds, &temp);
 		return nanoseconds;
 	}
 }
@@ -7953,12 +7972,13 @@ cob_sleep_msec (const unsigned int msecs)
 int
 cob_sys_oc_nanosleep (const void *data)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	COB_UNUSED (data);
 	COB_CHK_PARMS (CBL_GC_NANOSLEEP, 1);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
 		cob_s64_t nsecs
-			= get_sleep_nanoseconds (COB_MODULE_PTR->cob_procedure_params[0]);
+			= get_sleep_nanoseconds (ctx, COB_MODULE_PTR->cob_procedure_params[0]);
 		if (nsecs > 0) {
 			internal_nanosleep (nsecs, 0);
 		}
@@ -7971,12 +7991,13 @@ cob_sys_oc_nanosleep (const void *data)
 int
 cob_sys_sleep (const void *data)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	COB_UNUSED (data);
 	COB_CHK_PARMS (C$SLEEP, 1);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
 		cob_s64_t	nanoseconds
-			= get_sleep_nanoseconds_from_seconds (COB_MODULE_PTR->cob_procedure_params[0]);
+			= get_sleep_nanoseconds_from_seconds (ctx, COB_MODULE_PTR->cob_procedure_params[0]);
 		if (nanoseconds < 0) {
 			/* ACUCOBOL specifies a runtime error here... */
 			return -1;
@@ -7999,6 +8020,7 @@ cob_sys_getpid (void)
 int
 cob_sys_fork (void)
 {
+	cob_context	*ctx = cob_get_current_context ();
  /* cygwin does not define _WIN32, but implements [slow] fork() and provides unistd.h
     MSYS defines _WIN32, provides unistd.h and not implements fork()
  */
@@ -8010,12 +8032,12 @@ cob_sys_fork (void)
 		return 0;		/* child process just returns */
 	}
 	if (pid < 0) {			/* Some error happened */
-		cob_runtime_warning_ctx (COB_CTX_TODO, _("error '%s' during CBL_GC_FORK"), cob_get_strerror ());
+		cob_runtime_warning_ctx (ctx, _("error '%s' during CBL_GC_FORK"), cob_get_strerror ());
 		return -2;
 	}
 	return pid;			/* parent gets process id of child */
 #else
-	cob_runtime_warning_ctx (COB_CTX_TODO, _("'%s' is not supported on this platform"), "CBL_GC_FORK");
+	cob_runtime_warning_ctx (ctx, _("'%s' is not supported on this platform"), "CBL_GC_FORK");
 	return -1;
 #endif
 }
@@ -8027,13 +8049,14 @@ cob_sys_fork (void)
 int
 cob_sys_waitpid (const void *p_id)
 {
+	cob_context	*ctx = cob_get_current_context ();
 #ifdef	HAVE_SYS_WAIT_H
 	int	pid, status, wait_sts;
 
 	COB_UNUSED (p_id);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
-		pid = cob_get_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[0]);
+		pid = cob_get_int_ctx (ctx, COB_MODULE_PTR->cob_procedure_params[0]);
 		if (pid == cob_sys_getpid ()) {
 			status = 0 - EINVAL;
 			return status;
@@ -8041,7 +8064,7 @@ cob_sys_waitpid (const void *p_id)
 		wait_sts = waitpid (pid, &status, 0);
 		if (wait_sts < 0) {			/* Some error happened */
 			status = 0 - errno;
-			cob_runtime_warning_ctx (COB_CTX_TODO, _("error '%s' for P%d during CBL_GC_WAITPID"),
+			cob_runtime_warning_ctx (ctx, _("error '%s' for P%d during CBL_GC_WAITPID"),
 				cob_get_strerror (), pid);
 			return status;
 		}
@@ -8059,7 +8082,7 @@ cob_sys_waitpid (const void *p_id)
 
 	status = 0;
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
-		pid = cob_get_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[0]);
+		pid = cob_get_int_ctx (ctx, COB_MODULE_PTR->cob_procedure_params[0]);
 		if (pid == cob_sys_getpid ()) {
 			status = 0 - ERROR_INVALID_DATA;
 			return status;
@@ -8112,7 +8135,7 @@ cob_sys_waitpid (const void *p_id)
 #else
 	COB_UNUSED (p_id);
 
-	cob_runtime_warning_ctx (COB_CTX_TODO, _("'%s' is not supported on this platform"), "CBL_GC_WAITPID");
+	cob_runtime_warning_ctx (ctx, _("'%s' is not supported on this platform"), "CBL_GC_WAITPID");
 	return -1;
 #endif
 }
@@ -8124,12 +8147,13 @@ cob_sys_waitpid (const void *p_id)
 int
 cob_sys_return_args (void *data)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	COB_UNUSED (data);
 
 	COB_CHK_PARMS (C$NARG, 1);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
-		cob_set_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[0],
+		cob_set_int_ctx (ctx, COB_MODULE_PTR->cob_procedure_params[0],
 			COB_MODULE_PTR->module_num_params);
 	}
 	return 0;
@@ -8164,6 +8188,7 @@ cob_sys_calledby (void *data)
 int
 cob_sys_parameter_size (void *data)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	int	n;
 
 	COB_UNUSED (data);
@@ -8171,7 +8196,7 @@ cob_sys_parameter_size (void *data)
 	COB_CHK_PARMS (C$PARAMSIZE, 1);
 
 	if (COB_MODULE_PTR->cob_procedure_params[0]) {
-		n = cob_get_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[0]);
+		n = cob_get_int_ctx (ctx, COB_MODULE_PTR->cob_procedure_params[0]);
 		if (n > 0 && n <= COB_MODULE_PTR->module_num_params) {
 			n--;
 			if (COB_MODULE_PTR->next
@@ -8186,6 +8211,7 @@ cob_sys_parameter_size (void *data)
 int
 cob_sys_getopt_long_long (void *so, void *lo, void *idx, const int long_only, void *return_char, void *opt_val)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	/*
 	 * cob_argc is a static int containing argc from runtime
 	 * cob_argv is a static char ** containing argv from runtime
@@ -8232,15 +8258,15 @@ cob_sys_getopt_long_long (void *so, void *lo, void *idx, const int long_only, vo
 		lo_amount = (int)lo_size / sizeof (longoption_def);
 		longoptions_root = (struct option*) cob_malloc (sizeof (struct option) * ((size_t)lo_amount + 1U));
 	} else {
-		cob_runtime_error_ctx (COB_CTX_TODO, _("call to CBL_GC_GETOPT with wrong longoption size"));
+		cob_runtime_error_ctx (ctx, _("call to CBL_GC_GETOPT with wrong longoption size"));
 		cob_hard_failure ();
 	}
 
 	if (!COB_MODULE_PTR->cob_procedure_params[2]) {
-		cob_runtime_error_ctx (COB_CTX_TODO, _("call to CBL_GC_GETOPT with missing longind"));
+		cob_runtime_error_ctx (ctx, _("call to CBL_GC_GETOPT with missing longind"));
 		cob_hard_failure ();
 	}
-	longind = cob_get_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[2]);
+	longind = cob_get_int_ctx (ctx, COB_MODULE_PTR->cob_procedure_params[2]);
 
 	/* add 0-termination to strings */
 	shortoptions = cob_malloc (so_size + 1U);
@@ -8319,7 +8345,7 @@ cob_sys_getopt_long_long (void *so, void *lo, void *idx, const int long_only, vo
 	}
 #endif
 
-	cob_set_int_ctx (COB_CTX_TODO, COB_MODULE_PTR->cob_procedure_params[2], longind);
+	cob_set_int_ctx (ctx, COB_MODULE_PTR->cob_procedure_params[2], longind);
 	memcpy (return_char, &return_value, 4);
 
 	if (cob_optarg != NULL) {
@@ -8951,7 +8977,7 @@ translate_boolean_to_int (const char *ptr)
 
 /* Set runtime setting with given value */
 static int					/* returns 1 if any error, else 0 */
-set_config_val (char *value, int pos)
+set_config_val (cob_context *ctx, char *value, int pos)
 {
 	register char	*ptr = value;
 	char	*str;
@@ -9160,7 +9186,7 @@ set_config_val (char *value, int pos)
 
 		/* call internal routines that do post-processing */
 		if (data == (void *)cobsetptr->cob_date) {
-			check_current_date ();
+			check_current_date (ctx);
 		}
 
 	} else if ((data_type & ENV_CHAR)) {	/* 'char' field inline */
@@ -9176,14 +9202,14 @@ set_config_val (char *value, int pos)
 
 /* Set runtime setting by name with given value */
 static int					/* returns 1 if any error, else 0 */
-set_config_val_by_name (char *value, const char *name, const char *func)
+set_config_val_by_name (cob_context *ctx, char *value, const char *name, const char *func)
 {
 	int	i;
 	int ret = 1;
 
 	for (i = 0; i < NUM_CONFIG; i++) {
 		if (!strcmp (gc_conf[i].conf_name, name)) {
-			ret = set_config_val (value, i);
+			ret = set_config_val (ctx, value, i);
 			if (func) {
 				gc_conf[i].data_type |= STS_FNCSET;
 				gc_conf[i].set_by = FUNC_NAME_IN_DEFAULT;
@@ -9383,7 +9409,7 @@ cb_lookup_config (char *keyword)
 }
 
 static int
-cb_config_entry (char *buf, int line)
+cb_config_entry (cob_context *ctx, char *buf, int line)
 {
 	int	i, j, k, old_type;
 	void	*data;
@@ -9485,7 +9511,7 @@ cb_config_entry (char *buf, int line)
 					break;
 				}
 			}
-			(void)cob_unsetenv_ctx (COB_CTX_TODO, value);
+			(void)cob_unsetenv_ctx (ctx, value);
 		}
 		return 0;
 	}
@@ -9513,7 +9539,7 @@ cb_config_entry (char *buf, int line)
 		gc_conf[i].set_by = 0;
 		gc_conf[i].config_num = cobsetptr->cob_config_cur - 1;
 		if (gc_conf[i].default_val) {
-			set_config_val ((char *)gc_conf[i].default_val, i);
+			set_config_val (ctx, (char *)gc_conf[i].default_val, i);
 		} else if ((gc_conf[i].data_type & ENV_STR)
 			|| (gc_conf[i].data_type & ENV_FILE)
 			|| (gc_conf[i].data_type & ENV_PATH)) {	/* String/Path stored as a string */
@@ -9525,7 +9551,7 @@ cb_config_entry (char *buf, int line)
 			str = NULL;
 			memcpy (data, &str, sizeof (char *));	/* Reset pointer to NULL */
 		} else {
-			set_config_val ((char *)"0", i);
+			set_config_val (ctx, (char *)"0", i);
 		}
 		return 0;
 	}
@@ -9539,7 +9565,7 @@ cb_config_entry (char *buf, int line)
 
 	old_type = gc_conf[i].data_type;
 	gc_conf[i].data_type |= STS_CNFSET;
-	if (!set_config_val (value, i)) {
+	if (!set_config_val (ctx, value, i)) {
 		gc_conf[i].data_type &= ~STS_RESET;
 		gc_conf[i].config_num = cobsetptr->cob_config_cur - 1;
 
@@ -9561,7 +9587,7 @@ cb_config_entry (char *buf, int line)
 }
 
 static int
-cob_load_config_file (const char *config_file, int isoptional)
+cob_load_config_file (cob_context *ctx, const char *config_file, int isoptional)
 {
 	char			buff[COB_FILE_BUFF - 10], filename[COB_FILE_BUFF];
 	char			*penv;
@@ -9659,12 +9685,12 @@ cob_load_config_file (const char *config_file, int isoptional)
 			continue;	/* Skip comments and blank lines */
 
 		/* Evaluate config line */
-		sub_ret = cb_config_entry (buff, line);
+		sub_ret = cb_config_entry (ctx, buff, line);
 
 		/* Include another configuration file */
 		if (sub_ret == 1 || sub_ret == 3) {
 			cob_source_line = line;
-			sub_ret = cob_load_config_file (buff, sub_ret == 3);
+			sub_ret = cob_load_config_file (ctx, buff, sub_ret == 3);
 			cob_source_file = config_file;
 			if (sub_ret < 0) {
 				ret = -1;
@@ -9691,6 +9717,7 @@ cob_load_config_file (const char *config_file, int isoptional)
 int
 cob_load_config (void)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	char		*env;
 	char		conf_file[COB_MEDIUM_BUFF];
 	int		is_optional = 1, sts, i, j;
@@ -9729,11 +9756,11 @@ cob_load_config (void)
 		gc_conf[i].data_type &= ~(STS_ENVSET | STS_CNFSET | STS_ENVCLR);	/* Clear status */
 	}
 
-	sts = cob_load_config_file (conf_file, is_optional);
+	sts = cob_load_config_file (ctx, conf_file, is_optional);
 	if (sts < 0) {
 		return sts;
 	}
-	cob_rescan_env_vals (); 			/* Check for possible environment variables */
+	cob_rescan_env_vals (ctx); 			/* Check for possible environment variables */
 
 	/* Set with default value if present and not set otherwise */
 	for (i = 0; i < NUM_CONFIG; i++) {
@@ -9748,14 +9775,14 @@ cob_load_config (void)
 			if (j < NUM_CONFIG) {
 				if (!(gc_conf[j].data_type & STS_CNFSET)
 				&& !(gc_conf[j].data_type & STS_ENVSET)) {	/* alias not defined? */
-					set_config_val ((char *)gc_conf[i].default_val, i);
+					set_config_val (ctx, (char *)gc_conf[i].default_val, i);
 				}
 			} else {
-				set_config_val ((char *)gc_conf[i].default_val, i); /* Set default value */
+				set_config_val (ctx, (char *)gc_conf[i].default_val, i); /* Set default value */
 			}
 		}
 	}
-	check_current_date ();
+	check_current_date (ctx);
 
 	return 0;
 }
@@ -10549,6 +10576,7 @@ get_math_info (char *version_buffer, size_t size, const int verbose)
 const char * 
 libcob_version () 
 {
+	cob_context	*ctx = COB_CTX_TODO;
 
 /* FIXME: replace this define by a general one (COB_TREE_DEBUG) _was_ for debugging
           the parse tree only ... */
@@ -10561,10 +10589,10 @@ libcob_version ()
 		if (major != __LIBCOB_VERSION || minor != __LIBCOB_VERSION_MINOR) {
 			const char *version = CB_XSTRINGIFY (__LIBCOB_VERSION) "."
 				CB_XSTRINGIFY (__LIBCOB_VERSION_MINOR);
-			cob_runtime_error_ctx (COB_CTX_TODO, _("version mismatch"));
-			cob_runtime_hint_ctx (COB_CTX_TODO, _("%s has version %s.%d"), "libcob internally",
+			cob_runtime_error_ctx (ctx, _("version mismatch"));
+			cob_runtime_hint_ctx (ctx, _("%s has version %s.%d"), "libcob internally",
 						version, __LIBCOB_VERSION_PATCHLEVEL);
-			cob_runtime_hint_ctx (COB_CTX_TODO, _("%s has version %s.%d"), "libcob package",
+			cob_runtime_hint_ctx (ctx, _("%s has version %s.%d"), "libcob package",
 						PACKAGE_VERSION, PATCH_LEVEL);
 			cob_hard_failure ();
 		}
@@ -10575,9 +10603,9 @@ libcob_version ()
 			check = set_libcob_version (&major, &minor, &patch);
 			/* LCOV_EXCL_START */
 			if (check != 0 && check != 3) {
-				cob_runtime_error_ctx (COB_CTX_TODO, _("version mismatch"));
+				cob_runtime_error_ctx (ctx, _("version mismatch"));
 				/* untranslated as it is very unlikely to happen */
-				cob_runtime_hint_ctx (COB_CTX_TODO, "internal version check differs at %d\n", check);
+				cob_runtime_hint_ctx (ctx, "internal version check differs at %d\n", check);
 				cob_hard_failure ();
 			}
 			/* LCOV_EXCL_STOP */
@@ -10970,6 +10998,7 @@ print_info_detailed (const int verbose)
 void
 print_runtime_conf ()
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	unsigned int 	i, j, k, vl, dohdg, hdlen, plen, plen2;
 	char	value[COB_MEDIUM_BUFF], orgvalue[COB_MINI_BUFF], *env;
 
@@ -11140,19 +11169,19 @@ print_runtime_conf ()
 			}
 		}
 		if (j == GRP_FILE) {
-			if ((env = cob_get_env_ctx (COB_CTX_TODO, "SQL_HIGH_VALUES",orgvalue)) != NULL)
+			if ((env = cob_get_env_ctx (ctx, "SQL_HIGH_VALUES",orgvalue)) != NULL)
 				printf ("    : %-*s : %s\n", hdlen, orgvalue, env);
-			else if ((env = cob_get_env_ctx (COB_CTX_TODO, "SQL_HIGH_VALUE",orgvalue)) != NULL)
+			else if ((env = cob_get_env_ctx (ctx, "SQL_HIGH_VALUE",orgvalue)) != NULL)
 				printf ("    : %-*s : %s\n", hdlen, orgvalue, env);
-			if ((env = cob_get_env_ctx (COB_CTX_TODO, "IO_OPTIONS",orgvalue)) != NULL)
+			if ((env = cob_get_env_ctx (ctx, "IO_OPTIONS",orgvalue)) != NULL)
 				printf ("    : %-*s : %s\n", hdlen, orgvalue, env);
-			if ((env = cob_get_env_ctx (COB_CTX_TODO, "IX_OPTIONS",orgvalue)) != NULL)
+			if ((env = cob_get_env_ctx (ctx, "IX_OPTIONS",orgvalue)) != NULL)
 				printf ("    : %-*s : %s\n", hdlen, orgvalue, env);
-			if ((env = cob_get_env_ctx (COB_CTX_TODO, "RL_OPTIONS",orgvalue)) != NULL)
+			if ((env = cob_get_env_ctx (ctx, "RL_OPTIONS",orgvalue)) != NULL)
 				printf ("    : %-*s : %s\n", hdlen, orgvalue, env);
-			if ((env = cob_get_env_ctx (COB_CTX_TODO, "SQ_OPTIONS",orgvalue)) != NULL)
+			if ((env = cob_get_env_ctx (ctx, "SQ_OPTIONS",orgvalue)) != NULL)
 				printf ("    : %-*s : %s\n", hdlen, orgvalue, env);
-			if ((env = cob_get_env_ctx (COB_CTX_TODO, "LS_OPTIONS",orgvalue)) != NULL)
+			if ((env = cob_get_env_ctx (ctx, "LS_OPTIONS",orgvalue)) != NULL)
 				printf ("    : %-*s : %s\n", hdlen, orgvalue, env);
 		}
 	}
@@ -11193,6 +11222,7 @@ cob_init_nomain (const int argc, char **argv)
 void
 cob_common_init (void *setptr)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 #ifdef	ENABLE_NLS
 	{
 		struct stat	localest;
@@ -11218,7 +11248,7 @@ cob_common_init (void *setptr)
 
 		if (s != NULL) {
 			if (setptr) {
-				set_config_val_by_name (s, "unix_lf", NULL);
+				set_config_val_by_name (ctx, s, "unix_lf", NULL);
 				use_unix_lf = cobsetptr->cob_unix_lf;
 			} else
 			if (*s == 'Y' || *s == 'y' ||
@@ -11274,7 +11304,7 @@ cob_call_with_exception_check (const char *name, const int argc, void **argv)
 
 
 static
-void cob_set_main_argv0 (const int argc, char **argv)
+void cob_set_main_argv0 (cob_context *ctx, const int argc, char **argv)
 {
 #if	defined (HAVE_READLINK) || defined (HAVE_GETEXECNAME)
 	const char	*path;
@@ -11336,7 +11366,7 @@ void cob_set_main_argv0 (const int argc, char **argv)
 	/* note: consider proc_pidpath for Mac OS X, if needed */
 
 	if (argc && argv && argv[0]) {
-		cobglobptr->cob_main_argv0 = cob_path_to_absolute_ctx (COB_CTX_TODO, argv[0]);
+		cobglobptr->cob_main_argv0 = cob_path_to_absolute_ctx (ctx, argv[0]);
 	} else {
 		cobglobptr->cob_main_argv0 = cob_strdup (_("unknown"));
 	}
@@ -11347,6 +11377,7 @@ void cob_set_main_argv0 (const int argc, char **argv)
 void
 cob_init (const int argc, char **argv)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	char		*s;
 	int		i;
 
@@ -11355,7 +11386,7 @@ cob_init (const int argc, char **argv)
 	   function again */
 	if (cob_initialized) {
 #if 0	/* Simon: We may raise a runtime warning/error in the future here */
-		cob_runtime_warning_ctx (COB_CTX_TODO, "%s called more than once", "cob_init");
+		cob_runtime_warning_ctx (ctx, "%s called more than once", "cob_init");
 #endif
 		return;
 	}
@@ -11404,7 +11435,7 @@ cob_init (const int argc, char **argv)
 	cobglobptr = &cob_main_context->glob;
 	cobglobptr->cob_call_params = 0;
 
-	cob_set_main_argv0 (argc, argv);
+	cob_set_main_argv0 (ctx, argc, argv);
 
 	/* Get settings structure */
 	cobsetptr = cob_malloc (sizeof (cob_settings));
@@ -11470,7 +11501,7 @@ cob_init (const int argc, char **argv)
 	/* Internal Debug Log */
 	if (cobsetptr->cob_debug_log) {
 #ifdef COB_DEBUG_LOG
-		cob_debug_open ();
+		cob_debug_open (ctx);
 #endif
 	}
 
@@ -11478,13 +11509,13 @@ cob_init (const int argc, char **argv)
 	/* Screen-IO might be needed for error outputs */
 	cob_init_screenio (cobglobptr, cobsetptr);
 	cob_init_cconv (cobglobptr);
-	cob_init_numeric (cobglobptr);
+	cob_init_numeric (ctx, cobglobptr);
 	cob_init_strings (cobglobptr);
 	cob_init_move (cobglobptr, cobsetptr);
 	cob_init_prof (cobglobptr, cobsetptr);
 	cob_init_intrinsic (cobglobptr);
-	cob_init_fileio (cobglobptr, cobsetptr);
-	cob_init_call (cobglobptr, cobsetptr, check_mainhandle);
+	cob_init_fileio (ctx, cobglobptr, cobsetptr);
+	cob_init_call (ctx, cobglobptr, cobsetptr, check_mainhandle);
 	cob_init_cobcapi (cobglobptr, cobsetptr);
 	cob_init_termio (cobglobptr, cobsetptr);
 	cob_init_reportio (cobglobptr, cobsetptr);
@@ -11517,18 +11548,18 @@ cob_init (const int argc, char **argv)
 		unsigned long bsiz = COB_MINI_MAX;
 		char user_name[COB_MINI_BUFF];
 		if (GetUserName (user_name, &bsiz)) {
-			set_config_val_by_name (user_name, "username", "GetUserName()");
+			set_config_val_by_name (ctx, user_name, "username", "GetUserName()");
 		}
 #endif
 #elif !defined(__OS400__)
 		s = getlogin ();
 		if (s) {
-			set_config_val_by_name (s, "username", "getlogin()");
+			set_config_val_by_name (ctx, s, "username", "getlogin()");
 		}
 #endif
 #if 0	/* likely not needed, if unset then empty */
 		if (cobsetptr->cob_user_name == NULL) {
-			set_config_val_by_name (_("unknown"), "username", "cob_init()");
+			set_config_val_by_name (ctx, _("unknown"), "username", "cob_init()");
 		}
 #endif
 	}
@@ -11601,7 +11632,7 @@ cob_set_runtime_option_ctx (cob_context *ctx, enum cob_runtime_option_switch opt
 		}
 		break;
 	case COB_SET_RUNTIME_RESCAN_ENV:
-		cob_rescan_env_vals ();
+		cob_rescan_env_vals (ctx);
 		break;
 	default:
 		cob_runtime_warning_ctx (ctx, _("%s called with unknown option: %d"),
@@ -12058,7 +12089,7 @@ cob_sym_get_occurs_ctx (cob_context *ctx, cob_symbol *sym, int k)
 	int			occmax;
 	if (sym[k].has_depend) {
 		cob_sym_get_field_ctx (ctx, &d0, sym, sym[k].depending);
-		occmax = cob_get_int_ctx (COB_CTX_TODO, &d0);
+		occmax = cob_get_int_ctx (ctx, &d0);
 		if (occmax > sym[k].occurs)
 			occmax = sym[k].occurs;
 	} else {
@@ -12074,16 +12105,16 @@ cob_sym_get_occurs (cob_symbol *sym, int k)
 	return cob_sym_get_occurs_ctx (COB_CTX_COMPAT, sym, k);
 }
 
-static void cob_dump_table ( cob_symbol *sym, int k);
+static void cob_dump_table (cob_context *,  cob_symbol *sym, int k);
 static void
-cob_dump_sub ( cob_symbol *sym, int k, int sub)
+cob_dump_sub (cob_context *ctx,  cob_symbol *sym, int k, int sub)
 {
 	cob_field	f0;
 	int		j;
 
 	sym_sub  [sym_idx-1] = sub;
-	cob_sym_get_field_ctx (COB_CTX_TODO, &f0, sym, k);
-	cob_dump_field_ctx (COB_CTX_TODO,  sym[k].level, sym[k].name?sym[k].name:"FILLER", 
+	cob_sym_get_field_ctx (ctx, &f0, sym, k);
+	cob_dump_field_ctx (ctx,  sym[k].level, sym[k].name?sym[k].name:"FILLER", 
 					&f0, 0, sym_idx, 
 					sym_sub [0], sym_size [0], 
 					sym_sub [1], sym_size [1], 
@@ -12096,31 +12127,31 @@ cob_dump_sub ( cob_symbol *sym, int k, int sub)
 	if (sym[k].is_group) {
 		for (j = k+1; sym[j].parent == k; j++) {
 			if (sym[j].occurs > 1) {
-				cob_dump_table (sym, j);
+				cob_dump_table (ctx, sym, j);
 				if ((j = sym[j].sister) == 0)
 					break;
 				j--;
 			} else {
-				cob_dump_sub (sym, j, sub);
+				cob_dump_sub (ctx, sym, j, sub);
 			}
 		}
 	}
 }
 
 static void
-cob_dump_table ( cob_symbol *sym, int k)
+cob_dump_table (cob_context *ctx,  cob_symbol *sym, int k)
 {
 	int		j, occmax;
 
-	occmax = cob_sym_get_occurs_ctx (COB_CTX_TODO, sym, k);
+	occmax = cob_sym_get_occurs_ctx (ctx, sym, k);
 	sym_size [sym_idx++] = sym[k].size;
 	for (j=0; j < occmax; j++)
-		cob_dump_sub (sym, k, j);
+		cob_dump_sub (ctx, sym, k, j);
 	sym_size [--sym_idx] = 0;
 }
 
 static void
-cob_dump_symbols (cob_module *mod)
+cob_dump_symbols (cob_context *ctx, cob_module *mod)
 {
 	static int skipgrp;
 	static cob_symbol *skpsym; 
@@ -12159,15 +12190,15 @@ cob_dump_symbols (cob_module *mod)
 		if (sect != sym[k].section) {
 			sect = sym[k].section;
 			if (!sym[k].is_file)
-				cob_dump_output_ctx (COB_CTX_TODO, sectname[sect]);
+				cob_dump_output_ctx (ctx, sectname[sect]);
 		}
 		if (sym[k].is_file) {
 			memcpy (&fl, sym[k].adrs, sizeof(void*));
-			cob_dump_file_ctx (COB_CTX_TODO, sym[k].name, fl);
+			cob_dump_file_ctx (ctx, sym[k].name, fl);
 			continue;
 		}
 		skipgrp = 0;
-		cob_sym_get_field_ctx (COB_CTX_TODO, &f0, sym, k);
+		cob_sym_get_field_ctx (ctx, &f0, sym, k);
 		cob_set_dump_signal ((void *)catch_sig_jmp);
 		if (setjmp (save_sig_env) != 0) {
 			skipgrp = 1;
@@ -12178,16 +12209,16 @@ cob_dump_symbols (cob_module *mod)
 			skpsym = &sym[k];
 			sprintf (msg," >>>> Dump of %s aborted! <<<< !!",
 						sym[k].name?sym[k].name:"FILLER");
-			cob_dump_output_ctx (COB_CTX_TODO, msg);
+			cob_dump_output_ctx (ctx, msg);
 		} else if (sym[k].occurs > 1) {
 			for (sym_idx = 0; sym_idx < SYM_MAX_IDX; sym_idx++)
 				sym_sub [sym_idx] = sym_size [sym_idx] = 0;
 			sym_idx = 0;
-			cob_dump_table ( sym, k);
+			cob_dump_table (ctx,  sym, k);
 			if (sym[k].is_group)
 				skipgrp = 1;
 		} else {
-			cob_dump_field_ctx (COB_CTX_TODO,  sym[k].level, sym[k].name?sym[k].name:"FILLER", &f0, 0, 0);
+			cob_dump_field_ctx (ctx,  sym[k].level, sym[k].name?sym[k].name:"FILLER", &f0, 0, 0);
 		}
 		if (skipgrp) {
 skipsym:
@@ -12213,13 +12244,13 @@ skipsym:
 		}
 	}
 	sprintf (msg, "END OF DUMP - %s", mod->module_name);
-	cob_dump_output_ctx (COB_CTX_TODO, msg);
+	cob_dump_output_ctx (ctx, msg);
 	fputc ('\n', fp);
 	fflush (fp);
 }
 
 static void
-cob_dump_module (char *reason)
+cob_dump_module (cob_context *ctx, char *reason)
 {
 	cob_module	*mod;
 	int		wants_dump = 0;
@@ -12287,7 +12318,7 @@ cob_dump_module (char *reason)
 			if (mod->module_symbols
 			 && mod->num_symbols > 0
 			 && !(mod->flag_debug_trace & COB_MODULE_DUMPED)) {
-					cob_dump_symbols (mod);
+					cob_dump_symbols (ctx, mod);
 			}
 			if (mod->next == mod
 			 || k++ == MAX_MODULE_ITERS) {
@@ -12446,7 +12477,7 @@ cob_get_env (const char *envname, char *envused)
  *        note:  replacements already done in common setting handling
  */
 void
-cob_debug_open (void)
+cob_debug_open (cob_context *ctx)
 {
 	char	*debug_env = cobsetptr->cob_debug_log;
 	int		i, j;
@@ -12563,7 +12594,7 @@ cob_debug_open (void)
 	cob_debug_file = cob_open_logfile (cob_debug_file_name);
 	if (cob_debug_file == NULL) {
 		/* developer-only msg - not translated */
-		cob_runtime_error_ctx (COB_CTX_TODO, "error '%s' opening COB_DEBUG_LOG '%s', resolved from '%s'",
+		cob_runtime_error_ctx (ctx, "error '%s' opening COB_DEBUG_LOG '%s', resolved from '%s'",
 			cob_get_strerror (), cob_debug_file_name, cobsetptr->cob_debug_log);
 		return;
 	}
@@ -12573,11 +12604,12 @@ cob_debug_open (void)
 int
 cob_debug_logit (int level, char *module)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	int	i;
 	if (cob_debug_check_open) {
 		if (cobsetptr == NULL)
 			cob_init (0, NULL);
-		cob_debug_open ();
+		cob_debug_open (ctx);
 	}
 	if (cob_debug_file == NULL) {
 		return 1;
