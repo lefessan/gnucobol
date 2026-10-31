@@ -388,8 +388,14 @@ Conséquences pour `cobc/codegen.c` :
    unique.)
 3. **J3 (T1.3) en cours** : 2026-10-31, `ctx` propagé aux fonctions
    internes de libcob (`COB_CTX_TODO` : 883 → 102, voir DESIGN §10 bis).
-   Reste : API interne des gestionnaires de fichiers, callbacks, puis
-   déplacement de l'état global dans `cob_context` / `cob_runtime`.
+   Puis : API interne des gestionnaires de fichiers avec `ctx`
+   (`COB_CTX_TODO` → 43) ; état de `strings.c` et état thread-local de
+   `common.c` dans le contexte ; collation BDB dans `app_private`.
+   **Le seul TLS restant dans libcob est `cob_current_context`.**
+   Reste : déplacer le reste de l'état global (statiques de
+   `numeric.c`, `intrinsic.c`, `fileio.c`, `call.c`… et `cobglobptr`
+   par fichier → `ctx->glob`), callbacks de tri, fonctions de niveau
+   processus → `cob_runtime`.
 3. **J3** : T1.3 + T1.4 — libcob sans état global mutable, thread-safe.
 4. **J4** : T1.5 + T1.6 — instances de programme par contexte, banc de
    test multi-thread.
