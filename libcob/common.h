@@ -1907,6 +1907,7 @@ struct cob_strings_state;	/* opaque, strings.c */
 typedef struct cob_context {
 	cob_runtime		*rt;
 	cob_global		glob;
+	struct __cob_settings		*settings;	/* runtime settings */
 	struct cob_common_state		*common;	/* allocated with the context */
 	struct cob_strings_state	*strings;	/* allocated on first use */
 } cob_context;

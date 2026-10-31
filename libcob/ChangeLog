@@ -1,6 +1,25 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (cob_set_library_path, do_cancel_module, add_to_preload,
+	  cache_preload, cob_resolve_internal, cob_cancel_ctx, ...), cobcapi.c
+	  (cob_init_cobcapi), coblocal.h (cob_exit_reportio), common.c
+	  (cob_terminate_routines, cob_call_with_exception_check_ctx,
+	  cob_init), common.h, fbdb.c (join_environment, bdb_lock_file,
+	  bdb_lock_record, bdb_test_record_lock, bdb_nofile, ix_bdb_open),
+	  fextfh.c (copy_fcd_to_file), fileio.c (cob_write_dict, cob_read_dict,
+	  cob_chk_file_env, cob_set_ls_defaults, cob_set_file_defaults,
+	  cob_set_file_format, ...), fileio.h, fisam.c (isopen_retry,
+	  isread_retry, isam_read, isam_read_next, isam_write, isam_delete,
+	  ...), flmdb.c (lmdb_open, cob_lmdb_init_fileio), move.c
+	  (cob_init_move), profiling.c (prof_init_static, cob_init_prof,
+	  cob_prof_init_module_ctx, cob_prof_realloc_arrays,
+	  cob_prof_print_line, cob_prof_end), reportio.c (print_field,
+	  copy_line_fields, cob_init_reportio), screenio.c (cob_screen_attr,
+	  cob_screen_init, refresh_field, cob_screen_get_all, cob_prep_input,
+	  field_accept, ...), termio.c (cob_display_va_ctx,
+	  cob_dump_field_va_ctx, cob_init_termio): per-file copies of the
+	  settings pointer replaced by ctx->settings
 	* call.c (cob_resolve_internal, cob_resolve_ctx, cob_resolve_cobol_ctx,
 	  cob_resolve_func_ctx, cob_call_field_ctx, cob_cancel_ctx, ...),
 	  cobcapi.c (cob_init_cobcapi, cob_get_param_field, cob_get_num_params,

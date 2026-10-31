@@ -944,7 +944,7 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 	}
 	p->maxkeylen = maxsize;
 
-	snprintf (db_buff, (size_t)COB_SMALL_MAX, "%s%c%s",file_setptr->lmdb_home, SLASH_CHAR, filename);
+	snprintf (db_buff, (size_t)COB_SMALL_MAX, "%s%c%s",ctx->settings->lmdb_home, SLASH_CHAR, filename);
 	if (mode != COB_OPEN_OUTPUT) {
 		if (db_nofile (filename) == 0) {
 			ret = a->cob_read_dict (ctx, f, db_buff, !f->flag_keycheck);
@@ -1574,11 +1574,10 @@ void
 cob_lmdb_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	a->io_funcs[COB_IO_LMDB] = (void*)&lmdb_funcs;
-	cobsetptr = a->setptr;
 	db_data_dir = NULL;
 	db_buff = cob_malloc (COB_SMALL_BUFF);
-	if (cobsetptr->lmdb_home == NULL) {
-		cobsetptr->lmdb_home = cob_strdup(".");
+	if (ctx->settings->lmdb_home == NULL) {
+		ctx->settings->lmdb_home = cob_strdup(".");
 	}
 }
 

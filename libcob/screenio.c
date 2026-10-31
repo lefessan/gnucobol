@@ -157,7 +157,6 @@ enum screen_statement {
 
 /* Local variables */
 
-static cob_settings		*cobsetptr;
 
 /* Local variables when screenio activated */
 
@@ -428,7 +427,7 @@ refresh_mywin (WINDOW *curr_win)
 }
 
 static void
-cob_beep (void)
+cob_beep (cob_context *ctx)
 {
 	switch (COB_BEEP_VALUE) {
 	case 1:
@@ -1124,7 +1123,7 @@ cob_screen_attr (cob_context *ctx, cob_field *fgc, cob_field *bgc, cob_flags_t a
 		}
 	}
 	if (attr & COB_SCREEN_BELL) {
-		cob_beep ();
+		cob_beep (ctx);
 	}
 	return attr;
 }
@@ -1244,7 +1243,7 @@ cob_screen_init (cob_context *ctx)
 				}
 			}
 #if defined (PDC_BUILD) && PDC_BUILD >= 3501
-			if (!cobsetptr->cob_legacy) {
+			if (!ctx->settings->cob_legacy) {
 				PDC_set_blink (1);
 				PDC_set_bold (1);
 			}
@@ -1321,7 +1320,7 @@ cob_screen_init (cob_context *ctx)
 }
 
 static void
-cob_convert_key (int *keyp, const cob_u32_t field_accept)
+cob_convert_key (cob_context *ctx, int *keyp, const cob_u32_t field_accept)
 {
 	/* Map key to KEY_xxx value */
 	switch (*keyp) {
@@ -2165,7 +2164,7 @@ refresh_field (cob_context *ctx, cob_screen *s)
 	int		x;
 
 	getyx (mywin, y, x);
-	cob_screen_puts (ctx, s, s->field, cobsetptr->cob_legacy, ACCEPT_STATEMENT);
+	cob_screen_puts (ctx, s, s->field, ctx->settings->cob_legacy, ACCEPT_STATEMENT);
 	cob_move_cursor (ctx, y, x);
 }
 
@@ -2611,10 +2610,10 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 		}
 #endif
 
-		cob_convert_key (&keyp, 0);
+		cob_convert_key (ctx, &keyp, 0);
 		if (keyp <= 0) {
 			(void)flushinp ();
-			cob_beep ();
+			cob_beep (ctx);
 			continue;
 		}
 
@@ -2623,7 +2622,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 		switch (keyp) {
 		case KEY_ENTER:
 			if (finalize_all_fields (ctx, cob_base_inp, totl_index)) {
-				cob_beep ();
+				cob_beep (ctx);
 				continue;
 			}
 			goto screen_return;
@@ -2751,7 +2750,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 				cob_move_cursor (ctx, cline, ccolumn);
 				p--;
 			} else {
-				cob_beep ();
+				cob_beep (ctx);
 			}
 			continue;
 		case KEY_LEFT:
@@ -2781,7 +2780,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 			/* Delete key. */
 			/* Don't allow deletion of decimal point */
 			if (at_offset_from_decimal_point (ctx, s->field, scolumn, ccolumn, 0)) {
-				cob_beep ();
+				cob_beep (ctx);
 				continue;
 			}
 			/* Delete character, move remainder left. */
@@ -2869,7 +2868,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 			/* translate mouse position from stdscr to current window;
 			   error if outside current window */
 			if (!wmouse_trafo (mywin, &mline, &mcolumn, 0)) {
-				cob_beep ();
+				cob_beep (ctx);
 				continue;
 			}
 			/* handle depending on state */
@@ -2923,7 +2922,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 			if (cob_field_is_numeric_or_numeric_edited (s->field)
 			    && ((keyp != '+' && keyp != '-' && (keyp < '0' || keyp > '9'))
 				|| at_offset_from_decimal_point (ctx, s->field, scolumn, ccolumn, 0))) {
-				cob_beep ();
+				cob_beep (ctx);
 				continue;
 			}
 
@@ -2957,7 +2956,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 						*/
 						p2 = s->field->data;
 						if (*p2 != '0' && *p2 != ' ') {
-							cob_beep ();
+							cob_beep (ctx);
 							continue;
 						}
 						shift_left (ctx, s, cline, ccolumn,
@@ -2969,7 +2968,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 						   point - make user move to one
 						   side of it
 						*/
-						cob_beep ();
+						cob_beep (ctx);
 						continue;
 					} else {
 						/*
@@ -2983,7 +2982,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 						*/
 						p2 = s->field->data + right_pos - scolumn;
 						if (*p2 != '0' && *p2 != ' ') {
-							cob_beep ();
+							cob_beep (ctx);
 							continue;
 						}
 						shift_right (ctx, s, cline, ccolumn, right_pos, scolumn);
@@ -2992,7 +2991,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 					/* check and beep if field is already full */
 					p2 = s->field->data + right_pos - scolumn;
 					if (*p2 != ' ') {
-						cob_beep ();
+						cob_beep (ctx);
 						continue;
 					}
 					shift_right (ctx, s, cline, ccolumn, right_pos, scolumn);
@@ -3030,7 +3029,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 				   mode or navigating to last character and
 				   overwriting it. */
 				if (at_eof) {
-					cob_beep ();
+					cob_beep (ctx);
 				} else {
 					at_eof = !COB_INSERT_MODE
 						|| !can_insert_left (ctx, s->field, *s->field->data, ccolumn);
@@ -3044,7 +3043,7 @@ cob_screen_get_all (cob_context *ctx, const int initial_curs, const int accept_t
 			continue;
 		}
 		(void)flushinp ();
-		cob_beep ();
+		cob_beep (ctx);
 	}
 screen_return:
 	refresh_mywin (mywin);
@@ -3141,7 +3140,7 @@ cob_prep_input (cob_context *ctx, cob_screen *s)
 		}
 		break;
 	case COB_SCREEN_TYPE_FIELD:
-		cob_screen_puts (ctx, s, s->field, cobsetptr->cob_legacy,
+		cob_screen_puts (ctx, s, s->field, ctx->settings->cob_legacy,
 				 ACCEPT_STATEMENT);
 		if (s->attr & COB_SCREEN_INPUT) {
 			if (totl_index >= COB_INP_FLD_MAX) {
@@ -3155,12 +3154,12 @@ cob_prep_input (cob_context *ctx, cob_screen *s)
 		}
 		break;
 	case COB_SCREEN_TYPE_VALUE:
-		cob_screen_puts (ctx, s, s->value, cobsetptr->cob_legacy,
+		cob_screen_puts (ctx, s, s->value, ctx->settings->cob_legacy,
 				 ACCEPT_STATEMENT);
 		if (s->occurs) {
 			int		n;
 			for (n = 1; n < s->occurs; ++n) {
-				cob_screen_puts (ctx, s, s->value, cobsetptr->cob_legacy,
+				cob_screen_puts (ctx, s, s->value, ctx->settings->cob_legacy,
 						 ACCEPT_STATEMENT);
 			}
 		}
@@ -3783,10 +3782,10 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 			goto field_return;
 		}
 
-		cob_convert_key (&keyp, 1U);
+		cob_convert_key (ctx, &keyp, 1U);
 		if (keyp <= 0) {
 			(void)flushinp ();
-			cob_beep ();
+			cob_beep (ctx);
 			continue;
 		}
 
@@ -3882,7 +3881,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 				int mline = mevent.y;
 				int mcolumn = mevent.x;
 				if (!wmouse_trafo (mywin, &mline, &mcolumn, 0)) {
-					cob_beep ();
+					cob_beep (ctx);
 					continue;
 				}
 				mevent.bstate &= cob_mask_accept;
@@ -3895,7 +3894,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 #endif
 			default:
 				(void)flushinp ();
-				cob_beep ();
+				cob_beep (ctx);
 				continue;
 			}
 		}
@@ -3937,7 +3936,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 				cob_move_cursor (ctx, cline, ccolumn);
 				p--;
 			} else {
-				cob_beep ();
+				cob_beep (ctx);
 			}
 			at_eof = 0;
 			continue;
@@ -4026,7 +4025,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 				fret = 2009;
 				goto field_return;
 			}
-			cob_beep ();
+			cob_beep (ctx);
 			continue;
 		case KEY_RIGHT:
 		case ALT_RIGHT:
@@ -4043,7 +4042,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 				fret = 2010;
 				goto field_return;
 			}
-			cob_beep ();
+			cob_beep (ctx);
 			continue;
 		case KEY_IC:
 			/* Insert key toggle */
@@ -4113,7 +4112,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 			int mline = mevent.y;
 			int mcolumn = mevent.x;
 			if (!wmouse_trafo (mywin, &mline, &mcolumn, 0)) {
-				cob_beep ();
+				cob_beep (ctx);
 				continue;
 			}
 			/* handle depending on state */
@@ -4155,7 +4154,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 			/* Numeric field check. */
 			if (cob_field_is_numeric_or_numeric_edited (f)) {
 				if (keyp < '0' || keyp > '9') {
-					cob_beep ();
+					cob_beep (ctx);
 					continue;
 				}
 			}
@@ -4178,7 +4177,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 					p2 = COB_TERM_BUFF + right_pos - scolumn;
 				}
 				if (*p2 != ' ') {
-					cob_beep ();
+					cob_beep (ctx);
 					continue;
 				}
 				/* Move remainder to the right. */
@@ -4227,7 +4226,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 				/* check if we (still) are at last position and inform
 				   user with a beep (after having processed his key) */
 				if (at_eof) {
-					cob_beep ();
+					cob_beep (ctx);
 				} else {
 					at_eof = 1;
 				}
@@ -4237,7 +4236,7 @@ field_accept (cob_field *f, cob_flags_t fattr, const int sline, const int scolum
 			continue;
 		}
 		(void)flushinp ();
-		cob_beep ();
+		cob_beep (ctx);
 	}
 
 
@@ -4750,15 +4749,15 @@ cob_exit_screen (cob_context *ctx)
 		return;
 	}
 	if (ctx->glob.cob_screen_initialized) {
-		if (pending_accept && cobsetptr->cob_exit_wait) {
+		if (pending_accept && ctx->settings->cob_exit_wait) {
 			/* FIXME: we likely should position to either the very last line or
 			          the last line since last cleanup + 1 before; problem:
 			          DISPLAY AT 1010 DISPLAY AT 0909 GOBACK
 					  results in first DISPLAY to be overwritten */
 			WINDOW		*savwin = mywin;
 			mywin = stdscr;	/* consider also to restore fg+bg coilor + use reverse-video */
-			if (cobsetptr->cob_exit_msg[0] != 0) {
-				snprintf (exit_msg, COB_MINI_BUFF, "\n%s ", cobsetptr->cob_exit_msg);
+			if (ctx->settings->cob_exit_msg[0] != 0) {
+				snprintf (exit_msg, COB_MINI_BUFF, "\n%s ", ctx->settings->cob_exit_msg);
 				cob_display_text (exit_msg);
 			} else {
 				cob_display_text (" ");
@@ -5076,7 +5075,7 @@ cob_sys_sound_bell (void)
 			return ret;
 		}
 	}
-	cob_beep ();
+	cob_beep (ctx);
 #else
 	cob_speaker_beep ();
 #endif
@@ -5388,8 +5387,8 @@ cob_settings_screenio (cob_context *ctx)
 	}
 
 	/* extended ACCEPT status returns */
-	if (cobsetptr->cob_extended_status == 0) {
-		cobsetptr->cob_use_esc = 0;
+	if (ctx->settings->cob_extended_status == 0) {
+		ctx->settings->cob_use_esc = 0;
 	}
 
 #ifdef HAVE_MOUSEINTERVAL
@@ -5459,9 +5458,8 @@ cob_settings_screenio (cob_context *ctx)
 void
 cob_init_screenio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 {
-	cobsetptr  = sptr;
-	if (!cobsetptr->cob_exit_msg || !cobsetptr->cob_exit_msg[0]) {
-		cobsetptr->cob_exit_msg =
+	if (!ctx->settings->cob_exit_msg || !ctx->settings->cob_exit_msg[0]) {
+		ctx->settings->cob_exit_msg =
 			cob_strdup (_("end of program, please press a key to exit"));
 	}
 
@@ -5503,6 +5501,7 @@ update_all_windows (void)
 static int
 sys_window_new (PPARM_FLD parm)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	PPANEL_ENTRY	pan_first = &my_panels[0];
 	PPANEL_ENTRY	pan_last = &my_panels[MAX_PANELS];
 	PPANEL_ENTRY	ptr_pan_entry;
@@ -5563,7 +5562,7 @@ sys_window_new (PPARM_FLD parm)
 
 	mywin = ptr_win;
 
-	if (cobsetptr->cob_legacy) {
+	if (ctx->settings->cob_legacy) {
 		fg_color |= (parm->fg_color & 8);
 		bg_color |= (parm->bg_color & 8);
 	}

@@ -204,15 +204,15 @@
 #define	COB_MAX_Y_COORD		ctx->glob.cob_max_y
 #define	COB_MAX_X_COORD		ctx->glob.cob_max_x
 
-#define	COB_DISP_TO_STDERR	cobsetptr->cob_disp_to_stderr
-#define	COB_BEEP_VALUE		cobsetptr->cob_beep_value
-#define	COB_TIMEOUT_SCALE	cobsetptr->cob_timeout_scale
-#define	COB_INSERT_MODE		cobsetptr->cob_insert_mode
-#define	COB_HIDE_CURSOR		cobsetptr->cob_hide_cursor
-#define	COB_EXTENDED_STATUS	cobsetptr->cob_extended_status
-#define	COB_MOUSE_FLAGS	cobsetptr->cob_mouse_flags
-#define	COB_MOUSE_INTERVAL	cobsetptr->cob_mouse_interval
-#define	COB_USE_ESC		cobsetptr->cob_use_esc
+#define	COB_DISP_TO_STDERR	ctx->settings->cob_disp_to_stderr
+#define	COB_BEEP_VALUE		ctx->settings->cob_beep_value
+#define	COB_TIMEOUT_SCALE	ctx->settings->cob_timeout_scale
+#define	COB_INSERT_MODE		ctx->settings->cob_insert_mode
+#define	COB_HIDE_CURSOR		ctx->settings->cob_hide_cursor
+#define	COB_EXTENDED_STATUS	ctx->settings->cob_extended_status
+#define	COB_MOUSE_FLAGS	ctx->settings->cob_mouse_flags
+#define	COB_MOUSE_INTERVAL	ctx->settings->cob_mouse_interval
+#define	COB_USE_ESC		ctx->settings->cob_use_esc
 
 #if defined(COB_TLS)
     /* already defined, for example as static to explicit disable TLS */
@@ -417,7 +417,7 @@ struct config_tbl {
 #define GRP_SYSENV	5
 #define GRP_MAX 	6
 
-#define SETPOS(member)	offsetof(cob_settings,member),sizeof(cobsetptr->member),0,0
+#define SETPOS(member)	offsetof(cob_settings,member),sizeof(((cob_settings *)0)->member),0,0
 
 /* max sizes */
 
@@ -482,7 +482,7 @@ COB_HIDDEN void		cob_exit_numeric	(void);
 COB_HIDDEN void		cob_exit_fileio_msg_only	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio		(cob_context *);
 COB_HIDDEN void		cob_exit_reportio	(void);
-COB_HIDDEN void		cob_exit_call		(void);
+COB_HIDDEN void		cob_exit_call		(cob_context *);
 COB_HIDDEN void		cob_exit_cobcapi	(void);
 COB_HIDDEN void		cob_exit_intrinsic	(void);
 COB_HIDDEN void		cob_exit_strings	(cob_context *);

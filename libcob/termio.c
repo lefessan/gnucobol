@@ -45,7 +45,6 @@
 
 /* Local variables */
 
-static cob_settings		*cobsetptr = NULL;
 
 static char no_syspunch_error_raised = 0;
 #define MAX_PREV 256
@@ -350,17 +349,17 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 		break;
 	case 2:	/* PRINTER */
 		/* display to external specified print file handle */
-		if (cobsetptr->cob_display_print_file) {
-			fp = cobsetptr->cob_display_print_file;
+		if (ctx->settings->cob_display_print_file) {
+			fp = ctx->settings->cob_display_print_file;
 		/* display to configured print file */
-		} else if (cobsetptr->cob_display_print_filename != NULL) {
+		} else if (ctx->settings->cob_display_print_filename != NULL) {
 			const char *mode;
-			if (!cobsetptr->cob_unix_lf) {
+			if (!ctx->settings->cob_unix_lf) {
 				mode = "a";
 			} else {
 				mode = "ab";
 			}
-			fp = fopen (cobsetptr->cob_display_print_filename, mode);
+			fp = fopen (ctx->settings->cob_display_print_filename, mode);
 			if (fp == NULL) {
 				fp = stderr;
 			} else {
@@ -368,15 +367,15 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 			}
 #ifdef HAVE_POPEN
 		/* display to configured print command (piped) */
-		} else if (cobsetptr->cob_display_print_pipe != NULL) {
+		} else if (ctx->settings->cob_display_print_pipe != NULL) {
 			const char* mode;
-			if (!cobsetptr->cob_unix_lf) {
+			if (!ctx->settings->cob_unix_lf) {
 				mode = "w";
 			} else {
 				/* Note: this doesn't seem to help with pipes :-( */
 				mode = "wb";
 			}
-			fp = popen (cobsetptr->cob_display_print_pipe, mode);
+			fp = popen (ctx->settings->cob_display_print_pipe, mode);
 			if (fp == NULL) {
 				fp = stderr;
 			} else {
@@ -397,28 +396,28 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 		break;
 	case 3:	/* SYSPCH */
 		/* open if not available but specified */
-		if (!cobsetptr->cob_display_punch_file
-		 && cobsetptr->cob_display_punch_filename != NULL) {
+		if (!ctx->settings->cob_display_punch_file
+		 && ctx->settings->cob_display_punch_filename != NULL) {
 			const char* mode;
-			if (!cobsetptr->cob_unix_lf) {
+			if (!ctx->settings->cob_unix_lf) {
 				mode = "w";
 			} else {
 				/* Note: this doesn't seem to help with pipes :-( */
 				mode = "wb";
 			}
-			fp = fopen (cobsetptr->cob_display_punch_filename, mode);
+			fp = fopen (ctx->settings->cob_display_punch_filename, mode);
 			if (fp == NULL) {
 				cob_runtime_warning_ctx (ctx, _("cannot open %s (=%s)"),
-					"COB_DISPLAY_PUNCH_FILE", cobsetptr->cob_display_punch_filename);
-				cob_free (cobsetptr->cob_display_punch_filename);
-				cobsetptr->cob_display_punch_filename = NULL;
+					"COB_DISPLAY_PUNCH_FILE", ctx->settings->cob_display_punch_filename);
+				cob_free (ctx->settings->cob_display_punch_filename);
+				ctx->settings->cob_display_punch_filename = NULL;
 			} else {
-				cobsetptr->cob_display_punch_file = fp;
+				ctx->settings->cob_display_punch_file = fp;
 			}
 		}
 		/* display to already opened punch file */
-		if (cobsetptr->cob_display_punch_file) {
-			fp = cobsetptr->cob_display_punch_file;
+		if (ctx->settings->cob_display_punch_file) {
+			fp = ctx->settings->cob_display_punch_file;
 		} else {
 			cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);	/* come back to this later... */
 			if (!no_syspunch_error_raised) {
@@ -998,12 +997,12 @@ cob_dump_field_va_ctx (cob_context *ctx, const int level, const char *name, cob_
 		if (  (COB_FIELD_TYPE (f) == COB_TYPE_NUMERIC_EDITED
 			|| COB_FIELD_TYPE (f) == COB_TYPE_NUMERIC_DISPLAY)
 		 && !is_field_display (f)) {
-			display_alnum_dump (f, fp, 41, cobsetptr->cob_dump_width);
+			display_alnum_dump (f, fp, 41, ctx->settings->cob_dump_width);
 		} else
 		if (COB_FIELD_TYPE (f) == COB_TYPE_ALPHANUMERIC
 		 || COB_FIELD_TYPE (f) == COB_TYPE_ALPHANUMERIC_EDITED
 		 || f->size > 39) {
-			display_alnum_dump (f, fp, 41, cobsetptr->cob_dump_width);
+			display_alnum_dump (f, fp, 41, ctx->settings->cob_dump_width);
 		} else {
 			fprintf (fp, " ");
 			cob_display_common (ctx, f, fp);
@@ -1137,5 +1136,4 @@ cob_accept (cob_field *f)
 void
 cob_init_termio (cob_global *lptr, cob_settings *sptr)
 {
-	cobsetptr  = sptr;
 }

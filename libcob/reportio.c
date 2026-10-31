@@ -32,7 +32,6 @@
 #define	COB_MAYSWAP_32(x)	(COB_BSWAP_32((unsigned int)(x)))
 #endif
 
-static	cob_settings	*cobrpsetptr = NULL;
 
 #ifndef TRUE
 #define TRUE 1
@@ -884,7 +883,7 @@ do_page_heading(cob_context *ctx, cob_report *r)
  * Format one field into print line
  */
 static void
-print_field (cob_report_field *rf, char *rec)
+print_field (cob_context *ctx, cob_report_field *rf, char *rec)
 {
 	char	wrk[COB_SMALL_BUFF];
 	size_t	ln = 0, k, i;
@@ -897,8 +896,7 @@ print_field (cob_report_field *rf, char *rec)
 	}
 	if (rf->step_count > 0)
 		memset (&rec[dest_pos], ' ', rf->step_count);
-	if (cobrpsetptr
-	 && !cobrpsetptr->cob_col_just_lrc) {
+	if (ctx&& !ctx->settings->cob_col_just_lrc) {
 		/* Data justify is turned off, no adjustment */
 	} else
 	if ((rf->flags & COB_REPORT_COLUMN_RIGHT)
@@ -973,10 +971,10 @@ copy_line_fields (cob_context *ctx, cob_report *r, cob_report_line *l, int doset
 		}
 		if (rf->from.data) {		/* Copy source field in */
 			cob_move_ctx (ctx, &rf->from, rf->f);
-			print_field (rf, rec);
+			print_field (ctx, rf, rec);
 		} else if (rf->sum) {		/* Copy SUM field in */
 			cob_move_ctx (ctx, rf->sum, rf->f);
-			print_field (rf, rec);
+			print_field (ctx, rf, rec);
 		} else if (rf->litval) {		/* Refresh literal value */
 			if (rf->f
 			 && COB_FIELD_IS_NUMERIC (rf->f)) {
@@ -986,12 +984,12 @@ copy_line_fields (cob_context *ctx, cob_report *r, cob_report_line *l, int doset
 				temp.data = (unsigned char *)rf->litval;
 				temp.attr = &const_alpha_attr;
 				cob_move_ctx (ctx, &temp, rf->f);
-				print_field(rf, rec);
+				print_field(ctx, rf, rec);
 			} else {
 				memcpy(&rec[rf->column-1], rf->litval, rf->litlen);
 			}
 		} else if (rf->f) {
-			print_field(rf, rec);
+			print_field(ctx, rf, rec);
 		}
 		if (doset
 		 && (rf->flags & COB_REPORT_GROUP_INDICATE)) {	/* Suppress subsequent printings */
@@ -1395,7 +1393,6 @@ void
 cob_init_reportio (cob_global *gptr, cob_settings *sptr)
 {
 	int		k;
-	cobrpsetptr  = sptr;
 	for(k=0; k < MAX_ACTIVE_REPORTS; k++)
 		active_reports[k] = NULL;
 }
