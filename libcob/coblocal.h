@@ -513,7 +513,7 @@ COB_HIDDEN void		cob_print_realbin	(cob_context *, const cob_field *, FILE *,
 COB_HIDDEN void		cob_screen_set_mode	(cob_context *, const cob_u32_t);
 COB_HIDDEN void		cob_settings_screenio	(cob_context *);
 
-COB_HIDDEN int		cob_get_last_exception_code	(void);
+COB_HIDDEN int		cob_get_last_exception_code	(cob_context *);
 COB_HIDDEN void		cob_add_exception (cob_context *, const int);
 COB_HIDDEN int		cob_check_env_true	(char*);
 COB_HIDDEN int		cob_check_env_false	(char*);
