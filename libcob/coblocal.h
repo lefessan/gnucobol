@@ -503,7 +503,7 @@ COB_HIDDEN void		cob_decimal_setget_fld	(cob_context *, cob_field *, cob_field *
 						 const int);
 COB_HIDDEN void		cob_decimal_move_temp	(cob_context *, cob_field *, cob_field *);
 COB_HIDDEN void		cob_move_display_to_packed (cob_field *, cob_field *);
-COB_HIDDEN void		cob_move_packed_to_display (cob_field *, cob_field *);
+COB_HIDDEN void		cob_move_packed_to_display (cob_context *, cob_field *, cob_field *);
 
 COB_HIDDEN void		cob_display_common	(cob_context *, const cob_field *, FILE *);
 COB_HIDDEN void		cob_print_ieeedec	(cob_context *, const cob_field *, FILE *);

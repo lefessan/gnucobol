@@ -1,6 +1,11 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_move_display_to_packed), move.c
+	  (cob_move_display_to_display, cob_move_packed_to_display,
+	  cob_move_binary_to_display, cob_move_edited_to_display,
+	  indirect_move, cob_move_ctx), numeric.c (cob_addsub_optimized): pass
+	  the context to MOVE helpers called through a pointer
 	* common.c (cob_sys_exit_proc, cob_sys_error_proc, cob_common_init),
 	  screenio.c (cob_sys_window): no local context where it is only used
 	  in disabled code

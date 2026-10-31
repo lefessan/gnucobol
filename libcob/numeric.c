@@ -2427,7 +2427,7 @@ cob_addsub_optimized (cob_context *ctx, cob_field *f1, cob_field *f2,
 			if (f2_type == COB_TYPE_NUMERIC_PACKED) {
 				cob_move_display_to_packed (f1, &field1);
 				cob_add_bcd (ctx, &field1, f2, &field1, opt, stmt);
-				cob_move_packed_to_display (&field1, f1);
+				cob_move_packed_to_display (ctx, &field1, f1);
 				return 1;
 			} else {
 				const unsigned short f2_digits = COB_FIELD_DIGITS (f2);
@@ -2450,7 +2450,7 @@ cob_addsub_optimized (cob_context *ctx, cob_field *f1, cob_field *f2,
 					}
 					cob_move_ctx (ctx, f2, &field2);
 					cob_add_bcd (ctx, &field1, &field2, &field1, opt, stmt);
-					cob_move_packed_to_display (&field1, f1);
+					cob_move_packed_to_display (ctx, &field1, f1);
 					return 1;
 				}
 			}
