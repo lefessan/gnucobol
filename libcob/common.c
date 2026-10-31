@@ -7066,7 +7066,6 @@ cob_tidy (void)
 int
 cob_sys_exit_proc (const void *dispo, const void *pptr)
 {
-	cob_context	*ctx = cob_get_current_context ();
 	struct exit_handlerlist *hp;
 	struct exit_handlerlist *h;
 	unsigned char	install_flag;
@@ -7083,7 +7082,7 @@ cob_sys_exit_proc (const void *dispo, const void *pptr)
 	   furthermore the second parameter is a mixed priority + install_flag */
 	if (something) {
 		const char *name = (char *)pptr;
-		pptr = cob_resolve_cobol_ctx (ctx, name, 0, 0);
+		pptr = cob_resolve_cobol_ctx (cob_get_current_context (), name, 0, 0);
 
 		if (!p) {
 			return -1;
@@ -7189,7 +7188,6 @@ cob_sys_exit_proc (const void *dispo, const void *pptr)
 int
 cob_sys_error_proc (const void *dispo, const void *pptr)
 {
-	cob_context	*ctx = cob_get_current_context ();
 	struct handlerlist	*hp;
 	struct handlerlist	*h;
 	const unsigned char	*x;
@@ -7203,7 +7201,7 @@ cob_sys_error_proc (const void *dispo, const void *pptr)
 	   maybe resolve here and return -1 if not possible */
 	if (something) {
 		const char *name = (char *)pptr;
-		pptr = cob_resolve_cobol_ctx (ctx, name, 0, 0);
+		pptr = cob_resolve_cobol_ctx (cob_get_current_context (), name, 0, 0);
 		if (!p) {
 			return -1;
 		}
@@ -11218,7 +11216,6 @@ cob_init_nomain (const int argc, char **argv)
 void
 cob_common_init (void *setptr)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 #ifdef	ENABLE_NLS
 	{
 		struct stat	localest;
@@ -11244,7 +11241,7 @@ cob_common_init (void *setptr)
 
 		if (s != NULL) {
 			if (setptr) {
-				set_config_val_by_name (ctx, s, "unix_lf", NULL);
+				set_config_val_by_name (COB_CTX_TODO, s, "unix_lf", NULL);
 				use_unix_lf = cobsetptr->cob_unix_lf;
 			} else
 			if (*s == 'Y' || *s == 'y' ||
