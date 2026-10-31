@@ -395,9 +395,12 @@ Conséquences pour `cobc/codegen.c` :
    Puis : les copies par fichier du pointeur global (`cobglobptr`,
    `file_globptr`…) remplacées par `ctx->glob`, et celles du pointeur
    de réglages par `ctx->settings` (encore partagé : copie par contexte
-   à faire). Variables globales modifiables : 362 au départ, 328 restent.
-   Reste : statiques de `common.c`, `fileio.c`, `screenio.c`,
-   `intrinsic.c`, `numeric.c`, `reportio.c`, `call.c`… ; réglages par
+   à faire). Puis l'état de `numeric.c`, `intrinsic.c`, `reportio.c`,
+   `termio.c`, `cobcapi.c`, `fextfh.c`, `profiling.c` dans le contexte
+   (une structure opaque par fichier). Variables globales modifiables :
+   362 au départ, 247 restent (2026-11-01).
+   Reste : statiques de `common.c` (97), `fileio.c` (34), `screenio.c`
+   (27, terminal unique), `fsqlxfd.c` (20), `call.c` (14), `fbdb.c`… ; réglages par
    contexte (et `cobsetptr` de `common.c`) ; callbacks de tri ; état
    des fonctions de niveau processus → `cob_runtime`.
 3. **J3** : T1.3 + T1.4 — libcob sans état global mutable, thread-safe.
