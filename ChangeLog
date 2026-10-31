@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-T1-INVENTORY.md: TERMINATE / GENERATE statics are resume
+	  state
 	* TXSERIES-T1-DESIGN.md: file handler API done, EXTFH interface open
 	  point
 	* TXSERIES-T1-DESIGN.md: status of the context propagation

@@ -699,13 +699,13 @@ CONST, SCRATCH. « remove » = copie en cache de `cobglobptr`/`cobsetptr`.
 | reportio.c | 1426 | rr (cob_report_initiate) | SCRATCH | local in cob_report_initiate() | idem |
 | reportio.c | 1427 | sc (cob_report_initiate) | SCRATCH | local in cob_report_initiate() | idem |
 | reportio.c | 1428 | k (cob_report_initiate) | SCRATCH | local in cob_report_initiate() | idem |
-| reportio.c | 1529 | rc (cob_report_terminate) | SCRATCH | local in cob_report_terminate() | idem |
-| reportio.c | 1530 | rr (cob_report_terminate) | SCRATCH | local in cob_report_terminate() | idem |
-| reportio.c | 1531 | pl (cob_report_terminate) | SCRATCH | local in cob_report_terminate() | idem |
-| reportio.c | 1659 | rc (cob_report_generate) | SCRATCH | local in cob_report_generate() | idem |
-| reportio.c | 1660 | rr (cob_report_generate) | SCRATCH | local in cob_report_generate() | idem |
-| reportio.c | 1661 | pl, sl (cob_report_generate) | SCRATCH | local in cob_report_generate() | idem |
-| reportio.c | 1662 | maxctl, ln, num, gengrp, last_use, ctlidx | SCRATCH | local in cob_report_generate() | tous initialisés avant usage (last_use=0 à l'entrée, l.1701) |
+| reportio.c | 1529 | rc (cob_report_terminate) | C2 | ctx->reportio (état de reprise) | **corrigé le 2026-11-01** : pas inutile, l'état sert à reprendre l'instruction (`r->go_label`) |
+| reportio.c | 1530 | rr (cob_report_terminate) | C2 | ctx->reportio (état de reprise) | **corrigé le 2026-11-01** : pas inutile, l'état sert à reprendre l'instruction (`r->go_label`) |
+| reportio.c | 1531 | pl (cob_report_terminate) | C2 | ctx->reportio (état de reprise) | **corrigé le 2026-11-01** : pas inutile, l'état sert à reprendre l'instruction (`r->go_label`) |
+| reportio.c | 1659 | rc (cob_report_generate) | C2 | ctx->reportio (état de reprise) | **corrigé le 2026-11-01** : pas inutile, l'état sert à reprendre l'instruction (`r->go_label`) |
+| reportio.c | 1660 | rr (cob_report_generate) | C2 | ctx->reportio (état de reprise) | **corrigé le 2026-11-01** : pas inutile, l'état sert à reprendre l'instruction (`r->go_label`) |
+| reportio.c | 1661 | pl, sl (cob_report_generate) | C2 | ctx->reportio (état de reprise) | **corrigé le 2026-11-01** : pas inutile, l'état sert à reprendre l'instruction (`r->go_label`) |
+| reportio.c | 1662 | maxctl, ln, num, gengrp, last_use, ctlidx | C2 | ctx->reportio (état de reprise) | **corrigé le 2026-11-01** : pas inutile, l'état sert à reprendre l'instruction (`r->go_label`) |
 | mlio.c | 130 (143) | xml_event_name[] | CONST | `const char *const` | 216 o .data exporté ; jamais écrit avec designated inits ; variante l.143 (ifdef !HAVE_DESIGNATED_INITS) remplie une fois par init_xml_event_list -> C1 / mieux : initialiseur positionnel const |
 | mlio.c | 144 | xml_event_name_len[] | C1 | static const (positional init) | ifdef (!HAVE_DESIGNATED_INITS) ; rempli une fois dans cob_init_mlio |
 | mlio.c | 183 | cobglobptr | remove | remove (use ctx ; ctx stocké dans struct xml_state) | les callbacks SAX utilisent COB_MODULE_PTR via cette globale |
