@@ -18,7 +18,9 @@ source / signalé par une analyse, non vérifié).
 - Correction : passer `sizeof (buffer) - 1` ou `COB_MEDIUM_MAX`.
 
 ### `libcob/cobcapi.c:348` et `:395` — attribut statique partagé modifié
-- Statut : **vérifié** dans le source.
+- Statut : **vérifié** dans le source ; **corrigé** dans le commit 83bbaa55
+  (copie locale de l'attribut ; deux autres occurrences, dans
+  `cob_put_s64_param` / `cob_put_u64_param`, corrigées aussi).
 - `const_binll_attr.scale = f->attr->scale;` (de même pour
   `const_binull_attr`) écrit dans un `cob_field_attr` statique partagé
   (déclaré l. 53 et 55) à chaque appel.
