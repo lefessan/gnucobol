@@ -1901,6 +1901,7 @@ typedef struct __cob_global {
 
 typedef struct cob_runtime	cob_runtime;	/* opaque */
 
+struct cob_cobcapi_state;	/* opaque, cobcapi.c */
 struct cob_common_state;	/* opaque, common.c */
 struct cob_intrinsic_state;	/* opaque, intrinsic.c */
 struct cob_numeric_state;	/* opaque, numeric.c */
@@ -1918,6 +1919,7 @@ typedef struct cob_context {
 	struct cob_reportio_state	*reportio;	/* allocated on first use */
 	struct cob_strings_state	*strings;	/* allocated on first use */
 	struct cob_termio_state		*termio;	/* allocated on first use */
+	struct cob_cobcapi_state	*cobcapi;	/* allocated on first use */
 } cob_context;
 
 #ifndef COB_WITHOUT_JMP

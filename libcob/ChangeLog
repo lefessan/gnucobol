@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* cobcapi.c (cob_exit_cobcapi, cob_get_field_str_buffered,
+	  cob_watch_check), coblocal.h (cob_exit_call), common.c
+	  (cob_terminate_routines, cob_call_with_exception_check_ctx),
+	  common.h: state of the C API in the context
 	* common.c (cob_exit_common), common.h, termio.c (display_alnum_dump,
 	  cob_dump_output_ctx, cob_dump_file_ctx, cob_dump_file,
 	  setup_lvlwrk_and_dump_null_adrs, cob_dump_field_va_ctx): state of the
