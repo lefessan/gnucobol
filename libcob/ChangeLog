@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fileio.c (set_file_pos, cob_file_write_opt): constant tables
 	* common.c (cob_exit_common), common.h, profiling.c: state of the
 	  profiling in the context
 	* common.h, fextfh.c (free_extfh_fcd, cob_extfh_open_ctx,
