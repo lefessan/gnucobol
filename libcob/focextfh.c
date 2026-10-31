@@ -60,19 +60,19 @@ get_io_ptr (cob_context *ctx, cob_file *f)
 
 #ifdef WITH_INDEX_EXTFH
 
-void cob_index_init_fileio (cob_file_api *);
+void cob_index_init_fileio (cob_context *, cob_file_api *);
 
 /* Local variables */
 
-static void cob_index_exit_fileio (cob_file_api *a);
-static int indexed_open		(cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
-static int indexed_close	(cob_file_api *, cob_file *, const int);
-static int indexed_start	(cob_file_api *, cob_file *, const int, cob_field *);
-static int indexed_read		(cob_file_api *, cob_file *, cob_field *, const int);
-static int indexed_read_next	(cob_file_api *, cob_file *, const int);
-static int indexed_write	(cob_file_api *, cob_file *, const int);
-static int indexed_delete	(cob_file_api *, cob_file *);
-static int indexed_rewrite	(cob_file_api *, cob_file *, const int);
+static void cob_index_exit_fileio (cob_context *, cob_file_api *a);
+static int indexed_open		(cob_context *, cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
+static int indexed_close	(cob_context *, cob_file_api *, cob_file *, const int);
+static int indexed_start	(cob_context *, cob_file_api *, cob_file *, const int, cob_field *);
+static int indexed_read		(cob_context *, cob_file_api *, cob_file *, cob_field *, const int);
+static int indexed_read_next	(cob_context *, cob_file_api *, cob_file *, const int);
+static int indexed_write	(cob_context *, cob_file_api *, cob_file *, const int);
+static int indexed_delete	(cob_context *, cob_file_api *, cob_file *);
+static int indexed_rewrite	(cob_context *, cob_file_api *, cob_file *, const int);
 
 static struct cob_fileio_funcs ext_indexed_funcs = {
 	indexed_open,
@@ -95,7 +95,7 @@ static struct cob_fileio_funcs ext_indexed_funcs = {
 extern void	extfh_cob_init_fileio	(const struct cob_fileio_funcs *,
 					const struct cob_fileio_funcs *,
 					const struct cob_fileio_funcs *,
-					int (*)(cob_file *, const int));
+					int (*)(cob_context *, cob_file *, const int));
 extern void	extfh_cob_exit_fileio	(void);
 
 extern void extfh_indexed_unlock	(cob_file *);
@@ -111,7 +111,7 @@ extern int extfh_indexed_rewrite	(cob_file *, const int);
 
 /* OPEN INDEXED file */
 static int
-indexed_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+indexed_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
 	int		ret;
 
@@ -119,7 +119,7 @@ indexed_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_
 	ret = extfh_indexed_locate (f, filename);
 	switch (ret) {
 	case COB_NOT_CONFIGURED:
-		a->chk_file_mapping (f, NULL);
+		a->chk_file_mapping (ctx, f, NULL);
 		errno = 0;
 		if (access (filename, F_OK) && errno == ENOENT) {
 			if (mode != COB_OPEN_OUTPUT && f->flag_optional == 0) {
@@ -152,7 +152,7 @@ indexed_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_
 
 /* Close the INDEXED file */
 static int
-indexed_close (cob_file_api *a, cob_file *f, const int opt)
+indexed_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	COB_UNUSED (a);
 	return extfh_indexed_close (f, opt);
@@ -161,7 +161,7 @@ indexed_close (cob_file_api *a, cob_file *f, const int opt)
 
 /* START INDEXED file with positioning */
 static int
-indexed_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
+indexed_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 {
 	COB_UNUSED (a);
 	return extfh_indexed_start (f, cond, key);
@@ -169,7 +169,7 @@ indexed_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 
 /* Random READ of the INDEXED file  */
 static int
-indexed_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
+indexed_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
 	COB_UNUSED (a);
 	return extfh_indexed_read (f, key, read_opts);
@@ -177,7 +177,7 @@ indexed_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 
 /* Sequential READ of the INDEXED file */
 static int
-indexed_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+indexed_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
 	COB_UNUSED (a);
 	return extfh_indexed_read_next (f, read_opts);
@@ -185,7 +185,7 @@ indexed_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 
 /* WRITE to the INDEXED file  */
 static int
-indexed_write (cob_file_api *a, cob_file *f, const int opt)
+indexed_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	COB_UNUSED (a);
 	return extfh_indexed_write (f, opt);
@@ -194,7 +194,7 @@ indexed_write (cob_file_api *a, cob_file *f, const int opt)
 
 /* DELETE record from the INDEXED file  */
 static int
-indexed_delete (cob_file_api *a, cob_file *f)
+indexed_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	return extfh_indexed_delete (f);
@@ -202,7 +202,7 @@ indexed_delete (cob_file_api *a, cob_file *f)
 
 /* REWRITE record to the INDEXED file  */
 static int
-indexed_rewrite (cob_file_api *a, cob_file *f, const int opt)
+indexed_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	COB_UNUSED (a);
 	return extfh_indexed_rewrite (f, opt);
@@ -214,14 +214,14 @@ indexed_rewrite (cob_file_api *a, cob_file *f, const int opt)
 */
 
 static void
-cob_index_exit_fileio (cob_file_api *a)
+cob_index_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 	extfh_cob_exit_fileio ();
 }
 
 void
-cob_index_init_fileio (cob_file_api *a)
+cob_index_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	fileio_funcs = a->io_funcs;
 	a->io_funcs[COB_IO_IXEXT] = &ext_indexed_funcs;
@@ -251,19 +251,19 @@ extern int extfh_relative_read_next	(cob_file *, const int);
 extern int extfh_relative_write		(cob_file *, const int);
 extern int extfh_relative_rewrite	(cob_file *, const int);
 extern int extfh_relative_delete	(cob_file *);
-void cob_seqra_init_fileio (cob_file_api *);
-static int seqra_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing);
-static int seqra_close (cob_file_api *a, cob_file *f, const int opt);
-static void cob_seqra_exit_fileio (cob_file_api *a);
+void cob_seqra_init_fileio (cob_context *, cob_file_api *);
+static int seqra_open (cob_context *, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing);
+static int seqra_close (cob_context *, cob_file_api *a, cob_file *f, const int opt);
+static void cob_seqra_exit_fileio (cob_context *, cob_file_api *a);
 
-static int sequential_read	(cob_file_api *, cob_file *, const int);
-static int sequential_write	(cob_file_api *, cob_file *, const int);
-static int sequential_rewrite	(cob_file_api *, cob_file *, const int);
-static int relative_start	(cob_file_api *, cob_file *, const int, cob_field *);
-static int relative_read	(cob_file_api *, cob_file *, cob_field *, const int);
-static int relative_read_next	(cob_file_api *, cob_file *, const int);
-static int relative_write	(cob_file_api *, cob_file *, const int);
-static int relative_rewrite	(cob_file_api *, cob_file *, const int);
+static int sequential_read	(cob_context *, cob_file_api *, cob_file *, const int);
+static int sequential_write	(cob_context *, cob_file_api *, cob_file *, const int);
+static int sequential_rewrite	(cob_context *, cob_file_api *, cob_file *, const int);
+static int relative_start	(cob_context *, cob_file_api *, cob_file *, const int, cob_field *);
+static int relative_read	(cob_context *, cob_file_api *, cob_file *, cob_field *, const int);
+static int relative_read_next	(cob_context *, cob_file_api *, cob_file *, const int);
+static int relative_write	(cob_context *, cob_file_api *, cob_file *, const int);
+static int relative_rewrite	(cob_context *, cob_file_api *, cob_file *, const int);
 static int relative_delete	(cob_context *, cob_file_api *, cob_file *);
 
 
@@ -306,11 +306,11 @@ static struct cob_fileio_funcs ext_relative_funcs = {
 extern void	extfh_cob_init_fileio	(const struct cob_fileio_funcs *,
 					const struct cob_fileio_funcs *,
 					const struct cob_fileio_funcs *,
-					int (*)(cob_file *, const int));
+					int (*)(cob_context *, cob_file *, const int));
 extern void	extfh_cob_exit_fileio	(void);
 
 static int
-seqra_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+seqra_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
 	/* Note filename points to file_open_name */
 	/* cob_chk_file_mapping manipulates file_open_name directly */
@@ -321,7 +321,7 @@ seqra_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mo
 	ret = extfh_seqra_locate (f, filename);
 	switch (ret) {
 	case COB_NOT_CONFIGURED:
-		a->chk_file_mapping (f, NULL);
+		a->chk_file_mapping (ctx, f, NULL);
 		errno = 0;
 		if (access (filename, F_OK) && errno == ENOENT) {
 			if (mode != COB_OPEN_OUTPUT && f->flag_optional == 0) {
@@ -353,7 +353,7 @@ seqra_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mo
 }
 
 static int
-seqra_close (cob_file_api *a, cob_file *f, const int opt)
+seqra_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	COB_UNUSED (a);
 	return extfh_cob_file_close (f, opt);
@@ -362,9 +362,8 @@ seqra_close (cob_file_api *a, cob_file *f, const int opt)
 /* SEQUENTIAL */
 
 static int
-sequential_read (cob_file_api *a, cob_file *f, const int read_opts)
+sequential_read (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_sequential_read (f, read_opts);
@@ -375,14 +374,13 @@ sequential_read (cob_file_api *a, cob_file *f, const int read_opts)
 		f->io_routine = COB_IO_LINE_SEQUENTIAL;
 	else
 		f->io_routine = COB_IO_SEQUENTIAL;
-	return fileio_funcs[get_io_ptr (ctx, f)]->read_next (a, f, read_opts);
+	return fileio_funcs[get_io_ptr (ctx, f)]->read_next (ctx, a, f, read_opts);
 }
 
 /* WRITE */
 static int
-sequential_write (cob_file_api *a, cob_file *f, const int opt)
+sequential_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_sequential_write (f, opt);
@@ -393,14 +391,13 @@ sequential_write (cob_file_api *a, cob_file *f, const int opt)
 		f->io_routine = COB_IO_LINE_SEQUENTIAL;
 	else
 		f->io_routine = COB_IO_SEQUENTIAL;
-	return fileio_funcs[get_io_ptr (ctx, f)]->write (a, f, opt);
+	return fileio_funcs[get_io_ptr (ctx, f)]->write (ctx, a, f, opt);
 }
 
 /* REWRITE */
 static int
-sequential_rewrite (cob_file_api *a, cob_file *f, const int opt)
+sequential_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_sequential_rewrite (f, opt);
@@ -411,14 +408,13 @@ sequential_rewrite (cob_file_api *a, cob_file *f, const int opt)
 		f->io_routine = COB_IO_LINE_SEQUENTIAL;
 	else
 		f->io_routine = COB_IO_SEQUENTIAL;
-	return fileio_funcs[get_io_ptr (ctx, f)]->rewrite (a, f, opt);
+	return fileio_funcs[get_io_ptr (ctx, f)]->rewrite (ctx, a, f, opt);
 }
 
 /* RELATIVE  START */
 static int
-relative_start (cob_file_api *a, cob_file *f, const int cond, cob_field *k)
+relative_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *k)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_relative_start (f, cond, k);
@@ -429,14 +425,13 @@ relative_start (cob_file_api *a, cob_file *f, const int cond, cob_field *k)
 		f->io_routine = COB_IO_LINE_SEQUENTIAL;
 	else
 		f->io_routine = COB_IO_SEQUENTIAL;
-	return fileio_funcs[get_io_ptr (ctx, f)]->start (a, f, cond, k);
+	return fileio_funcs[get_io_ptr (ctx, f)]->start (ctx, a, f, cond, k);
 }
 
 /* RELATIVE  READ */
 static int
-relative_read (cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
+relative_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_relative_read (f, k, read_opts);
@@ -444,14 +439,13 @@ relative_read (cob_file_api *a, cob_file *f, cob_field *k, const int read_opts)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (ctx, f)]->read (a, f, k, read_opts);
+	return fileio_funcs[get_io_ptr (ctx, f)]->read (ctx, a, f, k, read_opts);
 }
 
 /* RELATIVE  READ NEXT */
 static int
-relative_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+relative_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int		extfh_ret;
 
 	extfh_ret = extfh_relative_read_next (f, read_opts);
@@ -459,14 +453,13 @@ relative_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (ctx, f)]->read_next (a, f, read_opts);
+	return fileio_funcs[get_io_ptr (ctx, f)]->read_next (ctx, a, f, read_opts);
 }
 
 /* RELATIVE  WRITE */
 static int
-relative_write (cob_file_api *a, cob_file *f, const int opt)
+relative_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_relative_write (f, opt);
@@ -474,14 +467,13 @@ relative_write (cob_file_api *a, cob_file *f, const int opt)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (ctx, f)]->write (a, f, opt);
+	return fileio_funcs[get_io_ptr (ctx, f)]->write (ctx, a, f, opt);
 }
 
 /* RELATIVE  REWRITE */
 static int
-relative_rewrite (cob_file_api *a, cob_file *f, const int opt)
+relative_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int	extfh_ret;
 
 	extfh_ret = extfh_relative_rewrite (f, opt);
@@ -489,7 +481,7 @@ relative_rewrite (cob_file_api *a, cob_file *f, const int opt)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (ctx, f)]->rewrite (a, f, opt);
+	return fileio_funcs[get_io_ptr (ctx, f)]->rewrite (ctx, a, f, opt);
 }
 
 /* RELATIVE  DELETE */
@@ -503,18 +495,18 @@ relative_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 		return extfh_ret;
 	}
 	f->io_routine = COB_IO_RELATIVE;
-	return fileio_funcs[get_io_ptr (ctx, f)]->recdelete (a, f);
+	return fileio_funcs[get_io_ptr (ctx, f)]->recdelete (ctx, a, f);
 }
 
 static void
-cob_seqra_exit_fileio (cob_file_api *a)
+cob_seqra_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 	extfh_cob_exit_fileio ();
 }
 
 void
-cob_seqra_init_fileio (cob_file_api *a)
+cob_seqra_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	fileio_funcs = a->io_funcs;
 	a->io_funcs[COB_IO_SQEXT] = &ext_sequential_funcs;

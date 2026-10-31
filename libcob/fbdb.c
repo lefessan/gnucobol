@@ -27,23 +27,23 @@
 
 #include <db.h>
 
-void cob_bdb_init_fileio (cob_file_api *a);
+void cob_bdb_init_fileio (cob_context *, cob_file_api *a);
 
 /* Local variables */
 
-static int ix_bdb_sync		(cob_file_api *,cob_file *f);
-static int ix_bdb_open		(cob_file_api *,cob_file *, char *, const enum cob_open_mode, const int);
-static int ix_bdb_close		(cob_file_api *,cob_file *, const int);
-static int ix_bdb_start		(cob_file_api *,cob_file *, const int, cob_field *);
-static int ix_bdb_read		(cob_file_api *,cob_file *, cob_field *, const int);
-static int ix_bdb_read_next	(cob_file_api *,cob_file *, const int);
-static int ix_bdb_write		(cob_file_api *,cob_file *, const int);
-static int ix_bdb_delete	(cob_file_api *,cob_file *);
-static int ix_bdb_file_delete(cob_file_api *, cob_file *, char *);
-static int ix_bdb_rewrite	(cob_file_api *,cob_file *, const int);
-static int ix_bdb_file_unlock (cob_file_api *a, cob_file *f);
-static void ix_bdb_exit_fileio (cob_file_api *a);
-static int ix_bdb_fork (cob_file_api *a);
+static int ix_bdb_sync		(cob_context *, cob_file_api *,cob_file *f);
+static int ix_bdb_open		(cob_context *, cob_file_api *,cob_file *, char *, const enum cob_open_mode, const int);
+static int ix_bdb_close		(cob_context *, cob_file_api *,cob_file *, const int);
+static int ix_bdb_start		(cob_context *, cob_file_api *,cob_file *, const int, cob_field *);
+static int ix_bdb_read		(cob_context *, cob_file_api *,cob_file *, cob_field *, const int);
+static int ix_bdb_read_next	(cob_context *, cob_file_api *,cob_file *, const int);
+static int ix_bdb_write		(cob_context *, cob_file_api *,cob_file *, const int);
+static int ix_bdb_delete	(cob_context *, cob_file_api *,cob_file *);
+static int ix_bdb_file_delete(cob_context *, cob_file_api *, cob_file *, char *);
+static int ix_bdb_rewrite	(cob_context *, cob_file_api *,cob_file *, const int);
+static int ix_bdb_file_unlock (cob_context *, cob_file_api *a, cob_file *f);
+static void ix_bdb_exit_fileio (cob_context *, cob_file_api *a);
+static int ix_bdb_fork (cob_context *, cob_file_api *a);
 static char * ix_bdb_version (void);
 
 static int ix_bdb_dummy () { return 0; }
@@ -302,7 +302,7 @@ bdb_bt_compare (DB *db, const DBT *k1, const DBT *k2
 /* Local functions */
 
 static int
-ix_bdb_sync (cob_file_api *a, cob_file *f)
+ix_bdb_sync (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	struct indexed_file	*p;
 	int			i;
@@ -1168,7 +1168,7 @@ ix_bdb_delete_internal (cob_context *ctx, cob_file *f, const int rewrite, int bd
 
 /* Delete file */
 static int
-ix_bdb_file_delete (cob_file_api *a, cob_file *f, char *filename)
+ix_bdb_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename)
 {
 	int	i;
 	char	file_open_buff[COB_FILE_MAX+1];
@@ -1254,9 +1254,8 @@ bdb_nofile (const char *filename)
 
 /* OPEN INDEXED file */
 static int
-ix_bdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+ix_bdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p;
 	int			i;
 	int			j;
@@ -1346,9 +1345,9 @@ ix_bdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_m
 
 	if (mode != COB_OPEN_OUTPUT) {
 		if (bdb_nofile(filename) == 0) {
-			ret = a->cob_read_dict (f, bdb_buff, !f->flag_keycheck);
+			ret = a->cob_read_dict (ctx, f, bdb_buff, !f->flag_keycheck);
 		} else {
-			ret = a->cob_read_dict (f, filename, !f->flag_keycheck);
+			ret = a->cob_read_dict (ctx, f, filename, !f->flag_keycheck);
 		}
 		if (ret == -1) {
 			/* no .dd found - just go on */
@@ -1451,7 +1450,7 @@ ix_bdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_m
 			 && i == 0
 			 && mode == COB_OPEN_OUTPUT
 			 && bdb_nofile(runtime_buffer) == 0) {
-				a->cob_write_dict(f, bdb_buff);
+				a->cob_write_dict(ctx, f, bdb_buff);
 			}
 		}
 		if (ret) {
@@ -1530,7 +1529,7 @@ ix_bdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_m
 		if (p->data.data != NULL
 		 && p->data.size > 0
 		 && p->data.size > f->record_max) {
-			ix_bdb_close (a, f, 0);
+			ix_bdb_close (ctx, a, f, 0);
 			return COB_STATUS_39_CONFLICT_ATTRIBUTE;
 		}
 	} else {
@@ -1549,9 +1548,8 @@ ix_bdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_m
 /* Close the INDEXED file */
 
 static int
-ix_bdb_close (cob_file_api *a, cob_file *f, const int opt)
+ix_bdb_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p = f->file;
 	int			i;
 
@@ -1613,9 +1611,8 @@ ix_bdb_close (cob_file_api *a, cob_file *f, const int opt)
 /* START INDEXED file with positioning */
 
 static int
-ix_bdb_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
+ix_bdb_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	COB_UNUSED (a);
 
 	return ix_bdb_start_internal (ctx, f, cond, key, 0, 0);
@@ -1624,9 +1621,8 @@ ix_bdb_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 /* Random READ of the INDEXED file  */
 
 static int
-ix_bdb_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
+ix_bdb_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p = f->file;
 	int			ret;
 	int			bdb_opts;
@@ -1690,9 +1686,8 @@ ix_bdb_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 /* Sequential READ of the INDEXED file */
 
 static int
-ix_bdb_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+ix_bdb_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p = f->file;
 	int			ret;
 	int			read_nextprev, skip_lock;
@@ -1994,9 +1989,8 @@ ix_bdb_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 /* WRITE to the INDEXED file  */
 
 static int
-ix_bdb_write (cob_file_api *a, cob_file *f, const int opt)
+ix_bdb_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexed_file	*p = f->file;
 	int			ret;
 
@@ -2037,9 +2031,8 @@ ix_bdb_write (cob_file_api *a, cob_file *f, const int opt)
 /* DELETE record from the INDEXED file  */
 
 static int
-ix_bdb_delete (cob_file_api *a, cob_file *f)
+ix_bdb_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int			ret;
 
 	COB_UNUSED (a);
@@ -2054,9 +2047,8 @@ ix_bdb_delete (cob_file_api *a, cob_file *f)
 /* REWRITE record to the INDEXED file  */
 
 static int
-ix_bdb_rewrite (cob_file_api *a, cob_file *f, const int opt)
+ix_bdb_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	int		ret;
 
 	COB_UNUSED (a);
@@ -2117,9 +2109,8 @@ ix_bdb_rewrite (cob_file_api *a, cob_file *f, const int opt)
 }
 
 static int
-ix_bdb_file_unlock (cob_file_api *a, cob_file *f)
+ix_bdb_file_unlock (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	COB_UNUSED (a);
 	if (COB_FILE_SPECIAL(f)) {
 		return 0;
@@ -2146,7 +2137,7 @@ ix_bdb_file_unlock (cob_file_api *a, cob_file *f)
 
 /* Call this routine when a new process has been forked */
 static int
-ix_bdb_fork (cob_file_api *a)
+ix_bdb_fork (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 	bdb_lock_id = 0;
@@ -2158,7 +2149,7 @@ ix_bdb_fork (cob_file_api *a)
 }
 
 static void
-ix_bdb_exit_fileio (cob_file_api *a)
+ix_bdb_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 	if (record_lock_object) {
@@ -2193,7 +2184,7 @@ ix_bdb_exit_fileio (cob_file_api *a)
 }
 
 void
-cob_bdb_init_fileio (cob_file_api *a)
+cob_bdb_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	a->io_funcs[COB_IO_BDB] = (void*)&ext_indexed_funcs;
 	bdb_env = NULL;

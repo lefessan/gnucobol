@@ -206,22 +206,22 @@ struct indexfile {
 
 /* Local variables */
 
-static int isam_open	(cob_file_api *a, cob_file *, char *, const enum cob_open_mode, const int);
-static int isam_close	(cob_file_api *a, cob_file *, const int);
-static int isam_start	(cob_file_api *a, cob_file *, const int, cob_field *);
-static int isam_read	(cob_file_api *a, cob_file *, cob_field *, const int);
-static int isam_read_next(cob_file_api *a, cob_file *, const int);
-static int isam_write	(cob_file_api *a, cob_file *, const int);
-static int isam_delete	(cob_file_api *a, cob_file *);
-static int isam_rewrite	(cob_file_api *a, cob_file *, const int);
-static int isam_file_delete (cob_file_api *a, cob_file *f, char *name);
-static int isam_sync (cob_file_api *a, cob_file *f);
-static int isam_commit (cob_file_api *a, cob_file *f);
-static int isam_rollback (cob_file_api *a, cob_file *f);
+static int isam_open	(cob_context *, cob_file_api *a, cob_file *, char *, const enum cob_open_mode, const int);
+static int isam_close	(cob_context *, cob_file_api *a, cob_file *, const int);
+static int isam_start	(cob_context *, cob_file_api *a, cob_file *, const int, cob_field *);
+static int isam_read	(cob_context *, cob_file_api *a, cob_file *, cob_field *, const int);
+static int isam_read_next(cob_context *, cob_file_api *a, cob_file *, const int);
+static int isam_write	(cob_context *, cob_file_api *a, cob_file *, const int);
+static int isam_delete	(cob_context *, cob_file_api *a, cob_file *);
+static int isam_rewrite	(cob_context *, cob_file_api *a, cob_file *, const int);
+static int isam_file_delete (cob_context *, cob_file_api *a, cob_file *f, char *name);
+static int isam_sync (cob_context *, cob_file_api *a, cob_file *f);
+static int isam_commit (cob_context *, cob_file_api *a, cob_file *f);
+static int isam_rollback (cob_context *, cob_file_api *a, cob_file *f);
 static char *isam_version (void);
-static void cob_isam_exit_fileio (cob_file_api *a);
+static void cob_isam_exit_fileio (cob_context *, cob_file_api *a);
 
-COB_EXT_EXPORT void cob_isam_init_fileio (cob_file_api *a);
+COB_EXT_EXPORT void cob_isam_init_fileio (cob_context *, cob_file_api *a);
 
 static int
 isam_dummy ()
@@ -452,7 +452,7 @@ indexed_keycmp (struct keydesc *k1, struct keydesc *k2)
 }
 
 static int
-isam_sync (cob_file_api *a, cob_file *f)
+isam_sync (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	struct indexfile	*fh;
 
@@ -476,7 +476,7 @@ isam_sync (cob_file_api *a, cob_file *f)
 }
 
 static int
-isam_commit (cob_file_api *a, cob_file *f)
+isam_commit (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 #ifndef ISSYNCWR
@@ -496,7 +496,7 @@ isam_commit (cob_file_api *a, cob_file *f)
 }
 
 static int
-isam_rollback (cob_file_api *a, cob_file *f)
+isam_rollback (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	COB_UNUSED (f);
@@ -794,7 +794,7 @@ isread_retry(cob_file *f, void *data, int mode)
 /* Delete file */
 
 static int
-isam_file_delete (cob_file_api *a, cob_file *f, char *filename)
+isam_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename)
 {
 	struct stat	st;
 	char	file_name_buf [COB_FILE_MAX];
@@ -876,9 +876,8 @@ isam_set_mode (cob_file *f)
 }
 
 static int
-isam_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+isam_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	/* Note filename points to file_open_name */
 	/* cob_chk_file_mapping manipulates file_open_name directly */
 
@@ -1057,7 +1056,7 @@ isam_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		if (isfd >= 0) {
 			isfullclose (isfd);
 		}
-		isam_file_delete (a, f, filename);
+		isam_file_delete (ctx, a, f, filename);
 		ISERRNO = 0;
 		dobld = 1;
 		break;
@@ -1103,7 +1102,7 @@ dobuild:
 #endif
 			) {
 				/* Erase file and redo the 'isbuild' */
-				isam_file_delete (a, f, filename);
+				isam_file_delete (ctx, a, f, filename);
 #if	ISVARLEN != 0
 				if (f->record_min != f->record_max) {
 					ISRECLEN = f->record_min;
@@ -1287,7 +1286,7 @@ dobuild:
 /* Close the INDEXED file */
 
 static int
-isam_close (cob_file_api *a, cob_file *f, const int opt)
+isam_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexfile	*fh = f->file;
 
@@ -1309,7 +1308,7 @@ isam_close (cob_file_api *a, cob_file *f, const int opt)
 /* START INDEXED file with positioning */
 
 static int
-isam_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
+isam_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 {
 	struct indexfile	*fh = f->file;
 	int			k;
@@ -1446,9 +1445,8 @@ isam_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 /* Random READ of the INDEXED file  */
 
 static int
-isam_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
+isam_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexfile	*fh;
 	int			k,fullkeylen,partlen;
 	int			ret;
@@ -1524,9 +1522,8 @@ isam_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 /* Sequential READ of the INDEXED file */
 
 static int
-isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+isam_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	struct indexfile	*fh;
 	int			ret;
 	int			lmode, skip_read;
@@ -1880,7 +1877,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 /* WRITE to the INDEXED file  */
 
 static int
-isam_write (cob_file_api *a, cob_file *f, const int opt)
+isam_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexfile	*fh = f->file;
 	int			ret, retdup;
@@ -1954,7 +1951,7 @@ isam_write (cob_file_api *a, cob_file *f, const int opt)
 /* DELETE record from the INDEXED file  */
 
 static int
-isam_delete (cob_file_api *a, cob_file *f)
+isam_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	struct indexfile	*fh;
 	int			ret;
@@ -1999,7 +1996,7 @@ isam_delete (cob_file_api *a, cob_file *f)
 /* REWRITE record to the INDEXED file  */
 
 static int
-isam_rewrite (cob_file_api *a, cob_file *f, const int opt)
+isam_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexfile	*fh;
 	int			k;
@@ -2154,7 +2151,7 @@ isam_rewrite (cob_file_api *a, cob_file *f, const int opt)
 }
 
 static void
-cob_isam_exit_fileio (cob_file_api *a)
+cob_isam_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 #ifndef	WITH_DISAM
@@ -2163,7 +2160,7 @@ cob_isam_exit_fileio (cob_file_api *a)
 }
 
 void
-cob_isam_init_fileio (cob_file_api *a)
+cob_isam_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 #ifdef NPARTS
 	if (max_keycomp > NPARTS)

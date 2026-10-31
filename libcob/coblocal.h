@@ -469,8 +469,8 @@ COB_HIDDEN void		cob_module_clean	(cob_module *);
 
 COB_HIDDEN void		cob_check_trace_file (void);
 
-COB_HIDDEN char		*cob_get_filename_print	(cob_file *, const int);
-COB_HIDDEN void		cob_fork_fileio		(cob_global *, cob_settings *);
+COB_HIDDEN char		*cob_get_filename_print	(cob_context *, cob_file *, const int);
+COB_HIDDEN void		cob_fork_fileio		(cob_context *, cob_global *, cob_settings *);
 
 COB_HIDDEN void		cob_file_fcd_sync	(cob_context *, cob_file*);
 COB_HIDDEN void		cob_fcd_file_sync	(cob_context *, cob_file*, char*);
@@ -479,7 +479,7 @@ COB_HIDDEN void		free_extfh_fcd		(cob_context *);
 COB_HIDDEN void		cob_exit_screen		(void);
 COB_HIDDEN void		cob_exit_screen_from_signal	(int);
 COB_HIDDEN void		cob_exit_numeric	(void);
-COB_HIDDEN void		cob_exit_fileio_msg_only	(void);
+COB_HIDDEN void		cob_exit_fileio_msg_only	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio		(cob_context *);
 COB_HIDDEN void		cob_exit_reportio	(void);
 COB_HIDDEN void		cob_exit_call		(void);

@@ -1,6 +1,24 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_check_trace_file, cob_exit_numeric), common.c
+	  (ss_terminate_routines, cob_terminate_routines, cob_sig_handler,
+	  cob_sys_fork, cob_fatal_error_ctx), fbdb.c (cob_bdb_init_fileio,
+	  ix_bdb_open, ix_bdb_close, ix_bdb_start, ix_bdb_read,
+	  ix_bdb_read_next, ...), fextfh.c (copy_fcd_to_file), fileio.c
+	  (cob_savekey, cob_index_init_fileio, cob_load_module, cob_read_dict,
+	  cob_chk_file_mapping, cob_file_sync, ...), fileio.h
+	  (indexed_file_type, cob_file_sync, cob_bdb_init_fileio,
+	  cob_sql_dump_index, cob_odbc_init_fileio, cob_oci_init_fileio),
+	  fisam.c (isam_version, cob_isam_exit_fileio, isam_open, isam_read,
+	  isam_read_next), flmdb.c (lmdb_version, cob_lmdb_fork, lmdb_open,
+	  lmdb_start, lmdb_read, lmdb_write, ...), focextfh.c (get_io_ptr,
+	  cob_index_init_fileio, extfh_cob_init_fileio, indexed_open,
+	  extfh_relative_delete, seqra_open, ...), foci.c (cob_oci_init_fileio,
+	  oci_create_table, oci_file_delete, oci_open, oci_close, oci_start,
+	  ...), fodbc.c (odbcStmt, odbc_create_table, odbc_file_delete,
+	  odbc_open, odbc_close, odbc_start, ...): pass the context through the
+	  internal file handler API
 	* coblocal.h (cob_move_display_to_packed), move.c
 	  (cob_move_display_to_display, cob_move_packed_to_display,
 	  cob_move_binary_to_display, cob_move_edited_to_display,
