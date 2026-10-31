@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* move.c (cob_move_all, cob_set_llcon, cob_get_u64_comp6): constant
+	  tables and local scratch field
 	* coblocal.h (cob_exit_fileio), common.c (cob_terminate_routines),
 	  common.h, reportio.c (free_control_fields, cob_init_reportio,
 	  cob_exit_reportio, cob_report_initiate_ctx, cob_report_terminate_ctx,

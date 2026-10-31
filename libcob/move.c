@@ -57,9 +57,6 @@ static const cob_field_attr	all_display_attr =
 
 static const cob_field_attr	all_numeric_display_attr =
 				{COB_TYPE_NUMERIC_DISPLAY, COB_MAX_DIGITS, 0, 0, NULL};
-static unsigned char all_numeric_data[COB_MAX_DIGITS];
-static const cob_field all_numeric_field =
-				{COB_MAX_DIGITS, all_numeric_data, &all_numeric_display_attr};
 
 static const int	cob_exp10[10] = {
 	1,
@@ -1575,8 +1572,12 @@ cob_move_all (cob_context *ctx, cob_field *src, cob_field *dst)
 		temp.attr = &all_display_attr;
 		digcount = dst->size;
 	} else if (src->size == 1) {
+		unsigned char	all_numeric_data[COB_MAX_DIGITS];
+		cob_field	all_numeric_field;
+		COB_FIELD_INIT_F (all_numeric_field, COB_MAX_DIGITS, all_numeric_data,
+			&all_numeric_display_attr);
 		memset (all_numeric_data, src->data[0], COB_MAX_DIGITS);
-		cob_move_ctx (ctx, (cob_field *)&all_numeric_field, dst);
+		cob_move_ctx (ctx, &all_numeric_field, dst);
 		return;
 	} else {
 		temp.attr = &all_numeric_display_attr;
@@ -2553,7 +2554,7 @@ cob_set_llcon (cob_field *f, const cob_s64_t n)
 	cob_set_llcon_ctx (COB_CTX_COMPAT, f, n);
 }
 
-static cob_u64_t chopcompx [7] = { 0xFF, 0xFFFF, 0xFFFFFF, 0xFFFFFFFF,
+static const cob_u64_t chopcompx [7] = { 0xFF, 0xFFFF, 0xFFFFFF, 0xFFFFFFFF,
 		0xFFFFFFFFFF, 0xFFFFFFFFFFFF, 0xFFFFFFFFFFFFFF};
 void
 cob_set_compx_ctx (cob_context *ctx, cob_field *f, const cob_s64_t n)
@@ -3182,8 +3183,8 @@ cob_get_u64_comp6 (void *mem, int len)
 }
 
 /* note: the 11th position is only there to keep the analyzer happy ...*/
-static char ebcdic_pos[11] = "{ABCDEFGHI";
-static char ebcdic_neg[11] = "}JKLMNOPQR";
+static const char ebcdic_pos[11] = "{ABCDEFGHI";
+static const char ebcdic_neg[11] = "}JKLMNOPQR";
 
 void
 cob_put_s64_pic9_ctx (cob_context *ctx, cob_s64_t val, void *mem, int len)
