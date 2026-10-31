@@ -35,7 +35,8 @@ source / signalé par une analyse, non vérifié).
   flag pourraient partager une valeur en cache erronée.
 
 ### `libcob/profiling.c` — `get_ns_time` : garde monotone inopérante
-- Statut : signalé par une analyse, **non vérifié**.
+- Statut : **vérifié** dans le source le 2026-11-01 (`ns_time` n'est
+  modifié que dans la branche `is_test`).
 - La valeur `ns_time` mémorisée n'est jamais mise à jour hors mode test,
   donc la vérification censée garantir un temps croissant ne sert à rien.
 
