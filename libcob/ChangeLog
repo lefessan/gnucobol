@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h, fileio.c (cob_put_qbl, do_acu_hyphen_translation,
+	  apply_file_paths, cob_chk_file_mapping, cob_sys_copy_file,
+	  cob_exit_fileio, ...): state of the file I/O in the context
 	* fileio.c (set_file_pos, cob_file_write_opt): constant tables
 	* common.c (cob_exit_common), common.h, profiling.c: state of the
 	  profiling in the context
