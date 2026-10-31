@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h, intrinsic.c (cob_alloc_set_field_int,
+	  cob_alloc_set_field_uint, cob_alloc_set_field_pretty,
+	  cob_alloc_field, cob_mod_or_rem, substitute, ...): state of the
+	  intrinsic functions in the context
 	* numeric.c (cob_move_bcd): h2b and b2h tables are constant
 	* coblocal.h (cob_init_cobcapi, cob_exit_screen_from_signal,
 	  cob_exit_cobcapi, cob_decimal_init2), common.c
