@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_malloc, cob_realloc, cob_free, cob_fast_malloc): no
+	  context lookup on the fast path of memory functions
 	* call.c (set_resolve_error, cache_preload, insert,
 	  cob_resolve_internal, cob_set_cancel_ctx, cob_resolve_ctx, ...),
 	  cconv.c (cob_load_collation), cobcapi.c (cob_get_param_field,
