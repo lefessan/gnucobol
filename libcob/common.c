@@ -999,7 +999,7 @@ cob_terminate_routines (cob_context *ctx)
 	cob_exit_common_modules ();
 	if (module_unload == COB_IMMEDIATE) {
 		cob_exit_call (ctx);
-		cob_exit_cobcapi ();
+		cob_exit_cobcapi (ctx);
 		cob_exit_common (ctx);
         /* If module unloading has been postponed, "remember" unloading has indeed been requested */
 	} else if (module_unload == COB_POSTPONE) {
@@ -11287,7 +11287,7 @@ cob_call_with_exception_check_ctx (cob_context *ctx, const char *name, const int
 		/* Module unloading has been requested (after being postponed): perform it */
 		if (module_unload == COB_REQUESTED) {
 			cob_exit_call (ctx);
-			cob_exit_cobcapi ();
+			cob_exit_cobcapi (ctx);
 			cob_exit_common (ctx);
 		}
 		module_unload = COB_IMMEDIATE;

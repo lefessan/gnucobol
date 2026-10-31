@@ -55,19 +55,38 @@ static const cob_field_attr	const_binll_attr =
 static const cob_field_attr	const_binull_attr =
 			{COB_TYPE_NUMERIC_BINARY, 18, 0, 0, NULL};
 
-static size_t		capi_lastsize = 0;
-static void			*capi_buffer = NULL;
-static struct watch_list {
+struct watch_list {
 		struct watch_list	*next;
 		char				*field_ref;
 		cob_module			*mod;
 		cob_field			f;
 		void				*saved;
-}	*head_watch	= NULL;
+};
+
+/* State of cobcapi.c, one per context; accessed with the macros below,
+   using the context 'ctx' */
+struct cob_cobcapi_state {
+	size_t			capi_lastsize;
+	void			*capi_buffer;
+	struct watch_list	*head_watch;
+};
+
+static struct cob_cobcapi_state *
+cobcapi_state (cob_context *ctx)
+{
+	if (ctx->cobcapi == NULL) {
+		ctx->cobcapi = cob_malloc (sizeof (struct cob_cobcapi_state));
+	}
+	return ctx->cobcapi;
+}
+
+#define capi_lastsize	(cobcapi_state (ctx)->capi_lastsize)
+#define capi_buffer	(cobcapi_state (ctx)->capi_buffer)
+#define head_watch	(cobcapi_state (ctx)->head_watch)
 
 /* Local functions */
 static void *
-cob_get_buff (const size_t buffsize)
+cob_get_buff (cob_context *ctx, const size_t buffsize)
 {
 	if (buffsize > capi_lastsize) {
 		capi_lastsize = buffsize;
@@ -86,9 +105,12 @@ cob_init_cobcapi (cob_global *lptr, cob_settings* sptr)
 } 
 
 void
-cob_exit_cobcapi (void)
+cob_exit_cobcapi (cob_context *ctx)
 {
 	struct watch_list *wl,*wp;
+	if (ctx == NULL || ctx->cobcapi == NULL) {
+		return;
+	}
 	if (capi_buffer) {
 		cob_free (capi_buffer);
 		capi_buffer = NULL;
@@ -100,6 +122,8 @@ cob_exit_cobcapi (void)
 		wp = wl->next;
 		cob_free (wl);
 	}
+	cob_free (ctx->cobcapi);
+	ctx->cobcapi = NULL;
 }
 
 /******************************************
@@ -562,6 +586,7 @@ cob_get_field_str (const cob_field *f, char *buffer, size_t size)
 const char *
 cob_get_field_str_buffered (const cob_field *f)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	char	*buff = NULL;
 	size_t	size = (size_t)cob_get_field_size (f) + 1;
 
@@ -569,7 +594,7 @@ cob_get_field_str_buffered (const cob_field *f)
 		if (size < 32) {
 			size = 32;
 		}
-		buff = cob_get_buff (size);
+		buff = cob_get_buff (ctx, size);
 	}
 	return cob_get_field_str (f, buff, size);
 }
@@ -1184,6 +1209,7 @@ cob_watch_field_free (char *mod_name, char *field_ref)
 int
 cob_watch_check (char *mod_name, char *field_ref)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	struct watch_list	*wl;
 	for (wl = head_watch; wl; wl = wl->next) {
 		if (memcmp (wl->saved, wl->f.data, wl->f.size) != 0) {
