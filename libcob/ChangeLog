@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fbdb.c (bdb_dupswap, bdb_setkey, bdb_bt_compare,
+	  ix_bdb_start_internal, ix_bdb_delete_internal, ix_bdb_open, ...):
+	  collating sequence of BDB keys in the DB handle
 	* coblocal.h (cob_strjoin), common.c (cob_debug_open, cob_exit_common,
 	  cob_terminate_routines, cob_get_source_line, set_source_location,
 	  get_source_location, ...), common.h, fileio.c
