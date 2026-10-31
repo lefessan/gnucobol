@@ -3140,13 +3140,12 @@ cob_accept_user_name (cob_field *f)
 void *
 cob_malloc (const size_t size)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	void	*mptr;
 
 	mptr = calloc ((size_t)1, size);
 	/* LCOV_EXCL_START */
 	if (!mptr) {
-		cob_fatal_error_ctx (ctx, COB_FERROR_MEMORY);
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_MEMORY);
 	}
 	/* LCOV_EXCL_STOP */
 	return mptr;
@@ -3155,12 +3154,11 @@ cob_malloc (const size_t size)
 void *
 cob_realloc (void * optr, const size_t osize, const size_t nsize)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	void	*mptr;
 
 	/* LCOV_EXCL_START */
 	if (!optr) {
-		cob_fatal_error_ctx (ctx, COB_FERROR_FREE);
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_FREE);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -3174,7 +3172,7 @@ cob_realloc (void * optr, const size_t osize, const size_t nsize)
 	mptr = calloc ((size_t)1, nsize);	/* New memory, past old is cleared */
 	/* LCOV_EXCL_START */
 	if (!mptr) {
-		cob_fatal_error_ctx (ctx, COB_FERROR_MEMORY);
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_MEMORY);
 	}
 	/* LCOV_EXCL_STOP */
 	memcpy (mptr, optr, osize);
@@ -3185,11 +3183,10 @@ cob_realloc (void * optr, const size_t osize, const size_t nsize)
 void
 cob_free (void * mptr)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 #ifdef _DEBUG
 	/* LCOV_EXCL_START */
 	if (!mptr) {
-		cob_fatal_error_ctx (ctx, COB_FERROR_FREE);
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_FREE);
 	}
 	/* LCOV_EXCL_STOP */
 #endif
@@ -3200,13 +3197,12 @@ cob_free (void * mptr)
 void *
 cob_fast_malloc (const size_t size)
 {
-	cob_context	*ctx = COB_CTX_TODO;
 	void	*mptr;
 
 	mptr = malloc (size);
 	/* LCOV_EXCL_START */
 	if (!mptr) {
-		cob_fatal_error_ctx (ctx, COB_FERROR_MEMORY);
+		cob_fatal_error_ctx (COB_CTX_TODO, COB_FERROR_MEMORY);
 	}
 	/* LCOV_EXCL_STOP */
 	return mptr;
