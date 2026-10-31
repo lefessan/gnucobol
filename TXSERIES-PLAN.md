@@ -386,6 +386,10 @@ Conséquences pour `cobc/codegen.c` :
    (sources, et binaire en mode un seul contexte ; DESIGN §5).
    (J2 : T1.2 — `ctx` passé partout (changement d'ABI), état encore
    unique.)
+3. **J3 (T1.3) en cours** : 2026-10-31, `ctx` propagé aux fonctions
+   internes de libcob (`COB_CTX_TODO` : 883 → 102, voir DESIGN §10 bis).
+   Reste : API interne des gestionnaires de fichiers, callbacks, puis
+   déplacement de l'état global dans `cob_context` / `cob_runtime`.
 3. **J3** : T1.3 + T1.4 — libcob sans état global mutable, thread-safe.
 4. **J4** : T1.5 + T1.6 — instances de programme par contexte, banc de
    test multi-thread.
