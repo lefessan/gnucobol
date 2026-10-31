@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md: status of T1.3 (187 mutable globals left)
 	* TXSERIES-PLAN.md: status of T1.3 (state of 7 more files in the
 	  context)
 	* TXSERIES-PLAN.md: status of T1.3 (global and settings pointers)
