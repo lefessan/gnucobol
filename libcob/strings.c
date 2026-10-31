@@ -108,9 +108,8 @@ struct cob_strings_state {
 	unsigned char			*figurative_ptr;
 	size_t				figurative_size;
 	cob_field			alpha_fld;
+	cob_field			str_cob_low;	/* LOW-VALUE of the current collating sequence */
 };
-
-static cob_field		str_cob_low;
 
 static struct cob_strings_state *
 strings_state (cob_context *ctx)
@@ -118,6 +117,9 @@ strings_state (cob_context *ctx)
 	if (ctx->strings == NULL) {
 		ctx->strings = cob_malloc (sizeof (struct cob_strings_state));
 		ctx->strings->alpha_fld.attr = &const_alpha_attr;
+		ctx->strings->str_cob_low.size = 1;
+		ctx->strings->str_cob_low.data = (cob_u8_ptr)"\0";
+		ctx->strings->str_cob_low.attr = &const_strall_attr;
 	}
 	return ctx->strings;
 }
@@ -128,9 +130,9 @@ static COB_INLINE COB_A_INLINE void
 cob_update_low_value (cob_context *ctx)
 {
 	if (COB_MODULE_PTR && COB_MODULE_PTR->collating_sequence != NULL) {
-		str_cob_low.data = (cob_u8_ptr)&COB_MODULE_PTR->collating_sequence[0];
+		strings_state (ctx)->str_cob_low.data = (cob_u8_ptr)&COB_MODULE_PTR->collating_sequence[0];
 	} else {
-		str_cob_low.data = (cob_u8_ptr)"\0";
+		strings_state (ctx)->str_cob_low.data = (cob_u8_ptr)"\0";
 	}
 }
 
@@ -482,11 +484,11 @@ inspect_common (cob_context *ctx,
 
 	if (!f1) {
 		cob_update_low_value (ctx);
-		f1 = &str_cob_low;
+		f1 = &strings_state (ctx)->str_cob_low;
 	}
 	if (!f2) {
 		cob_update_low_value (ctx);
-		f2 = &str_cob_low;
+		f2 = &strings_state (ctx)->str_cob_low;
 	}
 
 	/* note: inspect_common_no_replace and inspect_common_replacing share most
@@ -840,11 +842,11 @@ cob_inspect_converting_intern (cob_context *ctx,
 
 	if (!f1) {
 		cob_update_low_value (ctx);
-		f1 = &str_cob_low;
+		f1 = &strings_state (ctx)->str_cob_low;
 	}
 	if (!f2) {
 		cob_update_low_value (ctx);
-		f2 = &str_cob_low;
+		f2 = &strings_state (ctx)->str_cob_low;
 	}
 	if (f1->size != f2->size) {
 		if (COB_FIELD_TYPE (f2) == COB_TYPE_ALPHANUMERIC_ALL) {
@@ -1507,7 +1509,4 @@ void
 cob_init_strings (cob_global *lptr)
 {
 
-	str_cob_low.size = 1;
-	str_cob_low.data = (cob_u8_ptr)"\0";
-	str_cob_low.attr = &const_strall_attr;
 }
