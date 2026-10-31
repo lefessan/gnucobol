@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_exit_fileio), common.c (cob_terminate_routines),
+	  common.h, reportio.c (free_control_fields, cob_init_reportio,
+	  cob_exit_reportio, cob_report_initiate_ctx, cob_report_terminate_ctx,
+	  cob_report_generate_ctx): state of the report writer in the context
 	* common.h, intrinsic.c (cob_alloc_set_field_int,
 	  cob_alloc_set_field_uint, cob_alloc_set_field_pretty,
 	  cob_alloc_field, cob_mod_or_rem, substitute, ...): state of the

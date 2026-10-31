@@ -52,7 +52,32 @@ static const cob_field_attr	const_alpha_attr =
 static const cob_field_attr	const_num_attr =
 				{COB_TYPE_NUMERIC, 0, 0, 0, NULL};
 #define MAX_ACTIVE_REPORTS 10
-static cob_report *active_reports[MAX_ACTIVE_REPORTS];
+
+/* state of TERMINATE / GENERATE kept between two calls, when the
+   statement returns to the program to execute a SOURCE or declarative
+   and is called again to resume (r->go_label) */
+struct report_resume {
+	cob_report_control	*rc;
+	cob_report_control_ref	*rr;
+	cob_report_line		*pl, *sl;
+	int		maxctl, ln, num, gengrp, last_use, ctlidx;
+};
+
+/* State of reportio.c, one per context */
+struct cob_reportio_state {
+	cob_report		*active_reports[MAX_ACTIVE_REPORTS];
+	struct report_resume	terminate;
+	struct report_resume	generate;
+};
+
+static struct cob_reportio_state *
+reportio_state (cob_context *ctx)
+{
+	if (ctx->reportio == NULL) {
+		ctx->reportio = cob_malloc (sizeof (struct cob_reportio_state));
+	}
+	return ctx->reportio;
+}
 
 /*
  * Initialize data field
@@ -124,7 +149,7 @@ cob_field_free (cob_field *f)
  * Free control temp areas
  */
 static void
-free_control_fields (cob_report *r)
+free_control_fields (cob_context *ctx, cob_report *r)
 {
 	cob_report_control	*rc;
 	cob_report_control_ref	*rr;
@@ -153,8 +178,8 @@ free_control_fields (cob_report *r)
 		}
 	}
 	for (k=0; k < MAX_ACTIVE_REPORTS; k++) {
-		if (active_reports[k] == r) {
-			active_reports[k] = NULL;
+		if (reportio_state (ctx)->active_reports[k] == r) {
+			reportio_state (ctx)->active_reports[k] = NULL;
 		}
 	}
 }
@@ -1392,23 +1417,31 @@ zero_all_counters(cob_context *ctx, cob_report *r, int	flag, cob_report_line *l)
 void
 cob_init_reportio (cob_global *gptr, cob_settings *sptr)
 {
-	int		k;
-	for(k=0; k < MAX_ACTIVE_REPORTS; k++)
-		active_reports[k] = NULL;
+	/* state allocated on first use, see reportio_state */
+	COB_UNUSED (gptr);
+	COB_UNUSED (sptr);
 }
 
 /*
  * Runtime exiting 
  */
 void
-cob_exit_reportio()
+cob_exit_reportio (cob_context *ctx)
 {
+	cob_report	**active_reports;
 	int		k;
+
+	if (ctx == NULL || ctx->reportio == NULL) {
+		return;
+	}
+	active_reports = ctx->reportio->active_reports;
 	for(k=0; k < MAX_ACTIVE_REPORTS; k++) {
 		if(active_reports[k] != NULL) {
-			free_control_fields (active_reports[k]);
+			free_control_fields (ctx, active_reports[k]);
 		}
 	}
+	cob_free (ctx->reportio);
+	ctx->reportio = NULL;
 }
 
 /*
@@ -1417,10 +1450,10 @@ cob_exit_reportio()
 int
 cob_report_initiate_ctx (cob_context *ctx, cob_report *r)
 {
-static	cob_report_control	*rc;
-static	cob_report_control_ref	*rr;
-static	cob_report_sum_ctr	*sc;
-static	int		k;
+	cob_report_control	*rc;
+	cob_report_control_ref	*rr;
+	cob_report_sum_ctr	*sc;
+	int		k;
 	cob_file	*f = r->report_file;
 
 	if (r->report_ver != COB_REPORT_VERSION) {
@@ -1489,10 +1522,10 @@ static	int		k;
 		rc->val = cob_field_dup(ctx, rc->f,0);
 		rc->sf  = cob_field_dup(ctx, rc->f,0);
 		for(k=0; k < MAX_ACTIVE_REPORTS; k++) {
-			if (active_reports[k] == r)
+			if (reportio_state (ctx)->active_reports[k] == r)
 				break;
-			if (active_reports[k] == NULL) {
-				active_reports[k] = r;
+			if (reportio_state (ctx)->active_reports[k] == NULL) {
+				reportio_state (ctx)->active_reports[k] = r;
 				break;
 			}
 		}
@@ -1528,9 +1561,7 @@ cob_report_initiate (cob_report *r)
 int
 cob_report_terminate_ctx (cob_context *ctx, cob_report *r)
 {
-static	cob_report_control	*rc;
-static	cob_report_control_ref	*rr;
-static	cob_report_line		*pl;
+	struct report_resume	*rs = &reportio_state (ctx)->terminate;
 
 	if (r->report_ver != COB_REPORT_VERSION) {
 		cob_runtime_error_ctx (ctx, _("TERMINATE has invalid version; recompile"));
@@ -1573,44 +1604,44 @@ static	cob_report_line		*pl;
 	reportDump(ctx, r,"TERMINATE");
 #endif
 	/* Do CONTROL FOOTING breaks */
-	for(rc = r->controls; rc; rc = rc->next) {
-		for(rr = rc->control_ref; rr; rr = rr->next) {
-			if(rr->ref_line->flags & COB_REPORT_CONTROL_FOOTING) {
-				if(rr->ref_line->use_decl) {
-					if(!rc->suppress) {
-						copy_fields (ctx, r, rr->ref_line, 0);
+	for(rs->rc = r->controls; rs->rc; rs->rc = rs->rc->next) {
+		for(rs->rr = rs->rc->control_ref; rs->rr; rs->rr = rs->rr->next) {
+			if(rs->rr->ref_line->flags & COB_REPORT_CONTROL_FOOTING) {
+				if(rs->rr->ref_line->use_decl) {
+					if(!rs->rc->suppress) {
+						copy_fields (ctx, r, rs->rr->ref_line, 0);
 					}
 					DEBUG_LOG("rw",("  Return for %s Footing Declaratives %d; case %d\n",
-							rc->name,rr->ref_line->use_decl,rr->ref_line->use_source));
-					r->exec_source = rr->ref_line->use_source;
+							rs->rc->name,rs->rr->ref_line->use_decl,rs->rr->ref_line->use_source));
+					r->exec_source = rs->rr->ref_line->use_source;
 					r->go_label = 1;
 					return 1;
 				}
-				pl = get_print_line(rr->ref_line);
-				if (pl != rr->ref_line
-				 && (pl->use_decl || pl->use_source)) {
+				rs->pl = get_print_line(rs->rr->ref_line);
+				if (rs->pl != rs->rr->ref_line
+				 && (rs->pl->use_decl || rs->pl->use_source)) {
 					DEBUG_LOG("rw",("  Return for %s Footing Declaratives %d; case %d\n",
-							rc->name,pl->use_decl,pl->use_source));
-					r->exec_source = pl->use_source;
+							rs->rc->name,rs->pl->use_decl,rs->pl->use_source));
+					r->exec_source = rs->pl->use_source;
 					r->go_label = 1;
 					return 1;	/* Back for DECLARATIVES */
 				}
 PrintFooting:
-				if(!rc->suppress)
-					report_line_and(ctx, r,rr->ref_line,COB_REPORT_CONTROL_FOOTING);
-				rc->suppress = FALSE;
-				zero_all_counters(ctx, r, COB_REPORT_CONTROL_FOOTING,rr->ref_line);
+				if(!rs->rc->suppress)
+					report_line_and(ctx, r,rs->rr->ref_line,COB_REPORT_CONTROL_FOOTING);
+				rs->rc->suppress = FALSE;
+				zero_all_counters(ctx, r, COB_REPORT_CONTROL_FOOTING,rs->rr->ref_line);
 			}
 		}
 	}
 
 	/* Do CONTROL FOOTING FINAL */
-	pl = get_line_type(r, r->first_line,COB_REPORT_CONTROL_FOOTING_FINAL);
-	if(pl) {
-		if(pl->use_decl || pl->use_source) {
+	rs->pl = get_line_type(r, r->first_line,COB_REPORT_CONTROL_FOOTING_FINAL);
+	if(rs->pl) {
+		if(rs->pl->use_decl || rs->pl->use_source) {
 			DEBUG_LOG("rw",("  Return for Footing Final Declaratives %d; case %d\n", 
-								pl->use_decl,pl->use_source));
-			r->exec_source = pl->use_source;
+								rs->pl->use_decl,rs->pl->use_source));
+			r->exec_source = rs->pl->use_source;
 			r->go_label = 2;
 			return 1;	/* Back for DECLARATIVES */
 		}
@@ -1623,12 +1654,12 @@ PrintFootingFinal:
 	r->in_report_footing = TRUE;
 	do_page_footing(ctx, r);
 
-	pl = get_line_type(r, r->first_line,COB_REPORT_FOOTING);
-	if(pl) {
-		if(pl->use_decl || pl->use_source) {
+	rs->pl = get_line_type(r, r->first_line,COB_REPORT_FOOTING);
+	if(rs->pl) {
+		if(rs->pl->use_decl || rs->pl->use_source) {
 			DEBUG_LOG("rw",("  Return for Report Footing Declaratives %d; case %d\n", 
-							pl->use_decl,pl->use_source));
-			r->exec_source = pl->use_source;
+							rs->pl->use_decl,rs->pl->use_source));
+			r->exec_source = rs->pl->use_source;
 			r->go_label = 3;
 			return 1;	/* Back for DECLARATIVES */
 		}
@@ -1644,7 +1675,7 @@ PrintReportFooting:
 	}
 	r->in_report_footing = FALSE;
 
-	free_control_fields (r);
+	free_control_fields (ctx, r);
 	r->initiate_done = FALSE;
 	r->go_label = 0;
 	cob_file_sync (ctx, r->report_file);
@@ -1665,10 +1696,7 @@ cob_report_terminate (cob_report *r)
 int
 cob_report_generate_ctx (cob_context *ctx, cob_report *r, cob_report_line *l)
 {
-static	cob_report_control	*rc;
-static	cob_report_control_ref	*rr;
-static	cob_report_line		*pl, *sl;
-static	int		maxctl,ln,num,gengrp,last_use,ctlidx;
+	struct report_resume	*rs = &reportio_state (ctx)->generate;
 #if defined(COB_DEBUG_LOG) 
 	char			wrk[256];
 #endif
@@ -1695,7 +1723,7 @@ static	int		maxctl,ln,num,gengrp,last_use,ctlidx;
 		DEBUG_LOG("rw",("  Resume %s GENERATE case%d to %d\n",r->report_name,r->exec_source,r->go_label));
 		r->exec_source = 0;
 		r->go_label = 0;
-		l = sl;
+		l = rs->sl;
 		switch (backto) {
 		case 1:		goto PrintFirstHeadingLine;
 		case 2:		goto PrintFirstHeading;
@@ -1707,7 +1735,7 @@ static	int		maxctl,ln,num,gengrp,last_use,ctlidx;
 		default:	r->go_label = 0;
 		}
 	}
-	last_use = 0;
+	rs->last_use = 0;
 	if (l) {
 		DEBUG_LOG("rw",("~  Enter %sGENERATE line %d source line %d\n",
 							r->first_generate?"first ":"",r->curr_line,l->lineid));
@@ -1725,12 +1753,12 @@ static	int		maxctl,ln,num,gengrp,last_use,ctlidx;
 		 * First GENERATE of the report
 		 */
 		DEBUG_LOG("rw",("Process First GENERATE\n"));
-		pl = r->first_line;
-		if(pl->use_source) {
+		rs->pl = r->first_line;
+		if(rs->pl->use_source) {
 			DEBUG_LOG("rw",("  Return first %s Heading Line case %d\n",
-					r->report_name,pl->use_source));
-			sl = l;
-			r->exec_source = pl->use_source;
+					r->report_name,rs->pl->use_source));
+			rs->sl = l;
+			r->exec_source = rs->pl->use_source;
 			r->go_label = 1;
 			return 1;	/* Back for DECLARATIVES */
 		}
@@ -1744,42 +1772,42 @@ PrintFirstHeadingLine:
 			DEBUG_LOG("rw",("CONTROL FINAL HEADING Line# %d done\n",r->curr_line));
 		}
 		if (r->controls && r->num_controls == 0) {
-			for(rc = r->controls; rc; rc = rc->next) {
-				if (rc->sequence > r->num_controls)
-					r->num_controls = rc->sequence;
+			for(rs->rc = r->controls; rs->rc; rs->rc = rs->rc->next) {
+				if (rs->rc->sequence > r->num_controls)
+					r->num_controls = rs->rc->sequence;
 			}
 		}
 		/* do CONTROL Headings in opposite order to Footings */
-		for (ctlidx = r->num_controls; ctlidx > 0; ctlidx--) {
-			for(rc = r->controls; rc; rc = rc->next) {
-				if (rc->sequence != ctlidx)
+		for (rs->ctlidx = r->num_controls; rs->ctlidx > 0; rs->ctlidx--) {
+			for(rs->rc = r->controls; rs->rc; rs->rc = rs->rc->next) {
+				if (rs->rc->sequence != rs->ctlidx)
 					continue;
-				for(rr = rc->control_ref; rr; rr = rr->next) {
-					if(rr->ref_line->flags & COB_REPORT_CONTROL_HEADING) {
-						if(rr->ref_line->use_decl) {
+				for(rs->rr = rs->rc->control_ref; rs->rr; rs->rr = rs->rr->next) {
+					if(rs->rr->ref_line->flags & COB_REPORT_CONTROL_HEADING) {
+						if(rs->rr->ref_line->use_decl) {
 							DEBUG_LOG("rw",("  Return first %s Heading Declaratives %d; case %d\n",
-									rc->name,rr->ref_line->use_decl,rr->ref_line->use_source));
-							sl = l;
-							r->exec_source = rr->ref_line->use_source;
+									rs->rc->name,rs->rr->ref_line->use_decl,rs->rr->ref_line->use_source));
+							rs->sl = l;
+							r->exec_source = rs->rr->ref_line->use_source;
 							r->go_label = 2;
 							return 1;
 						}
-						pl = get_print_line(rr->ref_line);
-						if(pl != rr->ref_line
-						&& (pl->use_decl || pl->use_source)) {
+						rs->pl = get_print_line(rs->rr->ref_line);
+						if(rs->pl != rs->rr->ref_line
+						&& (rs->pl->use_decl || rs->pl->use_source)) {
 							DEBUG_LOG("rw",("  Return first %s Heading Declaratives %d; case %d\n",
-									rc->name,pl->use_decl,pl->use_source));
-							sl = l;
-							r->exec_source = pl->use_source;
+									rs->rc->name,rs->pl->use_decl,rs->pl->use_source));
+							rs->sl = l;
+							r->exec_source = rs->pl->use_source;
 							r->go_label = 2;
 							return 1;	/* Back for DECLARATIVES */
 						}
 PrintFirstHeading:
-						report_line_and(ctx, r,rr->ref_line,COB_REPORT_CONTROL_HEADING);
+						report_line_and(ctx, r,rs->rr->ref_line,COB_REPORT_CONTROL_HEADING);
 					}
 				}
-				cob_move_ctx (ctx, rc->f,rc->val);	/* Save current field data */
-				rc->data_change = FALSE;
+				cob_move_ctx (ctx, rs->rc->f,rs->rc->val);	/* Save current field data */
+				rs->rc->data_change = FALSE;
 			}
 		}
 		DEBUG_LOG("rw",("Finished First GENERATE\n"));
@@ -1807,82 +1835,82 @@ PrintFirstHeading:
 		/* 
 		 * Check for FOOTINGs on other GENERATEs 
 		 */
-		maxctl = 0;
-		for(rc = r->controls; rc; rc = rc->next) {
-			rc->data_change = (cob_cmp_ctx(ctx, rc->f,rc->val) != 0);
-			if(rc->data_change) {	/* Data change, implies control break at lower levels */
+		rs->maxctl = 0;
+		for(rs->rc = r->controls; rs->rc; rs->rc = rs->rc->next) {
+			rs->rc->data_change = (cob_cmp_ctx(ctx, rs->rc->f,rs->rc->val) != 0);
+			if(rs->rc->data_change) {	/* Data change, implies control break at lower levels */
 #if defined(COB_DEBUG_LOG)
 				DEBUG_LOG("rw",(" Control Break %s order %d changed from ",
-							rc->name,rc->sequence));
-				(void)cob_field_to_string (rc->val, wrk, sizeof(wrk)-1, CCM_NONE);
+							rs->rc->name,rs->rc->sequence));
+				(void)cob_field_to_string (rs->rc->val, wrk, sizeof(wrk)-1, CCM_NONE);
 				DEBUG_LOG("rw",("'%s' to ",wrk));
-				(void)cob_field_to_string (rc->f, wrk, sizeof(wrk)-1, CCM_NONE);
+				(void)cob_field_to_string (rs->rc->f, wrk, sizeof(wrk)-1, CCM_NONE);
 				DEBUG_LOG("rw",("'%s'\n",wrk));
 #endif
-				cob_move_ctx(ctx, rc->f, rc->sf);	/* Save new CONTROL value */
-				cob_move_ctx(ctx, rc->val,rc->f);	/* Prev value for FOOTING */
-				if(rc->sequence > maxctl)
-					maxctl = rc->sequence;
+				cob_move_ctx(ctx, rs->rc->f, rs->rc->sf);	/* Save new CONTROL value */
+				cob_move_ctx(ctx, rs->rc->val,rs->rc->f);	/* Prev value for FOOTING */
+				if(rs->rc->sequence > rs->maxctl)
+					rs->maxctl = rs->rc->sequence;
 			}
 		}
-		if(maxctl > 0) {
-			for(rc = r->controls; rc; rc = rc->next) {
-				if(rc->sequence < maxctl
-				&& !rc->data_change) {
-					rc->data_change = TRUE;
+		if(rs->maxctl > 0) {
+			for(rs->rc = r->controls; rs->rc; rs->rc = rs->rc->next) {
+				if(rs->rc->sequence < rs->maxctl
+				&& !rs->rc->data_change) {
+					rs->rc->data_change = TRUE;
 #if defined(COB_DEBUG_LOG)
 					DEBUG_LOG("rw",(" Control Break %s order %d also ",
-							rc->name,rc->sequence));
-					cob_field_to_string(rc->val, wrk, sizeof(wrk)-1, CCM_NONE);
+							rs->rc->name,rs->rc->sequence));
+					cob_field_to_string(rs->rc->val, wrk, sizeof(wrk)-1, CCM_NONE);
 					DEBUG_LOG("rw",("'%s' to ",wrk));
-					cob_field_to_string(rc->f, wrk, sizeof(wrk)-1, CCM_NONE);
+					cob_field_to_string(rs->rc->f, wrk, sizeof(wrk)-1, CCM_NONE);
 					DEBUG_LOG("rw",("'%s'\n",wrk));
 #endif
-					cob_move_ctx(ctx, rc->f, rc->sf); /* Save CONTROL value */
-					cob_move_ctx(ctx, rc->val,rc->f); /* Prev value for FOOTING */
+					cob_move_ctx(ctx, rs->rc->f, rs->rc->sf); /* Save CONTROL value */
+					cob_move_ctx(ctx, rs->rc->val,rs->rc->f); /* Prev value for FOOTING */
 				}
 			}
 		}
 
-		for(rc = r->controls; rc; rc = rc->next) {
-			if(rc->data_change) {	/* Data change, Check for PRESENT WHEN control-id */
-				line_control_chg(r, r->first_line, rc->f);
+		for(rs->rc = r->controls; rs->rc; rs->rc = rs->rc->next) {
+			if(rs->rc->data_change) {	/* Data change, Check for PRESENT WHEN control-id */
+				line_control_chg(r, r->first_line, rs->rc->f);
 			}
 		}
 
-		for(rc = r->controls; rc; rc = rc->next) {
-			if(rc->data_change) {
-				for(rr = rc->control_ref; rr; rr = rr->next) {
-					if(rr->ref_line->flags & COB_REPORT_CONTROL_FOOTING) {
-						if(rr->ref_line->use_decl) {
-							if(!rc->suppress)
-								copy_fields (ctx, r, rr->ref_line, 0);
+		for(rs->rc = r->controls; rs->rc; rs->rc = rs->rc->next) {
+			if(rs->rc->data_change) {
+				for(rs->rr = rs->rc->control_ref; rs->rr; rs->rr = rs->rr->next) {
+					if(rs->rr->ref_line->flags & COB_REPORT_CONTROL_FOOTING) {
+						if(rs->rr->ref_line->use_decl) {
+							if(!rs->rc->suppress)
+								copy_fields (ctx, r, rs->rr->ref_line, 0);
 							DEBUG_LOG("rw",("1: Return for %s Footing Declaratives %d; case %d\n",
-									rc->name,rr->ref_line->use_decl,rr->ref_line->use_source));
-							sl = l;
-							r->exec_source = rr->ref_line->use_source;
+									rs->rc->name,rs->rr->ref_line->use_decl,rs->rr->ref_line->use_source));
+							rs->sl = l;
+							r->exec_source = rs->rr->ref_line->use_source;
 							r->go_label = 3;
 							return 1;	/* Back for DECLARATIVES */
 						}
-						pl = get_print_line(rr->ref_line);
-						if(pl != rr->ref_line
-						&& (pl->use_decl || pl->use_source)) {
-							if(!rc->suppress)
-								copy_fields (ctx, r, rr->ref_line, 0);
+						rs->pl = get_print_line(rs->rr->ref_line);
+						if(rs->pl != rs->rr->ref_line
+						&& (rs->pl->use_decl || rs->pl->use_source)) {
+							if(!rs->rc->suppress)
+								copy_fields (ctx, r, rs->rr->ref_line, 0);
 							DEBUG_LOG("rw",("2: Return for %s Footing Declaratives %d; case %d\n",
-									rc->name,pl->use_decl,pl->use_source));
-							sl = l;
-							r->exec_source = pl->use_source;
+									rs->rc->name,rs->pl->use_decl,rs->pl->use_source));
+							rs->sl = l;
+							r->exec_source = rs->pl->use_source;
 							r->go_label = 3;
 							return 1;	/* Back for DECLARATIVES */
 						}
 PrintFooting:
-						if(!rc->suppress
-						&& !rr->ref_line->suppress)
-							report_line_and(ctx, r,rr->ref_line,COB_REPORT_CONTROL_FOOTING);
-						rc->suppress = FALSE;
-						rr->ref_line->suppress = FALSE;
-						zero_all_counters(ctx, r, COB_REPORT_CONTROL_FOOTING,rr->ref_line);
+						if(!rs->rc->suppress
+						&& !rs->rr->ref_line->suppress)
+							report_line_and(ctx, r,rs->rr->ref_line,COB_REPORT_CONTROL_FOOTING);
+						rs->rc->suppress = FALSE;
+						rs->rr->ref_line->suppress = FALSE;
+						zero_all_counters(ctx, r, COB_REPORT_CONTROL_FOOTING,rs->rr->ref_line);
 						clear_group_indicate(r->first_line);
 						r->next_just_set = FALSE;
 						if(r->next_page) {
@@ -1891,7 +1919,7 @@ PrintFooting:
 						}
 					}
 				}
-				cob_move_ctx(ctx, rc->sf,rc->f);	/* Put new CONTROL value back */
+				cob_move_ctx(ctx, rs->rc->sf,rs->rc->f);	/* Put new CONTROL value back */
 			}
 		}
 		if(r->foot_next_page) {
@@ -1907,46 +1935,46 @@ PrintFooting:
 		 * Check for Control Headings
 		 */
 		/* do CONTROL Headings in opposite order to Footings */
-		for (ctlidx = r->num_controls; ctlidx > 0; ctlidx--) {
-			for(rc = r->controls; rc; rc = rc->next) {
-				if (rc->sequence != ctlidx
-				|| !rc->data_change)
+		for (rs->ctlidx = r->num_controls; rs->ctlidx > 0; rs->ctlidx--) {
+			for(rs->rc = r->controls; rs->rc; rs->rc = rs->rc->next) {
+				if (rs->rc->sequence != rs->ctlidx
+				|| !rs->rc->data_change)
 					continue;
-				for(rr = rc->control_ref; rr; rr = rr->next) {
-					if(rr->ref_line->flags & COB_REPORT_CONTROL_HEADING) {
-						if(rr->ref_line->use_decl) {
+				for(rs->rr = rs->rc->control_ref; rs->rr; rs->rr = rs->rr->next) {
+					if(rs->rr->ref_line->flags & COB_REPORT_CONTROL_HEADING) {
+						if(rs->rr->ref_line->use_decl) {
 							DEBUG_LOG("rw",("  Return for %s Heading Declaratives %d; case %d\n",
-									rc->name,rr->ref_line->use_decl,rr->ref_line->use_source));
-							sl = l;
-							r->exec_source = rr->ref_line->use_source;
+									rs->rc->name,rs->rr->ref_line->use_decl,rs->rr->ref_line->use_source));
+							rs->sl = l;
+							r->exec_source = rs->rr->ref_line->use_source;
 							r->go_label = 4;
 							return 1;
 						}
-						pl = get_print_line(rr->ref_line);
-						if(pl != rr->ref_line
-						&& pl->use_decl) {
+						rs->pl = get_print_line(rs->rr->ref_line);
+						if(rs->pl != rs->rr->ref_line
+						&& rs->pl->use_decl) {
 							DEBUG_LOG("rw",("  Return for %s Heading Declaratives %d; case %d\n",
-									rc->name,pl->use_decl,pl->use_source));
-							sl = l;
-							r->exec_source = pl->use_source;
+									rs->rc->name,rs->pl->use_decl,rs->pl->use_source));
+							rs->sl = l;
+							r->exec_source = rs->pl->use_source;
 							r->go_label = 4;
 							return 1;	/* Back for DECLARATIVES */
 						}
 PrintHeading:
-						if(!rr->ref_line->suppress)
-							report_line_and(ctx, r,rr->ref_line,COB_REPORT_CONTROL_HEADING);
-						rr->ref_line->suppress = FALSE;
+						if(!rs->rr->ref_line->suppress)
+							report_line_and(ctx, r,rs->rr->ref_line,COB_REPORT_CONTROL_HEADING);
+						rs->rr->ref_line->suppress = FALSE;
 					}
 				}
-				cob_move_ctx (ctx, rc->f,rc->val);	/* Save current field data */
-				rc->data_change = FALSE;
+				cob_move_ctx (ctx, rs->rc->f,rs->rc->val);	/* Save current field data */
+				rs->rc->data_change = FALSE;
 			}
 		}
 	}
 
 	if (r->sum_exec) {
 		DEBUG_LOG("rw",("  Return Compute SUMs case %d\n",r->sum_exec));
-		sl = l;
+		rs->sl = l;
 		r->exec_source = r->sum_exec;
 		r->go_label = 7;
 		return 1;	/* Back for Compute expression */
@@ -1964,36 +1992,36 @@ PrintSum1:
 		if(l->use_source) {
 			DEBUG_LOG("rw",("  Return %s Detail Line case %d\n",
 					r->report_name,l->use_source));
-			sl = l;
+			rs->sl = l;
 			r->exec_source = l->use_source;
-			last_use = l->use_source;
+			rs->last_use = l->use_source;
 			r->go_label = 6;
 			return 1;	/* Back for DECLARATIVES */
 		}
 PrintDetail2:
-		gengrp = 0;
+		rs->gengrp = 0;
 		if(l->fields == NULL
 		&& l->child != NULL
 		&& l->child->sister != NULL) {
 			l = l->child;		/* Multiple Detail Lines in group */
-			gengrp = 1;
+			rs->gengrp = 1;
 		}
 
-		num = ln = 0;
-		for(pl = l; pl; pl = pl->sister) {
-			if( NOTDETAIL(pl->flags) ) {
-				DEBUG_LOG("rw",("A NOT Detail Line 0x%X\n",pl->flags));
+		rs->num = rs->ln = 0;
+		for(rs->pl = l; rs->pl; rs->pl = rs->pl->sister) {
+			if( NOTDETAIL(rs->pl->flags) ) {
+				DEBUG_LOG("rw",("A NOT Detail Line 0x%X\n",rs->pl->flags));
 				break;
 			}
-			if((pl->flags & COB_REPORT_LINE_PLUS)
-			&& pl->line > 1) {
-				ln += pl->line;
+			if((rs->pl->flags & COB_REPORT_LINE_PLUS)
+			&& rs->pl->line > 1) {
+				rs->ln += rs->pl->line;
 			}
-			num++;
-			if(!gengrp) break;
+			rs->num++;
+			if(!rs->gengrp) break;
 		}
-		if(num > 1
-		&& (r->curr_line + ln) > r->def_last_detail) {	/* Page overflow */
+		if(rs->num > 1
+		&& (r->curr_line + rs->ln) > r->def_last_detail) {	/* Page overflow */
 			r->incr_page = TRUE;
 			do_page_footing(ctx, r);
 			r->curr_line = 1;
@@ -2002,17 +2030,17 @@ PrintDetail2:
 			saveLineCounter(ctx, r);
 		}
 
-		for(pl = l; pl; pl = pl->sister) {
-			if( NOTDETAIL(pl->flags) ) {
-				DEBUG_LOG("rw",("B NOT Detail Line 0x%X\n",pl->flags));
+		for(rs->pl = l; rs->pl; rs->pl = rs->pl->sister) {
+			if( NOTDETAIL(rs->pl->flags) ) {
+				DEBUG_LOG("rw",("B NOT Detail Line 0x%X\n",rs->pl->flags));
 				break;
 			}
-			l = get_print_line(pl);		/* Find line with data fields */
+			l = get_print_line(rs->pl);		/* Find line with data fields */
 			if(!l->suppress) {
 				r->next_just_set = FALSE;
 				if (l->use_source > 0
-				 && l->use_source != last_use) {
-					sl = l;
+				 && l->use_source != rs->last_use) {
+					rs->sl = l;
 					r->exec_source = l->use_source;
 					l->use_source = l->use_source;
 					r->go_label = 5;
@@ -2024,7 +2052,7 @@ PrintDetail:	;
 				report_line(ctx, r,l);	/* Generate this DETAIL line */
 			}
 			l->suppress = FALSE;
-			if(!gengrp) break;
+			if(!rs->gengrp) break;
 		}
 	}
 

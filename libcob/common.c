@@ -988,7 +988,7 @@ cob_terminate_routines (cob_context *ctx)
 	}
 #endif
 
-	cob_exit_reportio ();
+	cob_exit_reportio (ctx);
 	cob_exit_mlio ();
 
 	cob_exit_intrinsic (ctx);
