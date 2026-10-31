@@ -1901,11 +1901,13 @@ typedef struct __cob_global {
 
 typedef struct cob_runtime	cob_runtime;	/* opaque */
 
+struct cob_common_state;	/* opaque, common.c */
 struct cob_strings_state;	/* opaque, strings.c */
 
 typedef struct cob_context {
 	cob_runtime		*rt;
 	cob_global		glob;
+	struct cob_common_state		*common;	/* allocated with the context */
 	struct cob_strings_state	*strings;	/* allocated on first use */
 } cob_context;
 
