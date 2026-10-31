@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h, fextfh.c (free_extfh_fcd, cob_extfh_open_ctx,
+	  update_key_from_fcd): state of the external file handler in the
+	  context
 	* cobcapi.c (cob_exit_cobcapi, cob_get_field_str_buffered,
 	  cob_watch_check), coblocal.h (cob_exit_call), common.c
 	  (cob_terminate_routines, cob_call_with_exception_check_ctx),

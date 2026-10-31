@@ -24,7 +24,7 @@
 /********************************************************************************/
 /* Following routines are for the External File Handler interface commonly used */
 /********************************************************************************/
-static struct fcd_file {
+struct fcd_file {
 	struct fcd_file	*next;
 	FCD3		*fcd;
 	cob_file	*f;
@@ -32,10 +32,32 @@ static struct fcd_file {
 	int		sts;
 	int		free_fcd;
 	int		free_select;
-} *fcd_file_list = NULL;
+};
+
+/* State of fextfh.c, one per context; accessed with the macros below,
+   using the context 'ctx' */
+struct cob_fextfh_state {
+	struct fcd_file	*fcd_file_list;
 #if !COB_64_BIT_POINTER
-static	FCD3	*tmpfcd = NULL;	/* Used to convert FCD2 into FCD3 for I/O */
+	FCD3		*tmpfcd;	/* Used to convert FCD2 into FCD3 for I/O */
 #endif
+	unsigned char	keywrk[80];	/* key data used for IDX, if not passed */
+};
+
+static struct cob_fextfh_state *
+fextfh_state (cob_context *ctx)
+{
+	if (ctx->fextfh == NULL) {
+		ctx->fextfh = cob_malloc (sizeof (struct cob_fextfh_state));
+	}
+	return ctx->fextfh;
+}
+
+#define fcd_file_list	(fextfh_state (ctx)->fcd_file_list)
+#if !COB_64_BIT_POINTER
+#define tmpfcd		(fextfh_state (ctx)->tmpfcd)
+#endif
+#define keywrk		(fextfh_state (ctx)->keywrk)
 static const cob_field_attr alnum_attr = {COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
 static const cob_field_attr compx_attr = {COB_TYPE_NUMERIC_BINARY, 0, 0, 0, NULL};
 
@@ -50,6 +72,9 @@ free_extfh_fcd (cob_context *ctx)
 {
 	struct fcd_file	*ff,*nff;
 
+	if (ctx == NULL || ctx->fextfh == NULL) {
+		return;
+	}
 	for (ff = fcd_file_list; ff; ff = nff) {
 		nff = ff->next;
 		if (ff->free_select) {
@@ -68,6 +93,8 @@ free_extfh_fcd (cob_context *ctx)
 		}
 		cob_cache_free_ctx(ctx, (void*)ff);
 	}
+	cob_free (ctx->fextfh);
+	ctx->fextfh = NULL;
 }
 
 /*
@@ -919,7 +946,7 @@ update_record_and_keys_if_necessary (cob_context *ctx, cob_file * f, FCD3 *fcd)
 }
 
 static void
-save_fcd_status (FCD3 *fcd, int sts)
+save_fcd_status (cob_context *ctx, FCD3 *fcd, int sts)
 {
 	struct fcd_file	*ff;
 	for (ff = fcd_file_list; ff; ff=ff->next) {
@@ -971,7 +998,7 @@ cob_extfh_open_ctx (cob_context *ctx, EXTFH_FUNC callfh, cob_file *f,
 		fcd->openMode &= ~OPEN_NOT_OPEN;
 	}
 	update_fcd_to_file (ctx, fcd, f, fnstatus, 1);
-	save_fcd_status (fcd, sts);
+	save_fcd_status (ctx, fcd, sts);
 }
 
 /* compatibility: cob_extfh_open without context */
@@ -1534,7 +1561,6 @@ update_key_from_fcd (cob_context *ctx, cob_file *f, FCD3 *fcd, cob_field *kf)
 #endif
 		} else {
 			/* CHECKME: Shouldn't this just result in an error? */
-			static unsigned char	keywrk[80]; 	/* key data used for IDX, if not passed */
 			memset (keywrk, 0, sizeof (keywrk));
 			kf->size = sizeof (keywrk);
 			kf->attr = &alnum_attr;
