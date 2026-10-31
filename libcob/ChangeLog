@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_sys_exit_proc, cob_sys_error_proc, cob_common_init),
+	  screenio.c (cob_sys_window): no local context where it is only used
+	  in disabled code
 	* common.c (cob_malloc, cob_realloc, cob_free, cob_fast_malloc): no
 	  context lookup on the fast path of memory functions
 	* call.c (set_resolve_error, cache_preload, insert,

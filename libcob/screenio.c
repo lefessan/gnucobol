@@ -5928,7 +5928,6 @@ sys_window_list (PLIST_FLD list, size_t amount)
 int
 cob_sys_window (unsigned char *mode_ext, unsigned char *fld)
 {
-	cob_context	*ctx = cob_get_current_context ();
 #ifdef COB_EXPERIMENTAL
 	const enum sys_win_mode mode = *mode_ext;
 	const cob_field		*f2 = cob_get_param_field (2, "CBL_GC_WINDOW");
@@ -5944,7 +5943,7 @@ cob_sys_window (unsigned char *mode_ext, unsigned char *fld)
 		size_t amount = f2->size / sizeof (LIST_FLD);
 		if (!amount) return 44;
 
-		init_cob_screen_if_needed (ctx);
+		init_cob_screen_if_needed (cob_get_current_context ());
 		sys_window_list ((PLIST_FLD)f2->data, amount);
 		return 0;
 #endif
@@ -5956,7 +5955,7 @@ cob_sys_window (unsigned char *mode_ext, unsigned char *fld)
 		}
 
 		/* also needed for COB_MAX_X_COORD, so do early */
-		init_cob_screen_if_needed (ctx);
+		init_cob_screen_if_needed (cob_get_current_context ());
 
 		switch (mode) {
 			case SYS_WIN_NEW:
