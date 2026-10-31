@@ -476,10 +476,13 @@ frontières à revoir :
   (`sort_compare`, `cob_file_sort_compare`, `comp_field` → tri interne
   prenant `ctx`), callbacks BDB (`db->app_private`), handler d'erreurs
   libxml2 (`user_data`) ;
-- fonctions des tables de gestionnaires de fichiers (`cob_file_open`,
-  `relative_*`, `ix_bdb_*`, `lmdb_*`, `odbc_*`, `oci_*`, `isam_*`…) :
-  l'API interne des gestionnaires (`cob_fileio_funcs`) devra recevoir
-  `ctx`.
+- ~~fonctions des tables de gestionnaires de fichiers~~ : fait
+  (2026-10-31), les pointeurs de `struct cob_fileio_funcs` (sauf
+  `ioversion`) et les callbacks de `cob_file_api` reçoivent `ctx`.
+  **Point ouvert** : les modules EXTFH externes (`focextfh.c`,
+  `extfh_cob_init_fileio`) reçoivent ces tables et le callback
+  `cob_file_write_opt` ; leur interface change. À décider : version de
+  l'interface, ou tables de compatibilité à l'ancienne signature.
 Les routines `cob_sys_*` et l'API Micro Focus (`cobcapi.c`) lisent le
 contexte courant une fois à l'entrée : c'est leur forme définitive.
 
