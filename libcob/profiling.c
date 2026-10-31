@@ -51,19 +51,42 @@ struct cob_prof_module_list {
 	struct cob_prof_module_list *next;
 };
 
-static struct cob_prof_module_list *prof_info_list ;
+/* State of the profiling, one per context; accessed with the macros
+   below, using the context 'ctx' */
+struct cob_prof_state {
+	struct cob_prof_module_list *prof_info_list ;
 
-/* We maintain a stack of the procedures entered as 3 different
- * arrays, with "current_idx" being the stack pointer. */
-static cob_ns_time				*start_times;
-static int        				*called_procedures;
-static struct cob_prof_module	**called_runtimes;
-/* Current size of previous arrays */
-static int max_prof_depth;
-static int current_idx = -1;
+	/* We maintain a stack of the procedures entered as 3 different
+	 * arrays, with "current_idx" being the stack pointer. */
+	cob_ns_time			*start_times;
+	int				*called_procedures;
+	struct cob_prof_module		**called_runtimes;
+	/* Current size of previous arrays */
+	int				max_prof_depth;
+	int				current_idx;
 
-/* Whether profiling is active or not. */
-static int is_active = -1;
+	/* Whether profiling is active or not. */
+	int				is_active;
+};
+
+static struct cob_prof_state *
+prof_state (cob_context *ctx)
+{
+	if (ctx->prof == NULL) {
+		ctx->prof = cob_malloc (sizeof (struct cob_prof_state));
+		ctx->prof->current_idx = -1;
+		ctx->prof->is_active = -1;
+	}
+	return ctx->prof;
+}
+
+#define prof_info_list		(prof_state (ctx)->prof_info_list)
+#define start_times		(prof_state (ctx)->start_times)
+#define called_procedures	(prof_state (ctx)->called_procedures)
+#define called_runtimes		(prof_state (ctx)->called_runtimes)
+#define max_prof_depth		(prof_state (ctx)->max_prof_depth)
+#define current_idx		(prof_state (ctx)->current_idx)
+#define is_active		(prof_state (ctx)->is_active)
 
 /* Which clock to use for clock_gettime (if available) */
 #ifdef HAVE_CLOCK_GETTIME
