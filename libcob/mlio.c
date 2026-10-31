@@ -1596,8 +1596,8 @@ xml_error_handling (struct xml_state *state, const xmlError *err) {
 }
 
 static void
-xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
-	struct xml_state *parse_state = ctx;
+xml_error_handler (void *user_data, LIBXML_CONST_ERROR_PTR err) {
+	struct xml_state *parse_state = user_data;
 	enum xml_parser_state state = parse_state->state;
 	static int last_error_code = 0;
 
@@ -1654,22 +1654,22 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 }
 
 static void
-xml_startDocument (void *ctx) {
-	struct xml_state *state = ctx;
+xml_startDocument (void *user_data) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_START_OF_DOCUMENT);
 	state->state = XML_PARSER_DOCUMENT_START;
 }
 
 static void
-xml_endDocument (void *ctx) {
-	struct xml_state *state = ctx;
+xml_endDocument (void *user_data) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_END_OF_DOCUMENT);
 	state->state = XML_PARSER_HAD_END_OF_INPUT;
 }
 
 static void
-xml_comment (void *ctx, const xmlChar *content) {
-	struct xml_state *state = ctx;
+xml_comment (void *user_data, const xmlChar *content) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_COMMENT);
 	add_xml_event_data (state, content, xmlStrlen (content), 0);
 }
@@ -1686,49 +1686,49 @@ xml_element_ns_handling (struct xml_state *state,
 }
 
 static void
-xml_startElementNs (void *ctx,
+xml_startElementNs (void *user_data,
 		const xmlChar *localname, const xmlChar *prefix, const xmlChar *URI,
 		int nb_namespaces, const xmlChar **namespaces,
 		int nb_attributes, int nb_defaulted, const xmlChar **attributes) {
-	struct xml_state *state = ctx;
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_START_OF_ELEMENT);
 	xml_element_ns_handling (state, localname, prefix, URI, nb_namespaces, namespaces,
 		 nb_attributes, nb_defaulted, attributes);
 }
 
 static void
-xml_endElementNs (void *ctx,
+xml_endElementNs (void *user_data,
 		const xmlChar *localname, const xmlChar *prefix, const xmlChar *URI) {
-	struct xml_state *state = ctx;
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_END_OF_ELEMENT);
 	xml_element_ns_handling (state, localname, prefix, URI,
 		0, NULL, 0, 0, NULL);
 }
 
 static void
-xml_startElement (void *ctx, const xmlChar *name, const xmlChar **atts) {
-	struct xml_state *state = ctx;
+xml_startElement (void *user_data, const xmlChar *name, const xmlChar **atts) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_START_OF_ELEMENT);
 	add_xml_event_data_tag (state, name, xmlStrlen (name));
 }
 
 static void
-xml_endElement (void *ctx, const xmlChar *name) {
-	struct xml_state *state = ctx;
+xml_endElement (void *user_data, const xmlChar *name) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_END_OF_ELEMENT);
 	add_xml_event_data_tag (state, name, xmlStrlen (name));
 }
 
 static void
-xml_characters (void *ctx, const xmlChar *content, int len) {
-	struct xml_state *state = ctx;
+xml_characters (void *user_data, const xmlChar *content, int len) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_CONTENT_CHARACTERS);
 	add_xml_event_data (state, content, len, 0);
 }
 
 static void
-xml_cdata (void *ctx, const xmlChar *content, int len) {
-	struct xml_state *state = ctx;
+xml_cdata (void *user_data, const xmlChar *content, int len) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_START_OF_CDATA_SECTION);
 	new_xml_event (state, EVENT_CONTENT_CHARACTERS);
 	add_xml_event_data (state, content, len, 0);
