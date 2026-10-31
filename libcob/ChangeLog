@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* numeric.c (cob_move_bcd): h2b and b2h tables are constant
 	* coblocal.h (cob_init_cobcapi, cob_exit_screen_from_signal,
 	  cob_exit_cobcapi, cob_decimal_init2), common.c
 	  (cob_terminate_routines, cob_init), common.h, intrinsic.c

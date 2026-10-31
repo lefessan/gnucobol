@@ -2912,7 +2912,7 @@ cob_move_bcd (cob_field *f1, cob_field *f2)
 
 /* Optimized arithmetic for BCD fiields */
 
-static unsigned char   h2b[256] =
+static const unsigned char   h2b[256] =
 { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 255, 255, 255, 255, 255, 255,
   10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 255, 255, 255, 255, 255, 255,
   20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 255, 255, 255, 255, 255, 255,
@@ -2924,7 +2924,7 @@ static unsigned char   h2b[256] =
   80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 255, 255, 255, 255, 255, 255,
   90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 255, 255, 255, 255, 255, 255 };
 
-static unsigned char   b2h[256] =
+static const unsigned char   b2h[256] =
 { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
   0x08, 0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
   0x16, 0x17, 0x18, 0x19, 0x20, 0x21, 0x22, 0x23,
