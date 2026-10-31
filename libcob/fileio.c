@@ -199,30 +199,14 @@ struct cobsort {
 /* Local variables */
 
 
-static unsigned int	delete_file_status = 0;
-unsigned int		eop_status = 0;
-static unsigned int	check_eop_status = 0;
-
-static struct file_list	*file_cache = NULL;
-
-static char		*file_open_env = NULL;
-static char		*file_open_name = NULL;
-static char		*file_open_buff = NULL;
-static char		*file_open_io_env = NULL;	/* IO_filename env value */
-
-static char		*runtime_buffer = NULL;
-
 static int		chk_file_path = 1;
 static int		chk_filename_spaces = -1;
 
 static const cob_field_attr	const_alpha_attr = {COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
 static cob_file_api file_api = {NULL, NULL};
 
-static int	qblfd = -1;
-static char	qblfilename[256];
-static unsigned int qblhdrsz = 0;
 /* Each record in the QBL file starts with this header */
-static struct cob_qbl_hdr {
+struct cob_qbl_hdr {
 	char		type[2];	/* Record type */
 #define QBL_DEF		"FD"	/* File definition */
 #define QBL_OPEN	"FO"	/* File was Opened */
@@ -235,9 +219,61 @@ static struct cob_qbl_hdr {
 	cob_u8_t	recnum[4];	/* Relative Record Number */
 	cob_u8_t	filepos[8];	/* Offset into file where written */
 	cob_u8_t	data[1];	/* alloc this record based on max record size */
-} *qbl_hdr = NULL;
-static void	*qbl_tmp = NULL;
+};
 #define SZ_QBLHDR (sizeof (struct cob_qbl_hdr) - 1)
+
+/* State of fileio.c, one per context: status of the last operations,
+   open files, buffers for file names, rollback journal (QBL); accessed
+   with the macros below, using the context 'ctx' */
+struct cob_fileio_state {
+	unsigned int		delete_file_status;
+	unsigned int		eop_status;
+	unsigned int		check_eop_status;
+
+	struct file_list	*file_cache;
+
+	char			*runtime_buffer;
+	char			*file_open_env;		/* in runtime_buffer */
+	char			*file_open_name;	/* in runtime_buffer */
+	char			*file_open_buff;	/* in runtime_buffer */
+	char			*file_open_io_env;	/* IO_filename env value */
+
+	int			qblfd;
+	char			qblfilename[256];
+	unsigned int		qblhdrsz;
+	struct cob_qbl_hdr	*qbl_hdr;
+	void			*qbl_tmp;
+};
+
+static struct cob_fileio_state *
+fileio_state (cob_context *ctx)
+{
+	if (ctx->fileio == NULL) {
+		struct cob_fileio_state	*st;
+		st = cob_malloc (sizeof (struct cob_fileio_state));
+		st->runtime_buffer = cob_fast_malloc ((size_t)(4 * COB_FILE_BUFF) + 4);
+		st->file_open_env = st->runtime_buffer + COB_FILE_BUFF;
+		st->file_open_name = st->runtime_buffer + (2 * COB_FILE_BUFF);
+		st->file_open_buff = st->runtime_buffer + (3 * COB_FILE_BUFF);
+		st->qblfd = -1;
+		ctx->fileio = st;
+	}
+	return ctx->fileio;
+}
+
+#define delete_file_status	(fileio_state (ctx)->delete_file_status)
+#define eop_status		(fileio_state (ctx)->eop_status)
+#define check_eop_status	(fileio_state (ctx)->check_eop_status)
+#define file_cache		(fileio_state (ctx)->file_cache)
+#define runtime_buffer		(fileio_state (ctx)->runtime_buffer)
+#define file_open_env		(fileio_state (ctx)->file_open_env)
+#define file_open_name		(fileio_state (ctx)->file_open_name)
+#define file_open_io_env	(fileio_state (ctx)->file_open_io_env)
+#define qblfd			(fileio_state (ctx)->qblfd)
+#define qblfilename		(fileio_state (ctx)->qblfilename)
+#define qblhdrsz		(fileio_state (ctx)->qblhdrsz)
+#define qbl_hdr			(fileio_state (ctx)->qbl_hdr)
+#define qbl_tmp			(fileio_state (ctx)->qbl_tmp)
 
 static char	**file_paths = NULL;
 static const char	* const prefix[] = { "DD_", "dd_", "" };
@@ -1174,7 +1210,7 @@ readBlock (int fd, void *data, int len)
 #define CHKSEED 0xE7
 #define CHKMARK '@'
 static off_t
-cob_write_qbl (int fd, int len, void *data)
+cob_write_qbl (cob_context *ctx, int fd, int len, void *data)
 {
 	unsigned char head[6], tail[6], chk;
 	off_t	pos;
@@ -1322,11 +1358,11 @@ cob_put_qbl (cob_context *ctx, cob_file *f, const char *type)
 	if (f->organization == COB_ORG_SEQUENTIAL
 	 || f->organization == COB_ORG_LINE_SEQUENTIAL) {
 		if (memcmp (type, QBL_NEW, 2) == 0)
-			pos = cob_write_qbl (qblfd, 0, qbl_hdr->data);
+			pos = cob_write_qbl (ctx, qblfd, 0, qbl_hdr->data);
 		else
-			pos = cob_write_qbl (qblfd, (int)f->record->size+f->record_prefix, qbl_hdr->data);
+			pos = cob_write_qbl (ctx, qblfd, (int)f->record->size+f->record_prefix, qbl_hdr->data);
 	} else {
-		pos = cob_write_qbl (qblfd, (int)f->record->size, f->record->data);
+		pos = cob_write_qbl (ctx, qblfd, (int)f->record->size, f->record->data);
 	}
 
 	if (pos == -1) {	/* Unable to write; Must do a ROLLBACK */
@@ -1687,7 +1723,7 @@ has_acu_hyphen (char *src)
 
 /* do acu translation, 'src' may not be file_open_buff! */
 static void
-do_acu_hyphen_translation (char *src)
+do_acu_hyphen_translation (cob_context *ctx, char *src)
 {
 	size_t len;
 	/* maybe store device type to "adjust locking rules" */
@@ -1698,46 +1734,46 @@ do_acu_hyphen_translation (char *src)
 	if (len >= COB_FILE_MAX) {
 		len = COB_FILE_MAX;
 	}
-	memcpy (file_open_buff, src, len);
-	file_open_buff[len + 1] = 0;
+	memcpy (fileio_state (ctx)->file_open_buff, src, len);
+	fileio_state (ctx)->file_open_buff[len + 1] = 0;
 
-	strncpy (file_open_name, file_open_buff, (size_t)COB_FILE_MAX);
+	strncpy (file_open_name, fileio_state (ctx)->file_open_buff, (size_t)COB_FILE_MAX);
 }
 
 /* apply COB_FILE_PATH if set (similar to ACUCOBOL's FILE-PREFIX)
    MF and Fujistu simply don't have that - not set by default,
    so no compatilibity issue here; writes to global file_open_buff */
 static void
-apply_file_paths (char *src)
+apply_file_paths (cob_context *ctx, char *src)
 {
 	int k;
 	if (file_paths) {
 		for (k=0; file_paths[k] != NULL; k++) {
-			snprintf (file_open_buff, (size_t)COB_FILE_MAX, "%s%c%s",
+			snprintf (fileio_state (ctx)->file_open_buff, (size_t)COB_FILE_MAX, "%s%c%s",
 				  file_paths[k], SLASH_CHAR, src);
-			file_open_buff[COB_FILE_MAX] = 0;
-			if (access (file_open_buff, F_OK) == 0) {
+			fileio_state (ctx)->file_open_buff[COB_FILE_MAX] = 0;
+			if (access (fileio_state (ctx)->file_open_buff, F_OK) == 0) {
 				break;
 			}
 #if defined(WITH_CISAM) || defined(WITH_DISAM) || defined(WITH_VBISAM) || defined(WITH_VISAM)
 			/* ISAM may append '.dat' to file name */
-			snprintf (file_open_buff, (size_t)COB_FILE_MAX, "%s%c%s.dat",
+			snprintf (fileio_state (ctx)->file_open_buff, (size_t)COB_FILE_MAX, "%s%c%s.dat",
 				  file_paths[k], SLASH_CHAR, src);
-			file_open_buff[COB_FILE_MAX] = 0;
-			if (access (file_open_buff, F_OK) == 0) {
-				snprintf (file_open_buff, (size_t)COB_FILE_MAX, "%s%c%s",
+			fileio_state (ctx)->file_open_buff[COB_FILE_MAX] = 0;
+			if (access (fileio_state (ctx)->file_open_buff, F_OK) == 0) {
+				snprintf (fileio_state (ctx)->file_open_buff, (size_t)COB_FILE_MAX, "%s%c%s",
 					  file_paths[k], SLASH_CHAR, src);
-				file_open_buff[COB_FILE_MAX] = 0;
+				fileio_state (ctx)->file_open_buff[COB_FILE_MAX] = 0;
 				break;
 			}
 #endif
 		}
 		if (file_paths[k] == NULL) {
-			snprintf (file_open_buff, (size_t)COB_FILE_MAX, "%s%c%s",
+			snprintf (fileio_state (ctx)->file_open_buff, (size_t)COB_FILE_MAX, "%s%c%s",
 				  file_paths[0], SLASH_CHAR, src);
-			file_open_buff[COB_FILE_MAX] = 0;
+			fileio_state (ctx)->file_open_buff[COB_FILE_MAX] = 0;
 		}
-		strncpy (file_open_name, file_open_buff, (size_t)COB_FILE_MAX);
+		strncpy (file_open_name, fileio_state (ctx)->file_open_buff, (size_t)COB_FILE_MAX);
 	} else if (src != file_open_name) {
 		strncpy (file_open_name, src, (size_t)COB_FILE_MAX);
 	}
@@ -1763,7 +1799,7 @@ cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 	/* Special ACUCOBOL-case: file that start with hyphen [note: -P not supported]
 	   no translation at all, name starts after first non-space */
 	if (has_acu_hyphen (file_open_name)) {
-		do_acu_hyphen_translation (file_open_name);
+		do_acu_hyphen_translation (ctx, file_open_name);
 		return ;
 	}
 
@@ -1824,11 +1860,11 @@ cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 				return;
 			}
 			if (has_acu_hyphen (file_open_name)) {
-				do_acu_hyphen_translation (file_open_name);
+				do_acu_hyphen_translation (ctx, file_open_name);
 				return ;
 			}
 		}
-		apply_file_paths (file_open_name);
+		apply_file_paths (ctx, file_open_name);
 		return;
 	}
 
@@ -1844,7 +1880,7 @@ cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 	/* with a $, in which case we ignore the element AND */
 	/* the following slash */
 
-	dst = file_open_buff;
+	dst = fileio_state (ctx)->file_open_buff;
 	*dst = 0;
 
 	if (*src != '$') {
@@ -1859,19 +1895,19 @@ cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 
 	/* strtok strips leading delimiters */
 	if (*src == '/' || *src == '\\') {
-		strcpy (file_open_buff, SLASH_STR);
+		strcpy (fileio_state (ctx)->file_open_buff, SLASH_STR);
 	} else {
-		file_open_buff[COB_FILE_MAX] = 0;
+		fileio_state (ctx)->file_open_buff[COB_FILE_MAX] = 0;
 		p = strtok (orig, "/\\");
 		orig = NULL;
 		if ((src = cob_chk_file_env (ctx, f, p)) != NULL) {
-			strncpy (file_open_buff, src, (size_t)COB_FILE_MAX);
+			strncpy (fileio_state (ctx)->file_open_buff, src, (size_t)COB_FILE_MAX);
 			dollar = 0;
 		} else if (!dollar) {
-			strncpy (file_open_buff, p, (size_t)COB_FILE_MAX);
+			strncpy (fileio_state (ctx)->file_open_buff, p, (size_t)COB_FILE_MAX);
 		}
 	}
-	file_open_buff[COB_FILE_MAX] = 0;
+	fileio_state (ctx)->file_open_buff[COB_FILE_MAX] = 0;
 	/* First element completed, loop through remaining */
 	/* elements delimited by slash */
 	/* Check only for $ from now on; includes the DD_xx/dd_xx/xx mapping */
@@ -1883,7 +1919,7 @@ cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 		}
 		if (!orig) {
 			if (!dollar) {
-				strcat (file_open_buff, SLASH_STR);
+				strcat (fileio_state (ctx)->file_open_buff, SLASH_STR);
 			}
 		} else {
 			orig = NULL;
@@ -1895,10 +1931,10 @@ cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 			p++;
 		}
 		if (dollar && (src = cob_chk_file_env (ctx, f, p)) != NULL) {
-			strncat (file_open_buff, src, (size_t)COB_FILE_MAX);
+			strncat (fileio_state (ctx)->file_open_buff, src, (size_t)COB_FILE_MAX);
 			src = NULL;
 		} else if (!dollar) {
-			strncat (file_open_buff, p, (size_t)COB_FILE_MAX);
+			strncat (fileio_state (ctx)->file_open_buff, p, (size_t)COB_FILE_MAX);
 			src = NULL;
 		} else {
 			src = p - 1;
@@ -1906,16 +1942,16 @@ cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 	}
 	/* if we have a final $something that cannot be resolved - use as plain name */
 	if (src) {
-		strncat (file_open_buff, src, (size_t)COB_FILE_MAX);
+		strncat (fileio_state (ctx)->file_open_buff, src, (size_t)COB_FILE_MAX);
 	}
-	strcpy (file_open_name, file_open_buff);
+	strcpy (file_open_name, fileio_state (ctx)->file_open_buff);
 	cob_free (saveptr);
 
 	if (looks_absolute (file_open_name)) {
 		return;
 	}
 
-	apply_file_paths (file_open_name);
+	apply_file_paths (ctx, file_open_name);
 }
 
 void
@@ -8868,8 +8904,8 @@ cob_sys_copy_file (unsigned char *fname1, unsigned char *fname2)
 	}
 
 	ret = 0;
-	while ((i = read (fd1, file_open_buff, COB_FILE_BUFF)) > 0) {
-		if ((size_t)write (fd2, file_open_buff, (size_t)i) != (size_t)i) {
+	while ((i = read (fd1, fileio_state (ctx)->file_open_buff, COB_FILE_BUFF)) > 0) {
+		if ((size_t)write (fd2, fileio_state (ctx)->file_open_buff, (size_t)i) != (size_t)i) {
 			ret = -1;
 			break;
 		}
@@ -10427,6 +10463,11 @@ cob_exit_fileio (cob_context *ctx)
 		}
 		file_cache = NULL;
 	}
+
+	if (ctx->fileio != NULL) {
+		cob_free (ctx->fileio);
+		ctx->fileio = NULL;
+	}
 }
 
 void
@@ -10434,11 +10475,6 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 {
 	char	*p;
 	int	i,k;
-
-	runtime_buffer = cob_fast_malloc ((size_t)(4 * COB_FILE_BUFF) + 4);
-	file_open_env = runtime_buffer + COB_FILE_BUFF;
-	file_open_name = runtime_buffer + (2 * COB_FILE_BUFF);
-	file_open_buff = runtime_buffer + (3 * COB_FILE_BUFF);
 
 	/* TRANSLATORS: This msgid is concatenated with a filename;
 	   setup translation to allow this to be followed on the right side,
@@ -10454,7 +10490,8 @@ cob_init_fileio (cob_context *ctx, cob_global *lptr, cob_settings *sptr)
 	file_api.io_funcs = fileio_funcs;
 	file_api.chk_file_mapping = cob_chk_file_mapping;
 	file_api.cob_file_write_opt = cob_file_write_opt;
-	file_api.file_open_buff = file_open_buff;
+	/* TODO (T1.3): per-context buffer for the backends */
+	file_api.file_open_buff = fileio_state (ctx)->file_open_buff;
 
 	if (chk_file_path) {
 		chk_file_path = 0;
