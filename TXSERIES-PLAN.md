@@ -392,10 +392,14 @@ Conséquences pour `cobc/codegen.c` :
    (`COB_CTX_TODO` → 43) ; état de `strings.c` et état thread-local de
    `common.c` dans le contexte ; collation BDB dans `app_private`.
    **Le seul TLS restant dans libcob est `cob_current_context`.**
-   Reste : déplacer le reste de l'état global (statiques de
-   `numeric.c`, `intrinsic.c`, `fileio.c`, `call.c`… et `cobglobptr`
-   par fichier → `ctx->glob`), callbacks de tri, fonctions de niveau
-   processus → `cob_runtime`.
+   Puis : les copies par fichier du pointeur global (`cobglobptr`,
+   `file_globptr`…) remplacées par `ctx->glob`, et celles du pointeur
+   de réglages par `ctx->settings` (encore partagé : copie par contexte
+   à faire). Variables globales modifiables : 362 au départ, 328 restent.
+   Reste : statiques de `common.c`, `fileio.c`, `screenio.c`,
+   `intrinsic.c`, `numeric.c`, `reportio.c`, `call.c`… ; réglages par
+   contexte (et `cobsetptr` de `common.c`) ; callbacks de tri ; état
+   des fonctions de niveau processus → `cob_runtime`.
 3. **J3** : T1.3 + T1.4 — libcob sans état global mutable, thread-safe.
 4. **J4** : T1.5 + T1.6 — instances de programme par contexte, banc de
    test multi-thread.

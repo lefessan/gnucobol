@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md: status of T1.3 (global and settings pointers)
 	* TXSERIES-PLAN.md: status of T1.3 (single thread-local variable left)
 	* TXSERIES-PLAN.md: status with "TXSERIES docs: status of the context
 	  propagation (T1.3)"
