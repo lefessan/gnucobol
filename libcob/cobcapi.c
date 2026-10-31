@@ -48,11 +48,11 @@
 
 static const cob_field_attr	all_display_attr =
 				{COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
-static cob_field_attr	const_float_attr =
+static const cob_field_attr	const_float_attr =
 			{COB_TYPE_NUMERIC_DOUBLE, 8, 0, COB_FLAG_HAVE_SIGN, NULL};
-static cob_field_attr	const_binll_attr =
+static const cob_field_attr	const_binll_attr =
 			{COB_TYPE_NUMERIC_BINARY, 18, 0, COB_FLAG_HAVE_SIGN, NULL};
-static cob_field_attr	const_binull_attr =
+static const cob_field_attr	const_binull_attr =
 			{COB_TYPE_NUMERIC_BINARY, 18, 0, 0, NULL};
 
 static size_t		capi_lastsize = 0;
@@ -319,6 +319,7 @@ cob_get_s64_param (int n)
 	cob_s64_t	val;
 	double		dbl;
 	cob_field	temp;
+	cob_field_attr	bin_attr;
 	cob_field	*f = cob_get_param_field (n, "cob_get_s64_param");
 
 	if (f == NULL) {
@@ -352,8 +353,9 @@ cob_get_s64_param (int n)
 	default:
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
-		temp.attr = &const_binll_attr;
-		const_binll_attr.scale = f->attr->scale;
+		bin_attr = const_binll_attr;
+		bin_attr.scale = f->attr->scale;
+		temp.attr = &bin_attr;
 		cob_move_ctx (ctx, f, &temp);
 		return val;
 	}
@@ -368,6 +370,7 @@ cob_get_u64_param (int n)
 	cob_u64_t	val;
 	double		dbl;
 	cob_field	temp;
+	cob_field_attr	bin_attr;
 	cob_field	*f = cob_get_param_field (n, "cob_get_u64_param");
 
 	if (f == NULL) {
@@ -401,8 +404,9 @@ cob_get_u64_param (int n)
 	default:
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
-		temp.attr = &const_binull_attr;
-		const_binull_attr.scale = f->attr->scale;
+		bin_attr = const_binull_attr;
+		bin_attr.scale = f->attr->scale;
+		temp.attr = &bin_attr;
 		cob_move_ctx (ctx, f, &temp);
 		return val;
 	}
@@ -618,6 +622,7 @@ cob_put_s64_param (int n, cob_s64_t val)
 	float		flt;
 	double		dbl;
 	cob_field	temp;
+	cob_field_attr	bin_attr;
 	cob_field	*f = cob_get_param_field (n, "cob_put_s64_param");
 
 	if (f == NULL) {
@@ -661,8 +666,9 @@ cob_put_s64_param (int n, cob_s64_t val)
 	default:	/* COB_TYPE_NUMERIC_EDITED, ... */
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
-		temp.attr = &const_binll_attr;
-		const_binll_attr.scale = f->attr->scale;
+		bin_attr = const_binll_attr;
+		bin_attr.scale = f->attr->scale;
+		temp.attr = &bin_attr;
 		cob_move_ctx (ctx, &temp, f);
 		return;
 	}
@@ -677,6 +683,7 @@ cob_put_u64_param (int n, cob_u64_t val)
 	float		flt;
 	double		dbl;
 	cob_field	temp;
+	cob_field_attr	bin_attr;
 	cob_field	*f = cob_get_param_field (n, "cob_put_u64_param");
 
 	if (f == NULL) {
@@ -720,8 +727,9 @@ cob_put_u64_param (int n, cob_u64_t val)
 	default:	/* COB_TYPE_NUMERIC_EDITED, ... */
 		temp.size = 8;
 		temp.data = (unsigned char *)&val;
-		temp.attr = &const_binll_attr;
-		const_binll_attr.scale = f->attr->scale;
+		bin_attr = const_binll_attr;
+		bin_attr.scale = f->attr->scale;
+		temp.attr = &bin_attr;
 		cob_move_ctx (ctx, &temp, f);
 		return;
 	}
