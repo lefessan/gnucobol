@@ -46,7 +46,9 @@ source / signalé par une analyse, non vérifié).
   réentrant) au lieu de `strerror_r`.
 
 ### `libcob/common.c` — `cob_module_err` mort
-- Statut : signalé par une analyse, **non vérifié**.
+- Statut : **vérifié** le 2026-11-01 : écrit dans
+  `cob_module_global_enter_ctx`, lu seulement dans du code `#if 0`
+  (`cob_fatal_error_ctx`, cas `COB_FERROR_RECURSIVE`).
 - Variable lue seulement dans du code `#if 0` : à supprimer.
 
 ## 2026-10-29 — trouvés pendant le test de compatibilité binaire
