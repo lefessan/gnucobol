@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* mlio.c (xml_startElementNs, xml_endElementNs): rename the user data
+	  parameter of SAX callbacks
 	* call.c (set_resolve_error, cache_preload, insert,
 	  cob_resolve_internal, cob_resolve_error, cob_call_error, ...),
 	  cconv.c (cob_load_collation), cobcapi.c (cob_get_param_field,
