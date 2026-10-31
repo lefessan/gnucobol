@@ -333,14 +333,14 @@ indexed_cmpkey (struct indexfile *fh, unsigned char *data, int idx, int partlen)
 /* Build 'keydesc' from 'cob_file_key'
    Return total length of the key */
 static int
-indexed_keydesc (cob_file *f, struct keydesc *kd, cob_file_key *key)
+indexed_keydesc (cob_context *ctx, cob_file *f, struct keydesc *kd, cob_file_key *key)
 {
 	int	keylen, part, keytype;
 	/* LCOV_EXCL_START */
 	if (key->count_components < 1) {
 		/* Should not happen as this was generated pre GC 3.0 */
-		cob_runtime_error_ctx (COB_CTX_TODO, "file i/o version mismatch");
-		cob_stop_run_ctx (COB_CTX_TODO, 1);
+		cob_runtime_error_ctx (ctx, "file i/o version mismatch");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -360,7 +360,7 @@ indexed_keydesc (cob_file *f, struct keydesc *kd, cob_file_key *key)
 	/* LCOV_EXCL_START */
 	if (key->count_components > max_keycomp) {
 		/* not translated as this is safety guard unlikely to be ever triggered */
-		cob_runtime_warning_ctx (COB_CTX_TODO, "module specifies %d key components, "
+		cob_runtime_warning_ctx (ctx, "module specifies %d key components, "
 			"%s runtime ignores all parts greater than %d",
 			key->count_components, isam_name, max_keycomp);
 		key->count_components = max_keycomp;
@@ -656,7 +656,7 @@ savefileposition (cob_file *f)
 
 /* Get length of variable length record */
 static COB_INLINE COB_A_INLINE void
-get_isreclen (cob_file *f)
+get_isreclen (cob_context *ctx, cob_file *f)
 {
 	if (f->record_min != f->record_max) {
 #if ISVARLEN == 0
@@ -665,14 +665,14 @@ get_isreclen (cob_file *f)
 		if (f->variable_record) {
 			for (k = f->record_max; k > f->record_min && f->record->data[k-1] == 0; k--);
 			f->record->size = k;
-			cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) k);
+			cob_set_int_ctx (ctx, f->variable_record, (int) k);
 		}
 #else
 		f->record->size = ISRECLEN;
 		if (f->record->size < f->record_max)
 			memset(&f->record->data[f->record->size], 0, f->record_max - f->record->size);
 		if (f->variable_record)
-			cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) f->record->size);
+			cob_set_int_ctx (ctx, f->variable_record, (int) f->record->size);
 #endif
 	}
 }
@@ -878,6 +878,7 @@ isam_set_mode (cob_file *f)
 static int
 isam_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	/* Note filename points to file_open_name */
 	/* cob_chk_file_mapping manipulates file_open_name directly */
 
@@ -1082,7 +1083,7 @@ isam_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 dobuild:
 		/* copy index information cob_file_key -> keydesc */
 		for (k = 0; k < f->nkeys; ++k) {
-			len = indexed_keydesc (f, &fh->key[k], &f->keys[k]);
+			len = indexed_keydesc (ctx, f, &fh->key[k], &f->keys[k]);
 			if (fh->lenkey < len) {
 				fh->lenkey = len;
 			}
@@ -1148,7 +1149,7 @@ dobuild:
 					f->record_min = f->record_max = di.di_recsize;
 					f->record->size = di.di_recsize;
 					if (f->variable_record)
-						cob_set_int_ctx (COB_CTX_TODO, f->variable_record, (int) f->record->size);
+						cob_set_int_ctx (ctx, f->variable_record, (int) f->record->size);
 				} else
 				if (f->flag_keycheck
 				|| f->record_max < di.di_recsize) {
@@ -1169,7 +1170,7 @@ dobuild:
 				/* Verify that COBOL keys defined match some real ISAM key */
 				for (j = 0; j < f->nkeys && !ret; ++j) {
 					struct keydesc	kd = { 0 };
-					indexed_keydesc (f, &kd, &f->keys[j]);
+					indexed_keydesc (ctx, f, &kd, &f->keys[j]);
 					for (k = 0; k < fh->nkeys; ++k) {
 						if (indexed_keycmp (&kd, &fh->key[k]) == 0) {
 							fh->idxmap[j] = k;
@@ -1196,7 +1197,7 @@ dobuild:
 						fh->lenkey = len;
 					}
 					/* get key info from cob_key */
-					len_key = indexed_keydesc (f, &kd, &f->keys[k]);
+					len_key = indexed_keydesc (ctx, f, &kd, &f->keys[k]);
 					/* verify that COBOL keys match exactly to real ISAM keys */
 					if (len_key != len
 					 || indexed_keycmp (&kd, &key) != 0) {
@@ -1447,6 +1448,7 @@ isam_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 static int
 isam_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	struct indexfile	*fh;
 	int			k,fullkeylen,partlen;
 	int			ret;
@@ -1515,7 +1517,7 @@ isam_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 	f->flag_begin_of_file = 0;
 	indexed_savekey (fh, f->record->data, 0);
 	fh->recnum = ISRECNUM;
-	get_isreclen (f);
+	get_isreclen (ctx, f);
 	return 0;
 }
 
@@ -1524,6 +1526,7 @@ isam_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 static int
 isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	struct indexfile	*fh;
 	int			ret;
 	int			lmode, skip_read;
@@ -1803,7 +1806,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 	f->flag_begin_of_file = 0;
 	indexed_savekey (fh, f->record->data, 0);
 	fh->recnum = ISRECNUM;
-	get_isreclen (f);
+	get_isreclen (ctx, f);
 
 #ifdef COB_WITH_STATUS_02
 	/* If first read after a START then Read ahead to see if next record has same key value */

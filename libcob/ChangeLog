@@ -1,6 +1,53 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (set_resolve_error, cache_preload, insert,
+	  cob_resolve_internal, cob_set_cancel_ctx, cob_resolve_ctx, ...),
+	  cconv.c (cob_load_collation), cobcapi.c (cob_get_param_field,
+	  cob_get_num_params, cob_get_dbl_param, cob_put_dbl_param,
+	  cob_get_s64_param, cob_get_u64_param, ...), coblocal.h (cob_io_name,
+	  cob_init_termio, cob_init_reportio, cob_fork_fileio,
+	  cob_exit_fileio_msg_only, cob_decimal_get_mpf, ...), common.c
+	  (translate_boolean_to_int, internal_nanosleep, get_config_val,
+	  cob_stack_trace_internal, cob_terminate_routines, cob_get_strerror,
+	  ...), fbdb.c (bdb_bt_compare, bdb_err_event, join_environment,
+	  bdb_lock_file, bdb_lock_record, bdb_test_record_lock, ...), fextfh.c
+	  (free_extfh_fcd, copy_file_to_fcd, update_fcd_to_file,
+	  copy_keys_fcd_to_file, copy_fcd_to_file, find_fcd, ...), fileio.c
+	  (dummy_91, get_io_ptr, isam_to_file, indexed_file_type, cob_key_def,
+	  set_qbl_buf, ...), fileio.h (cob_read_dict, cob_chk_file_mapping,
+	  db_savekey, cob_dump_xfd, cob_xfd_to_ddl), fisam.c (indexed_keydesc,
+	  get_isreclen, isam_open, isam_read, isam_read_next), flmdb.c
+	  (check_alt_keys, lmdb_write_internal, lmdb_start_internal,
+	  lmdb_delete_internal, lmdb_open, lmdb_start, ...), focextfh.c
+	  (get_io_ptr, relative_rewrite, sequential_read, sequential_write,
+	  sequential_rewrite, relative_start, ...), foci.c (ociCountIndex,
+	  oci_create_table, join_environment, oci_file_delete, oci_open,
+	  oci_start, ...), fodbc.c (odbcCountIndex, odbc_create_table,
+	  join_environment, odbc_file_delete, odbc_open, odbc_start, ...),
+	  fsqlxfd.c (db_cmpkey, eval_expr, cob_load_xfd, cob_load_ddl,
+	  getSchemaEnvName, logSchemaEnvName, ...), intrinsic.c (comp_field,
+	  cob_alloc_field, cob_mod_or_rem, numval, get_min_and_max_of_args,
+	  calc_mean_of_args, ...), mlio.c (set_xml_code, set_xml_exception,
+	  get_xml_code, set_json_code, set_json_exception, get_num, ...),
+	  move.c (store_common_region, cob_move_display_to_display,
+	  cob_move_packed_to_display, cob_move_display_to_binary,
+	  cob_move_binary_to_display, optimized_move_display_to_edited, ...),
+	  numeric.c (cob_decimal_print, cob_decimal_adjust,
+	  cob_decimal_get_ieee64dec, cob_decimal_set_ieee64dec,
+	  cob_decimal_get_ieee128dec, cob_decimal_set_ieee128dec, ...),
+	  profiling.c (cob_prof_realloc_arrays, cob_prof_enter_procedure_ctx,
+	  cob_prof_end), reportio.c (cob_field_init, cob_field_dup,
+	  cob_add_fields, reportDump, limitCheckOneLine, limitCheckLine, ...),
+	  screenio.c (init_cob_screen_if_needed, handle_status,
+	  raise_ec_on_invalid_line_or_col, cob_move_cursor, cob_set_cursor_pos,
+	  adjust_attr_from_color_field, ...), strings.c (cob_str_memcpy,
+	  inspect_common_no_replace, inspect_common,
+	  cob_inspect_characters_intern, cob_inspect_characters_ctx,
+	  cob_inspect_all_intern, ...), termio.c (display_numeric,
+	  pretty_display_numeric, cob_display_common, cob_display_va_ctx,
+	  cob_dump_field_va_ctx, cob_print_field, ...): propagate the context
+	  to internal functions
 	* mlio.c (xml_startElementNs, xml_endElementNs): rename the user data
 	  parameter of SAX callbacks
 	* call.c (set_resolve_error, cache_preload, insert,

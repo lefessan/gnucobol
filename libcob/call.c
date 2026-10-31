@@ -274,13 +274,13 @@ static const unsigned char	pvalid_char[] =
 /* Local functions */
 
 static void
-set_resolve_error (int module_type)
+set_resolve_error (cob_context *ctx, int module_type)
 {
 	resolve_error = resolve_error_buff;
 	if (module_type == COB_MODULE_TYPE_PROGRAM) {
-		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_PROGRAM_NOT_FOUND);
+		cob_set_exception_ctx (ctx, COB_EC_PROGRAM_NOT_FOUND);
 	} else {
-		cob_set_exception_ctx (COB_CTX_TODO, COB_EC_FUNCTION_NOT_FOUND);
+		cob_set_exception_ctx (ctx, COB_EC_FUNCTION_NOT_FOUND);
 	}
 }
 
@@ -580,7 +580,7 @@ add_to_preload (const char *path, lt_dlhandle libhandle, struct struct_handle *l
    * 3 if previously CALLed and not CANCELed, now marked as pre-loaded (no physical cancel)
  */
 static size_t
-cache_preload (const char *path)
+cache_preload (cob_context *ctx, const char *path)
 {
 	struct struct_handle	*preptr;
 	lt_dlhandle		libhandle;
@@ -626,7 +626,7 @@ cache_preload (const char *path)
 
 	libhandle = lt_dlopen (path);
 	if (!libhandle) {
-		cob_runtime_warning_ctx (COB_CTX_TODO, 
+		cob_runtime_warning_ctx (ctx,
 			_("preloading from existing path '%s' failed; %s"), path, lt_dlerror());
 		return 0;
 	}
@@ -649,7 +649,7 @@ hash (const unsigned char *s)
 }
 
 static void
-insert (const char *name, void *func, lt_dlhandle handle,
+insert (cob_context *ctx, const char *name, void *func, lt_dlhandle handle,
 	cob_module *module, const char *path,
 	const unsigned int nocanc)
 {
@@ -663,7 +663,7 @@ insert (const char *name, void *func, lt_dlhandle handle,
 	p->module = module;
 
 	if (path) {
-		p->path = cob_path_to_absolute_ctx (COB_CTX_TODO, path);
+		p->path = cob_path_to_absolute_ctx (ctx, path);
 	}
 	p->no_phys_cancel = nocanc;
 	val = hash ((const unsigned char *)name);
@@ -777,7 +777,7 @@ cob_encode_program_id (const unsigned char *const name,
 }
 
 static void *
-cob_resolve_internal  (const char *name, const char *dirent,
+cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 	const int fold_case, int module_type, int cache_check)
 {
 	void			*func;
@@ -805,7 +805,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 			? _("%s: PROGRAM name exceeds %d characters")
 			: _("%s: FUNCTION name exceeds %d characters"),
 			name, COB_MAX_NAMELEN);
-		set_resolve_error (module_type);
+		set_resolve_error (ctx, module_type);
 		return NULL;
 	}
 
@@ -822,7 +822,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		  currently loaded linked libraries, but possibly not on MSVC! */
 		func = lt_dlsym (mainhandle, call_entry_buff);
 		if (func != NULL) {
-			insert (name, func, mainhandle, NULL, NULL, 1);
+			insert (ctx, name, func, mainhandle, NULL, NULL, 1);
 			resolve_error = NULL;
 			return func;
 		}
@@ -833,7 +833,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 	for (preptr = base_preload_ptr; preptr; preptr = preptr->next) {
 		func = lt_dlsym (preptr->handle, call_entry_buff);
 		if (func != NULL) {
-			insert (name, func, preptr->handle,	NULL, preptr->path, 1);
+			insert (ctx, name, func, preptr->handle,	NULL, preptr->path, 1);
 			resolve_error = NULL;
 			return func;
 		}
@@ -846,7 +846,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		}
 		func = lt_dlsym (preptr->handle, call_entry_buff);
 		if (func != NULL) {
-			insert (name, func, preptr->handle,
+			insert (ctx, name, func, preptr->handle,
 				NULL, preptr->path, 1);
 			resolve_error = NULL;
 			return func;
@@ -857,7 +857,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 #if	defined(USE_LIBDL) && defined (RTLD_DEFAULT)
 	func = lt_dlsym (RTLD_DEFAULT, call_entry_buff);
 	if (func != NULL) {
-		insert (name, func, NULL, NULL, NULL, 1);
+		insert (ctx, name, func, NULL, NULL, NULL, 1);
 		resolve_error = NULL;
 		return func;
 	}
@@ -876,7 +876,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		cache_dynload (call_filename_buff, handle);
 		func = lt_dlsym (handle, call_entry_buff);
 		if (func != NULL) {
-			insert (name, func, handle, NULL, call_filename_buff, 0);
+			insert (ctx, name, func, handle, NULL, call_filename_buff, 0);
 			resolve_error = NULL;
 			return func;
 		}
@@ -909,7 +909,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		if (access (call_filename_buff, R_OK) != 0) {
 			snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
 				  "module '%s' not found", name);
-			set_resolve_error (module_type);
+			set_resolve_error (ctx, module_type);
 			return NULL;
 		}
 		lt_dlerror ();	/* clear last error conditions */
@@ -919,7 +919,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 			cache_dynload (call_filename_buff, handle);
 			func = lt_dlsym (handle, call_entry_buff);
 			if (func != NULL) {
-				insert (name, func, handle, NULL,
+				insert (ctx, name, func, handle, NULL,
 					call_filename_buff, 0);
 				resolve_error = NULL;
 				return func;
@@ -927,9 +927,9 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		}
 		snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
 			  "entry point '%s' not found", (const char *)s);
-		set_resolve_error (module_type);
+		set_resolve_error (ctx, module_type);
 		/* lt_dlerror will now give either the message from lt_dlopen or lt_dlym */
-		cob_runtime_warning_ctx (COB_CTX_TODO, 
+		cob_runtime_warning_ctx (ctx,
 			_("loading from existing path '%s' failed; %s"),
 			call_filename_buff, lt_dlerror ());
 		return NULL;
@@ -952,7 +952,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 				cache_dynload (call_filename_buff, handle);
 				func = lt_dlsym (handle, call_entry_buff);
 				if (func != NULL) {
-					insert (name, func, handle, NULL,
+					insert (ctx, name, func, handle, NULL,
 						call_filename_buff, 0);
 					resolve_error = NULL;
 					return func;
@@ -960,9 +960,9 @@ cob_resolve_internal  (const char *name, const char *dirent,
 			}
 			snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
 				  "entry point '%s' not found", (const char *)s);
-			set_resolve_error (module_type);
+			set_resolve_error (ctx, module_type);
 			/* lt_dlerror will now give either the message from lt_dlopen or lt_dlym */
-			cob_runtime_warning_ctx (COB_CTX_TODO, 
+			cob_runtime_warning_ctx (ctx,
 				_("loading from existing path '%s' failed; %s"),
 				call_filename_buff, lt_dlerror ());
 			return NULL;
@@ -971,7 +971,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 #endif
 	snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
 		  "module '%s' not found", name);
-	set_resolve_error (module_type);
+	set_resolve_error (ctx, module_type);
 	return NULL;
 }
 
@@ -1079,7 +1079,7 @@ cob_set_cancel_ctx (cob_context *ctx, cob_module *m)
 			return;
 		}
 	}
-	insert (m->module_name, m->module_entry.funcvoid, NULL, m, NULL, 1);
+	insert (ctx, m->module_name, m->module_entry.funcvoid, NULL, m, NULL, 1);
 }
 
 /* compatibility: cob_set_cancel without context */
@@ -1103,7 +1103,7 @@ cob_resolve_ctx (cob_context *ctx, const char *name)
 	/* LCOV_EXCL_STOP */
 
 	entry = cob_chk_call_path (name, &dirent);
-	p = cob_resolve_internal (entry, dirent, 0, COB_MODULE_TYPE_PROGRAM, 1);
+	p = cob_resolve_internal (ctx, entry, dirent, 0, COB_MODULE_TYPE_PROGRAM, 1);
 	if (dirent) {
 		cob_free (dirent);
 	}
@@ -1133,7 +1133,7 @@ cob_resolve_cobol_ctx (cob_context *ctx, const char *name, const int fold_case, 
 	cobglobptr->cob_exception_code = 0;
 
 	entry = cob_chk_call_path (name, &dirent);
-	p = cob_resolve_internal (entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 1);
+	p = cob_resolve_internal (ctx, entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 1);
 	if (dirent) {
 		cob_free (dirent);
 	}
@@ -1165,7 +1165,7 @@ cob_resolve_func_ctx (cob_context *ctx, const char *name)
 	}
 	/* LCOV_EXCL_STOP */
 
-	p = cob_resolve_internal (name, NULL, 0, COB_MODULE_TYPE_FUNCTION, 1);
+	p = cob_resolve_internal (ctx, name, NULL, 0, COB_MODULE_TYPE_FUNCTION, 1);
 	if (!p) {
 		/* Note: exception raised above */
 		cob_runtime_error_ctx (ctx, _("user-defined FUNCTION '%s' not found"), name);
@@ -1252,7 +1252,7 @@ cob_call_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_
 	if (*name == ' ') {
 		size_t				len;
 		/* same warning as in cobc/typeck.c */
-		cob_runtime_warning_ctx (ctx, 
+		cob_runtime_warning_ctx (ctx,
 			_("'%s' literal includes leading spaces which are omitted"), name);
 		len = strlen (name);
 		while (*name == ' ') {
@@ -1301,7 +1301,7 @@ cob_call_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_
 		}
 	}
 
-	p = cob_resolve_internal (entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 0);
+	p = cob_resolve_internal (ctx, entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 0);
 	if (dirent) {
 		cob_free (dirent);
 	}
@@ -2158,7 +2158,7 @@ cob_exit_call (void)
 /* try to load specified module from all entries in COB_LIBRARY_PATH
    return values see cache_preload */
 static
-size_t cob_try_preload (const char* module_name)
+size_t cob_try_preload (cob_context *ctx, const char* module_name)
 {
 	char		buff[COB_MEDIUM_BUFF];
 
@@ -2171,7 +2171,7 @@ size_t cob_try_preload (const char* module_name)
 	}
 	*b = 0;
 
-	return cache_preload (buff);
+	return cache_preload (ctx, buff);
 #else
 	size_t				i, ret;
 
@@ -2179,23 +2179,23 @@ size_t cob_try_preload (const char* module_name)
 		snprintf (buff, (size_t)COB_MEDIUM_MAX,
 			"%s%c%s.%s",
 			resolve_path[i], SLASH_CHAR, module_name, COB_MODULE_EXT);
-		ret = cache_preload (buff);
+		ret = cache_preload (ctx, buff);
 		if (ret) {
 			return ret;
 		}
 	}
 	/* If not found, try just using the name as-is */
-	ret = cache_preload (module_name);
+	ret = cache_preload (ctx, module_name);
 
 	if (ret == 0) {
-		cob_runtime_warning_ctx (COB_CTX_TODO, _("preloading of '%s' failed"), module_name);
+		cob_runtime_warning_ctx (ctx, _("preloading of '%s' failed"), module_name);
 	}
 	return ret;
 #endif
 }
 
 void
-cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
+cob_init_call (cob_context *ctx, cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
 {
 #ifndef	HAVE_DESIGNATED_INITS
 	const unsigned char		*pv;
@@ -2267,7 +2267,7 @@ cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
 
 		s = strtok (p, PATHSEP_STR);
 		for (; s; s = strtok (NULL, PATHSEP_STR)) {
-			(void)cob_try_preload (s);
+			(void)cob_try_preload (ctx, s);
 		}
 		cob_free (p);
 	}

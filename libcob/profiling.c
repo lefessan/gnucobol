@@ -201,7 +201,7 @@ cob_prof_init_module (cob_module *module, struct cob_prof_procedure *procedures,
 }
 
 static void
-cob_prof_realloc_arrays (void)
+cob_prof_realloc_arrays (cob_context *ctx)
 {
 	int new_size = max_prof_depth * 2 + 16;
 
@@ -210,14 +210,14 @@ cob_prof_realloc_arrays (void)
 
 	if (max_prof_depth >= new_size){
 		int i;
-		cob_runtime_warning_ctx (COB_CTX_TODO, _("[cob_prof] Profiling overflow at %d calls, aborting profiling."),
+		cob_runtime_warning_ctx (ctx, _("[cob_prof] Profiling overflow at %d calls, aborting profiling."),
 			current_idx);
-		cob_runtime_warning_ctx (COB_CTX_TODO, _("  Last 10 calls on stack:"));
+		cob_runtime_warning_ctx (ctx, _("  Last 10 calls on stack:"));
 		for (i = 0; i < cob_min_int(10, current_idx); i++){
 			struct cob_prof_module *info = called_runtimes[current_idx-1-i];
 			int proc_idx = called_procedures[current_idx-1-i];
 			struct cob_prof_procedure *proc = info->procedures + proc_idx;
-			cob_runtime_warning_ctx (COB_CTX_TODO, _("  * %s at %s:%d"), proc->text,
+			cob_runtime_warning_ctx (ctx, _("  * %s at %s:%d"), proc->text,
 					     proc->file, proc->line);
 		}
 		is_active = 0;
@@ -260,7 +260,7 @@ cob_prof_enter_procedure_ctx (cob_context *ctx, struct cob_prof_module *info, in
 
 	current_idx++;
 	if (current_idx >= max_prof_depth) {
-		cob_prof_realloc_arrays();
+		cob_prof_realloc_arrays(ctx);
 		if (!is_active) return;
 	}
 
@@ -570,7 +570,7 @@ cob_prof_print_line (
 
 
 void
-cob_prof_end ()
+cob_prof_end (cob_context *ctx)
 {
 	FILE *file;
 	struct cob_prof_module_list *l;
@@ -580,7 +580,7 @@ cob_prof_end ()
 	if (!cobsetptr || !is_active || !prof_info_list) return;
 
 	while (current_idx >= 0) {
-		cob_prof_exit_procedure_ctx (COB_CTX_TODO, called_runtimes[current_idx],
+		cob_prof_exit_procedure_ctx (ctx, called_runtimes[current_idx],
 					 called_procedures[current_idx]);
 	}
 
@@ -615,7 +615,7 @@ cob_prof_end ()
 		fclose (file);
 		fprintf(stderr, "File %s generated\n", cobsetptr->cob_prof_filename);
 	} else {
-		cob_runtime_warning_ctx (COB_CTX_TODO, _("error '%s' opening COB_PROF_FILE '%s'"),
+		cob_runtime_warning_ctx (ctx, _("error '%s' opening COB_PROF_FILE '%s'"),
 				     cob_get_strerror (), cobsetptr->cob_prof_filename);
 	}
 	current_idx = -1;

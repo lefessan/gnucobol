@@ -194,10 +194,10 @@ enum cob_status_extended {
 
 COB_HIDDEN int cob_write_dict	(cob_file *f, char *filename);
 COB_HIDDEN int cob_read_dict	(cob_file *f, char *filename, int updt);
-COB_HIDDEN int indexed_file_type	(cob_file *f, char *filename);
+COB_HIDDEN int indexed_file_type	(cob_context *, cob_file *f, char *filename);
 COB_HIDDEN void cob_chk_file_mapping	(cob_file *f, char *filename);
-COB_HIDDEN void cob_file_save_status	(cob_file *f, cob_field *fnstatus, const int status);
-COB_HIDDEN void cob_file_sync	(cob_file *f);
+COB_HIDDEN void cob_file_save_status	(cob_context *, cob_file *f, cob_field *fnstatus, const int status);
+COB_HIDDEN void cob_file_sync	(cob_context *, cob_file *f);
 
 #ifdef	WITH_DB
 COB_EXPIMP void	cob_bdb_init_fileio (cob_file_api *);
@@ -212,7 +212,7 @@ COB_HIDDEN int cob_findkey_attr (cob_file *f, cob_field *kf, int *fullkeylen, in
 /* Routines in fsqlxfd.c common to all Database interfaces */
 COB_HIDDEN int db_keylen (cob_file *f, int idx);
 COB_HIDDEN int db_savekey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx);
-COB_HIDDEN int db_cmpkey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, int partlen);
+COB_HIDDEN int db_cmpkey (cob_context *, cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, int partlen);
 #endif
 #if defined(WITH_ODBC) || defined(WITH_OCI)
 #ifndef FALSE
@@ -439,18 +439,18 @@ struct file_xfd {
 };
 
 /* Routines in fsqlxfd.c common to ODBC/OCI interfaces */
-COB_HIDDEN struct file_xfd* cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, 
+COB_HIDDEN struct file_xfd* cob_load_xfd (cob_context *, struct db_state *db, cob_file *fl, char *alt_name, 
 											int indsize, int skiprid);
 COB_HIDDEN void 	cob_dump_xfd (struct file_xfd *fx, FILE *fo);
-COB_HIDDEN void 	cob_load_ddl (struct db_state *db, struct file_xfd *fx);
-COB_HIDDEN char *	getSchemaEnvName (struct db_state *db, char *envnm, const char *suf, char *out);
-COB_HIDDEN void 	logSchemaEnvName (struct db_state *db, const char *suffix);
-COB_HIDDEN char *	cob_sql_stmt (struct db_state *, struct file_xfd *, char *, int, int, int);
-COB_HIDDEN SQL_STMT *	cob_sql_select (struct db_state *, struct file_xfd *, int, int, int, void (*freeit)());
-COB_HIDDEN void 	cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl);
+COB_HIDDEN void 	cob_load_ddl (cob_context *, struct db_state *db, struct file_xfd *fx);
+COB_HIDDEN char *	getSchemaEnvName (cob_context *, struct db_state *db, char *envnm, const char *suf, char *out);
+COB_HIDDEN void 	logSchemaEnvName (cob_context *, struct db_state *db, const char *suffix);
+COB_HIDDEN char *	cob_sql_stmt (cob_context *, struct db_state *, struct file_xfd *, char *, int, int, int);
+COB_HIDDEN SQL_STMT *	cob_sql_select (cob_context *, struct db_state *, struct file_xfd *, int, int, int, void (*freeit)());
+COB_HIDDEN void 	cob_xfd_to_file (cob_context *, struct db_state *db, struct file_xfd *fx, cob_file *fl);
 COB_HIDDEN void 	cob_xfd_to_ddl (struct db_state *db, struct file_xfd *fx, FILE *fo);
-COB_HIDDEN void 	cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl);
-COB_HIDDEN void		cob_index_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl, 
+COB_HIDDEN void 	cob_file_to_xfd (cob_context *, struct db_state *db, struct file_xfd *fx, cob_file *fl);
+COB_HIDDEN void		cob_index_to_xfd (cob_context *, struct db_state *db, struct file_xfd *fx, cob_file *fl, 
 					int idx, int cond);
 COB_HIDDEN void		cob_index_clear (struct db_state *db, struct file_xfd *fx, cob_file *fl, int idx);
 COB_HIDDEN void		cob_xfd_swap_data (char *p1, char *p2, int len);
