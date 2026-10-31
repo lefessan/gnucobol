@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h, common.c: runtime configuration value tables are constant
 	* coblocal.h (cob_settings_screenio), common.c (common_state,
 	  cob_terminate_routines, cob_external_addr_ctx, cob_init), intrinsic.c
 	  (cob_intr_exception_status_ctx): run unit state in the context

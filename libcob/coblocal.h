@@ -378,7 +378,7 @@ struct config_tbl {
 	const char	*env_name;		/* Env Var name */
 	const char	*conf_name;		/* Name used in run-time config file */
 	const char	*default_val;		/* Default value */
-	struct config_enum *enums;		/* Table of Alternate values */
+	const struct config_enum *enums;	/* Table of Alternate values */
 	int		env_group;		/* Grouping for display of run-time options */
 	int		data_type;		/* Data type */
 	int		data_loc;		/* Location within structure */

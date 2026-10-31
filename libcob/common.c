@@ -509,25 +509,25 @@ static const char *setting_group[] = {" hidden setting ", "CALL configuration",
 					"File I/O configuration", "Screen I/O configuration", "Miscellaneous",
 					"System configuration"};
 
-static struct config_enum lwrupr[] = {{"LOWER", "1"}, {"UPPER", "2"}, {"not set", "0"}, {NULL, NULL}};
-static struct config_enum notset[] = {{"not set", "!"}, {NULL, NULL}};
-static struct config_enum never[] = {{"never", "!"}, {NULL, NULL}};
-static struct config_enum beepopts[] = {{"FLASH", "1"}, {"SPEAKER", "2"}, {"FALSE", "9"}, {"BEEP", "0"}, {NULL, NULL}};
-static struct config_enum timeopts[] = {{"0", "1000"}, {"1", "100"}, {"2", "10"}, {"3", "1"}, {NULL, NULL}};
-static struct config_enum coeopts[] = {{"0", "0"}, {"1", "1"}, {"2", "2"}, {"3", "3"}, {NULL, NULL}};
-static struct config_enum syncopts[] = {{"P", "1"}, {NULL, NULL}};
-static struct config_enum varseqopts[] = {{"0", "0"}, {"1", "1"}, {"2", "2"}, {"3", "3"},
+static const struct config_enum lwrupr[] = {{"LOWER", "1"}, {"UPPER", "2"}, {"not set", "0"}, {NULL, NULL}};
+static const struct config_enum notset[] = {{"not set", "!"}, {NULL, NULL}};
+static const struct config_enum never[] = {{"never", "!"}, {NULL, NULL}};
+static const struct config_enum beepopts[] = {{"FLASH", "1"}, {"SPEAKER", "2"}, {"FALSE", "9"}, {"BEEP", "0"}, {NULL, NULL}};
+static const struct config_enum timeopts[] = {{"0", "1000"}, {"1", "100"}, {"2", "10"}, {"3", "1"}, {NULL, NULL}};
+static const struct config_enum coeopts[] = {{"0", "0"}, {"1", "1"}, {"2", "2"}, {"3", "3"}, {NULL, NULL}};
+static const struct config_enum syncopts[] = {{"P", "1"}, {NULL, NULL}};
+static const struct config_enum varseqopts[] = {{"0", "0"}, {"1", "1"}, {"2", "2"}, {"3", "3"},
 					  {"mf","11"},{"gc","10"},{"gc3","10"},
 					  {"b4","4"},{"b32","4"},
 					  {"l4","6"},{"l32","6"},
 					  {NULL, NULL}};
 /* Make sure the values here match up with those defined in common.h */
-static struct config_enum relopts[]	= {
+static const struct config_enum relopts[]	= {
 						{"0","0"},{"gc","10"},{"mf","11"},{"gc3","10"},
 						{"b4","4"},{"b32","4"},{"b8","5"},{"b64","5"},
 						{"l4","6"},{"l32","6"},{"l8","7"},{"l64","7"},
 						{NULL,NULL}};
-static struct config_enum format_opts[]	= {{"0","0"},
+static const struct config_enum format_opts[]	= {{"0","0"},
 						{"gc","10"},{"gc3","10"},{"mf","11"},
 						{NULL,NULL}};
 #if defined(WITH_FILE_FORMAT) && (WITH_FILE_FORMAT == COB_FILE_IS_MF)
@@ -546,12 +546,12 @@ static char	varrel_dflt[8] = "0";	/* Default Variable length Relative file forma
 static char	fixrel_dflt[8] = "0";	/* Default Fixed length Relative file format */
 static char	varseq_dflt[8] = "0";	/* varseq0: Default Variable length Sequential file format */
 #endif
-static struct config_enum shareopts[]	= {{"none","0"},{"read","1"},{"all","2"},{"no","4"},{NULL,NULL}};
-static struct config_enum retryopts[]	= {{"none","0"},{"never","64"},{"forever","8"},{NULL,NULL}};
-static struct config_enum dict_opts[]	= {{"false","0"},{"true","1"},{"always","2"},
+static const struct config_enum shareopts[]	= {{"none","0"},{"read","1"},{"all","2"},{"no","4"},{NULL,NULL}};
+static const struct config_enum retryopts[]	= {{"none","0"},{"never","64"},{"forever","8"},{NULL,NULL}};
+static const struct config_enum dict_opts[]	= {{"false","0"},{"true","1"},{"always","2"},
 											{"no","0"},{"min","1"},{"max","2"},{NULL,NULL}};
-static struct config_enum dups_opts[]	= {{"default","0"},{"never","1"},{"always","2"}};
-static struct config_enum bdborder[]	= {
+static const struct config_enum dups_opts[]	= {{"default","0"},{"never","1"},{"always","2"}};
+static const struct config_enum bdborder[]	= {
 						{"native","0"},
 						{"big-endian","1"},{"little-endian","2"},
 						{"big_endian","1"},{"little_endian","2"},
