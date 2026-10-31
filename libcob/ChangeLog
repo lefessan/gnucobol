@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_exit_common), common.h, profiling.c: state of the
+	  profiling in the context
 	* common.h, fextfh.c (free_extfh_fcd, cob_extfh_open_ctx,
 	  update_key_from_fcd): state of the external file handler in the
 	  context
