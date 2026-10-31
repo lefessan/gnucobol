@@ -668,7 +668,7 @@ putNum(char *data, int pos, int len, int val)
 	memcpy(data+pos,wrk,len);
 }
 
-static short daysinmonth[] = {
+static const short daysinmonth[] = {
 	31, 28, 31, 30, 31, 30,
 	31, 31, 30, 31, 30, 31
 };
@@ -1932,7 +1932,7 @@ logSchemaEnvName(cob_context *ctx,
 static const char *condname[20] = {"0","EQ","LT","LE","GT","GE","NE","FI","LA",
 				"9","10","11","12","13","14","15","COUNT","NDUP","PDUP","19"};
 #endif
-static const char *condstr[9] = {"?","=","<","<=",">",">=","<>",">","<"};
+static const char *const condstr[9] = {"?","=","<","<=",">",">=","<>",">","<"};
 
 static int
 bld_where (struct db_state *db, struct file_xfd *fx, int idx, int cond, int pos, char *sbuf)
