@@ -332,6 +332,19 @@ Conséquences pour `cobc/codegen.c` :
   - environnement COBOL par contexte (surcharges `setenv` dans `ctx`) ;
   - verrous d'enregistrements : `F_OFD_SETLK` ou table de verrous
     interne (les verrous `fcntl` classiques sont par processus) ;
+  - relevés par ThreadSanitizer (banc multi-thread de T1.6, 8 tâches en
+    parallèle : calculs, chaînes, intrinsèques, fichiers séquentiels et
+    LMDB, DISPLAY) :
+    - `call.c` : `cob_set_cancel_ctx` écrit `p->module` dans la table
+      des appels partagée, alors que `module` est maintenant propre au
+      contexte (instance) : verrou sur la table, et le module ne doit
+      plus y être rangé (le rappel CANCEL prend déjà l'instance du
+      contexte courant) ;
+    - `common.c` : cache statique de la dernière heure dans
+      `set_cob_time_from_localtime`, et `localtime` → `localtime_r` /
+      `localtime_s` (ces fonctions ne prennent pas encore `ctx`) ;
+    - `flmdb.c` : tampons statiques (`db_buff`, lecture de
+      `/proc/partitions`) ;
   - code généré : caches `call_X` / `func_X` (écriture concurrente
     d'un pointeur, même valeur ; CANCEL les remet à NULL) et
     `cob_reference_count` (incréments atomiques) ;
@@ -428,6 +441,18 @@ Conséquences pour `cobc/codegen.c` :
    slot de l'unité, caches de résolution des `CALL` (`call_X`,
    `func_X`), `cob_module_path`, `cob_reference_count` (compteur de
    niveau processus pour le `dlclose` : à rendre atomique en T1.4).
+   **T1.6 commencé le 2026-11-01** : `cob_context_create` /
+   `cob_context_destroy` (DESIGN §3), test autofonce « CALL in from C,
+   several execution contexts » (isolation de WORKING-STORAGE, fichiers,
+   EXTERNAL ; fermeture des fichiers à la destruction). Banc multi-thread
+   hors suite (8 threads × 2000 à 20000 appels, un contexte par thread) :
+   résultats corrects ; sous ThreadSanitizer (libcob compilé à part avec
+   `-fsanitize=thread`, exécution sous `setarch -R` à cause de l'ASLR du
+   noyau), corrigés : utilisation après libération dans
+   `cob_exit_strings`, tampon statique de `cob_get_env_ctx` ; restent les
+   courses listées en T1.4. Reste à faire : intégrer le banc
+   multi-thread à la suite (test conditionné à pthread), script de
+   contrôle des statiques du code généré.
 5. **J5** : T1.7 — mesures et optimisations.
 
 ### Risques
