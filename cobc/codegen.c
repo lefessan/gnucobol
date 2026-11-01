@@ -756,6 +756,91 @@ output_local (const char *fmt, ...)
 	}
 }
 
+/* Instance of the compilation unit (TXSERIES-T1-DESIGN.md 4.2): the
+   mutable data of the programs is collected in the members of
+   struct cob_unit_instance, one instance per execution context; the
+   generated code reaches them through macros of the same names */
+
+struct unit_text {
+	struct unit_text	*next;
+	char			*text;
+};
+
+static struct unit_text	*unit_members = NULL;		/* shared data */
+static struct unit_text	*unit_members_last = NULL;
+static struct unit_text	*unit_inits = NULL;		/* initializations */
+static struct unit_text	*unit_inits_last = NULL;
+
+static void
+unit_text_add (struct unit_text **first, struct unit_text **last,
+	       const char *fmt, va_list ap)
+{
+	char			buff[COB_MEDIUM_BUFF];
+	struct unit_text	*t;
+
+	vsnprintf (buff, sizeof (buff), fmt, ap);
+	t = cobc_main_malloc (sizeof (struct unit_text));
+	t->text = cobc_main_strdup (buff);
+	if (*last) {
+		(*last)->next = t;
+	} else {
+		*first = t;
+	}
+	*last = t;
+}
+
+/* add a member declaration to the instance of the compilation unit */
+static void
+output_unit_member (const char *fmt, ...)
+{
+	va_list		ap;
+	va_start (ap, fmt);
+	unit_text_add (&unit_members, &unit_members_last, fmt, ap);
+	va_end (ap);
+}
+
+/* add a statement initializing a member when the instance is created */
+static void
+output_unit_init (const char *fmt, ...)
+{
+	va_list		ap;
+	va_start (ap, fmt);
+	unit_text_add (&unit_inits, &unit_inits_last, fmt, ap);
+	va_end (ap);
+}
+
+/* output the instance of the compilation unit, at the end of the main
+   include file (included at the beginning of the C file) */
+static void
+output_unit_instance (void)
+{
+	struct unit_text	*t;
+
+	output_storage ("\n/* Mutable data of the compilation unit, one instance per context */\n");
+	output_storage ("struct cob_unit_instance {\n");
+	output_storage ("\tint\tcob_unit_reserved;\n");
+	for (t = unit_members; t; t = t->next) {
+		output_storage ("\t%s\n", t->text);
+	}
+	output_storage ("};\n");
+	output_storage ("\n/* Slot of the compilation unit, set once for all contexts */\n");
+	output_storage ("static unsigned int\tcob_unit_slot = 0;\n");
+	output_storage ("\n/* Initialization of the instance of the compilation unit */\n");
+	output_storage ("static void\n");
+	output_storage ("cob_unit_init (cob_context *ctx, void *instance)\n");
+	output_storage ("{\n");
+	output_storage ("\tstruct cob_unit_instance\t*unit = instance;\n");
+	output_storage ("\tCOB_UNUSED (ctx);\n");
+	output_storage ("\tCOB_UNUSED (unit);\n");
+	for (t = unit_inits; t; t = t->next) {
+		output_storage ("\t%s\n", t->text);
+	}
+	output_storage ("}\n");
+
+	unit_members = unit_members_last = NULL;
+	unit_inits = unit_inits_last = NULL;
+}
+
 /* Field */
 
 static struct cb_field *
@@ -13409,8 +13494,10 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_local ("static cob_module\t*module = NULL;\n\n");
 	}
 
-	output_local ("/* Execution context and global variable pointer */\n");
+	output_local ("/* Execution context, instance of the compilation unit"
+		" and global variable pointer */\n");
 	output_local ("cob_context\t\t*ctx;\n");
+	output_local ("struct cob_unit_instance\t*unit;\n");
 	output_local ("cob_global\t\t*cob_glob_ptr;\n\n");
 
 
@@ -13579,6 +13666,9 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_line ("if (entry < 0) {");
 		output_line ("\tctx = cob_get_current_context ();");
 		output_line ("\tcob_glob_ptr = &ctx->glob;");
+		output_line ("\tunit = cob_unit_get (ctx, cob_unit_slot);");
+		output_line ("\tif (unit == NULL)	/* not active in this context */");
+		output_line ("\t\treturn 0;");
 		output_line ("\tif (entry == -20)");
 		output_line ("\t\tgoto P_clear_decimal;");
 		output_line ("\tgoto P_cancel;");
@@ -13586,8 +13676,16 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_newline ();
 	}
 
+	output_line ("/* Get context and instance of the compilation unit */");
+	output_line ("if (cob_unit_enter (&ctx, &cob_unit_slot, sizeof (struct cob_unit_instance),");
+	output_line ("                    cob_unit_init, (void **)&unit, %d))", cb_flag_implicit_init);
+	if (prog->prog_type == COB_MODULE_TYPE_FUNCTION) {
+		output_line ("\treturn NULL;");
+	} else {
+		output_line ("\treturn -1;");
+	}
 	output_line ("/* Check initialized, check module allocated, */");
-	output_line ("/* get context and global pointer, */");
+	output_line ("/* get global pointer, */");
 	output_line ("/* push module stack, save call parameter count */");
 	output_line ("if (cob_module_global_enter_ctx (&ctx, &module, &cob_glob_ptr, %d, entry, %sname_hash))",
 				      cb_flag_implicit_init, CB_PREFIX_STRING);
@@ -15668,6 +15766,7 @@ codegen_finalize (void)
 	output_collating_tables ();
 	output_string_cache ();
 	output_source_cache ();
+	output_unit_instance ();
 
 	/* Optimizer output */
 	{
