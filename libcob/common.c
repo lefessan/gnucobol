@@ -12575,7 +12575,8 @@ cob_alloc_attr (int type, int digits, int scale, int flags)
 char *
 cob_get_env_ctx (cob_context *ctx, const char *envname, char *envused)
 {
-	static char wrk[64];
+	char	wrk[64];	/* scratch buffer if 'envused' is NULL; was static,
+				   but the result is never in it */
 	char	*env;
 	unsigned char *uenvname;
 	int		i,j;
