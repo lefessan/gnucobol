@@ -865,6 +865,18 @@ unit_text_prepend (struct unit_text **first, struct unit_text **last,
 	}
 }
 
+/* whether the list contains the text */
+static int
+unit_text_find (const struct unit_text *t, const char *text)
+{
+	for (; t; t = t->next) {
+		if (!strcmp (t->text, text)) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
 /* name of the sub-structure of a program in the instance: as for the
    functions, contained programs may have the same name, the C name then
    includes toplev_count */
@@ -15468,9 +15480,9 @@ output_entry_function (struct cb_program *prog, cb_tree entry,
 	struct cb_field		*f1;
 	struct cb_field		*f2;
 	const char		*s;
-	const char		*s2;
 	const char		*s_prefix;
 	const char		*s_type[MAX_CALL_FIELD_PARAMS];
+	char			sticky_prefix[COB_MINI_BUFF];
 	cob_u32_t		parmnum;
 	cob_u32_t		n;
 	int			sticky_ids[MAX_CALL_FIELD_PARAMS] = { 0 };
@@ -15568,23 +15580,35 @@ output_entry_function (struct cb_program *prog, cb_tree entry,
 	  have the information as to possible ENTRY clauses.
 	*/
 
-	/* Sticky linkage parameters */
+	/* Sticky linkage parameters: kept in the instance (member of the
+	   program, accessed through a macro in the program itself) */
+	if (cb_sticky_linkage && parameter_list) {
+		snprintf (sticky_prefix, sizeof (sticky_prefix),
+			"unit->%s.cob_parm_", unit_prog_name (prog));
+		output_line ("cob_context\t*ctx;");
+		output_line ("struct cob_unit_instance\t*unit;");
+		for (l = parameter_list; l; l = CB_CHAIN (l)) {
+			char	name[COB_MINI_BUFF];
+			snprintf (name, sizeof (name), "cob_parm_%d",
+				cb_code_field (CB_VALUE (l))->id);
+			if (!unit_text_find (prog_names, name)) {
+				output_prog_member (name, "cob_u8_t\t*%s;", name);
+			}
+		}
+	}
 	if (cb_sticky_linkage && using_list) {
 		for (l = using_list, parmnum = 0; l; l = CB_CHAIN (l), parmnum++) {
 			f = cb_code_field (CB_VALUE (l));
 			sticky_ids[parmnum] = f->id;
 			if (CB_PURPOSE_INT (l) == CB_CALL_BY_VALUE) {
 				s = try_get_by_value_parameter_type (f->usage, l);
-				if (f->usage == CB_USAGE_FP_BIN128
-				 || f->usage == CB_USAGE_FP_DEC128) {
-					s2 = "{{0, 0}}";
-				} else {
-					s2 = "0";
-				}
-
 				if (s) {
-					output_line ("static %s\tcob_parm_l_%d = %s;",
-						s, f->id, s2);
+					char	name[COB_MINI_BUFF];
+					snprintf (name, sizeof (name), "cob_parm_l_%d", f->id);
+					if (!unit_text_find (prog_names, name)) {
+						/* the instance is zeroed at its creation */
+						output_prog_member (name, "%s\t%s;", s, name);
+					}
 					sticky_nonp[parmnum] = 1;
 				}
 			}
@@ -15596,15 +15620,24 @@ output_entry_function (struct cb_program *prog, cb_tree entry,
 	   See comment in typeck.c (cb_build_identifier), too. */
 
 	/* Sticky linkage set up */
+	if (cb_sticky_linkage && parameter_list) {
+		output_line ("/* Get context and instance of the compilation unit */");
+		output_line ("if (cob_unit_enter (&ctx, &cob_unit_slot, sizeof (struct cob_unit_instance),");
+		output_line ("                    cob_unit_init, (void **)&unit, %d))", cb_flag_implicit_init);
+		if (prog->flag_void) {
+			output_line ("\treturn;");
+		} else {
+			output_line ("\treturn -1;");
+		}
+	}
 	if (cb_sticky_linkage && using_list) {
 		if ((parmnum = cb_list_length(using_list)) > 1) {
-			output_line (" cob_global *cob_glob_ptr = cob_get_global_ptr();");
 			parmnum = 0;
-			output_line ("if (cob_glob_ptr->cob_call_name_hash != 0x%X)",
+			output_line ("if (ctx->glob.cob_call_name_hash != 0x%X)",
 									cob_get_name_hash (prog->orig_program_id));
-			output_line ("    cob_glob_ptr->cob_call_params = %u;", cb_list_length(using_list));
+			output_line ("    ctx->glob.cob_call_params = %u;", cb_list_length(using_list));
 			output_line ("/* Set the parameter list */");
-			output_line ("switch (cob_glob_ptr->cob_call_params) {");
+			output_line ("switch (ctx->glob.cob_call_params) {");
 			for (l = using_list; l; l = CB_CHAIN (l), parmnum++) {
 				if (parmnum == 0) {
 					continue;
@@ -15612,14 +15645,14 @@ output_entry_function (struct cb_program *prog, cb_tree entry,
 				output_line ("case %u:", parmnum);
 				for (n = 0; n < parmnum; ++n) {
 					if (sticky_nonp[n]) {
-						output_line ("\tcob_parm_l_%d = %s%d;",
+						output_line ("\t%sl_%d = %s%d;", sticky_prefix,
 							sticky_ids[n], CB_PREFIX_BASE,
 							sticky_ids[n]);
-						output_line ("\tcob_parm_%d = (cob_u8_ptr)&cob_parm_l_%d;",
-							sticky_ids[n],
-							sticky_ids[n]);
+						output_line ("\t%s%d = (cob_u8_ptr)&%sl_%d;",
+							sticky_prefix, sticky_ids[n],
+							sticky_prefix, sticky_ids[n]);
 					} else {
-						output_line ("\tcob_parm_%d = %s%d;",
+						output_line ("\t%s%d = %s%d;", sticky_prefix,
 							sticky_ids[n], CB_PREFIX_BASE,
 							sticky_ids[n]);
 					}
@@ -15628,18 +15661,22 @@ output_entry_function (struct cb_program *prog, cb_tree entry,
 			}
 			output_line ("default:");
 		}
-		for (n = 0; n < parmnum; ++n) {
-			if (sticky_nonp[n]) {
-				output_line ("\tcob_parm_l_%d = %s%d;",
-					sticky_ids[n], CB_PREFIX_BASE,
-					sticky_ids[n]);
-				output_line ("\tcob_parm_%d = (cob_u8_ptr)&cob_parm_l_%d;",
-					sticky_ids[n],
-					sticky_ids[n]);
-			} else {
-				output_line ("\tcob_parm_%d = %s%d;",
-					sticky_ids[n], CB_PREFIX_BASE,
-					sticky_ids[n]);
+		{
+			/* indented only in the default case of the switch */
+			const char	*ind = cb_list_length (using_list) > 1 ? "\t" : "";
+			for (n = 0; n < parmnum; ++n) {
+				if (sticky_nonp[n]) {
+					output_line ("%s%sl_%d = %s%d;", ind, sticky_prefix,
+						sticky_ids[n], CB_PREFIX_BASE,
+						sticky_ids[n]);
+					output_line ("%s%s%d = (cob_u8_ptr)&%sl_%d;", ind,
+						sticky_prefix, sticky_ids[n],
+						sticky_prefix, sticky_ids[n]);
+				} else {
+					output_line ("%s%s%d = %s%d;", ind, sticky_prefix,
+						sticky_ids[n], CB_PREFIX_BASE,
+						sticky_ids[n]);
+				}
 			}
 		}
 		if (cb_list_length(using_list) > 1) {
@@ -15649,7 +15686,7 @@ output_entry_function (struct cb_program *prog, cb_tree entry,
 	}
 
 	if (cb_sticky_linkage) {
-		s_prefix = "cob_parm_";
+		s_prefix = sticky_prefix;
 	} else {
 		s_prefix = CB_PREFIX_BASE;
 	}
@@ -15813,12 +15850,6 @@ output_function_prototypes (struct cb_program *prog)
 		if (!cp->flag_chained) {
 			for (l = cp->parameter_list; l; l = CB_CHAIN (l)) {
 				output (", cob_u8_t *");
-				if (cb_sticky_linkage) {
-					/* TODO (T1.5): set in the entry function, before
-					   the instance is known, stays static for now */
-					output_storage ("static cob_u8_t\t\t\t*cob_parm_%d = NULL;\n",
-							cb_code_field (CB_VALUE (l))->id);
-				}
 			}
 		}
 

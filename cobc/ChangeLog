@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (unit_text_prepend, output_entry_function,
+	  output_function_prototypes): sticky linkage parameters in the
+	  instance
 	* codegen.c (output_low_value, output_high_value, output_quote,
 	  output_space, output_zero, output_colseq_table_field, ...), tree.c
 	  (cb_init_parse_constants): figurative constants and collating table
