@@ -768,6 +768,8 @@ struct unit_text {
 
 static struct unit_text	*unit_members = NULL;		/* shared data */
 static struct unit_text	*unit_members_last = NULL;
+static struct unit_text	*unit_names = NULL;		/* their names */
+static struct unit_text	*unit_names_last = NULL;
 static struct unit_text	*unit_inits = NULL;		/* initializations */
 static struct unit_text	*unit_inits_last = NULL;
 
@@ -789,14 +791,20 @@ unit_text_add (struct unit_text **first, struct unit_text **last,
 	*last = t;
 }
 
-/* add a member declaration to the instance of the compilation unit */
+static void unit_text_add_str (struct unit_text **, struct unit_text **,
+			       const char *, ...);
+
+/* add the member 'name', shared by the programs of the compilation unit,
+   to the instance (declaration without 'static' given by fmt); its
+   access macro is defined after the structure */
 static void
-output_unit_member (const char *fmt, ...)
+output_unit_member (const char *name, const char *fmt, ...)
 {
 	va_list		ap;
 	va_start (ap, fmt);
 	unit_text_add (&unit_members, &unit_members_last, fmt, ap);
 	va_end (ap);
+	unit_text_add_str (&unit_names, &unit_names_last, "%s", name);
 }
 
 /* add a statement initializing a member when the instance is created */
@@ -838,6 +846,39 @@ unit_text_add_str (struct unit_text **first, struct unit_text **last,
 	va_end (ap);
 }
 
+static void
+unit_text_prepend (struct unit_text **first, struct unit_text **last,
+		   const char *fmt, ...)
+{
+	struct unit_text	*f = *first, *l = *last;
+	va_list		ap;
+
+	*first = *last = NULL;
+	va_start (ap, fmt);
+	unit_text_add (first, last, fmt, ap);
+	va_end (ap);
+	if (f) {
+		(*first)->next = f;
+		*last = l;
+	}
+}
+
+/* name of the sub-structure of a program in the instance: as for the
+   functions, contained programs may have the same name, the C name then
+   includes toplev_count */
+static const char *
+unit_prog_name (struct cb_program *prog)
+{
+	static char	buff[COB_MINI_BUFF];
+	if (prog->prog_type != COB_MODULE_TYPE_FUNCTION
+	 && prog->nested_level) {
+		snprintf (buff, sizeof (buff), "p_%s_%d", prog->program_id, prog->toplev_count);
+	} else {
+		snprintf (buff, sizeof (buff), "p_%s", prog->program_id);
+	}
+	return buff;
+}
+
 /* add the member 'name' of the current program to the instance
    (declaration without 'static' given by fmt), and its access macro */
 static void
@@ -848,8 +889,8 @@ output_prog_member (const char *name, const char *fmt, ...)
 	unit_text_add (&prog_members, &prog_members_last, fmt, ap);
 	va_end (ap);
 	unit_text_add_str (&prog_names, &prog_names_last, "%s", name);
-	output_local ("#define %s\t(unit->p_%s.%s)\n",
-		name, current_prog->program_id, name);
+	output_local ("#define %s\t(unit->%s.%s)\n",
+		name, unit_prog_name (current_prog), name);
 }
 
 /* add a statement initializing a member of the current program */
@@ -890,7 +931,7 @@ output_unit_prog_end (struct cb_program *prog)
 
 	if (prog_members) {
 		struct unit_prog	*up = cobc_main_malloc (sizeof (struct unit_prog));
-		up->id = cobc_main_strdup (prog->program_id);
+		up->id = cobc_main_strdup (unit_prog_name (prog));
 		up->members = prog_members;
 		if (unit_progs_last) {
 			unit_progs_last->next = up;
@@ -920,14 +961,20 @@ output_unit_instance (void)
 	{
 		struct unit_prog	*up;
 		for (up = unit_progs; up; up = up->next) {
-			output_storage ("\tstruct {\t/* data of program %s */\n", up->id);
+			output_storage ("\tstruct {\n");
 			for (t = up->members; t; t = t->next) {
 				output_storage ("\t\t%s\n", t->text);
 			}
-			output_storage ("\t} p_%s;\n", up->id);
+			output_storage ("\t} %s;\t/* data of a program */\n", up->id);
 		}
 	}
 	output_storage ("};\n");
+	if (unit_names) {
+		output_storage ("\n/* Access to the shared data in the instance */\n");
+		for (t = unit_names; t; t = t->next) {
+			output_storage ("#define %s\t(unit->%s)\n", t->text, t->text);
+		}
+	}
 	output_storage ("\n/* Slot of the compilation unit, set once for all contexts */\n");
 	output_storage ("static unsigned int\tcob_unit_slot = 0;\n");
 	output_storage ("\n/* Initialization of the instance of the compilation unit */\n");
@@ -943,6 +990,7 @@ output_unit_instance (void)
 	output_storage ("}\n");
 
 	unit_members = unit_members_last = NULL;
+	unit_names = unit_names_last = NULL;
 	unit_inits = unit_inits_last = NULL;
 	unit_progs = unit_progs_last = NULL;
 }
@@ -2340,6 +2388,28 @@ emit_comma ()
 	}
 }
 
+/* index of the current entry of the symbol table, and its address
+   expression: the table emitted is a constant template with NULL
+   addresses, the table of the instance gets the addresses at the
+   initialization of the program (output_prog_init) */
+static int	sym_cur = 0;
+
+static void
+emit_sym_adrs (const char *fmt, ...)
+{
+	char	buff[COB_SMALL_BUFF];
+	va_list	ap;
+
+	output (",NULL");
+	if (output_target) {
+		va_start (ap, fmt);
+		vsnprintf (buff, sizeof (buff), fmt, ap);
+		va_end (ap);
+		output_prog_init ("%s_sym_tab[%d].adrs = (void *)(%s);",
+			current_prog->program_id, sym_cur, buff);
+	}
+}
+
 static void
 emit_one_sym (struct cb_field *f)
 {
@@ -2352,6 +2422,7 @@ emit_one_sym (struct cb_field *f)
 	if (!output_target)
 		f->symtab = num_symtab++;
 	emit_comma ();
+	sym_cur = f->symtab;
 	output ("/*%4d*/ {",f->symtab);
 	if (f->flag_indexed_by
 	|| (f->flag_external && f->level == 1)) {
@@ -2377,51 +2448,51 @@ emit_one_sym (struct cb_field *f)
 		offset = 0;
 	} else
 	if (fp->flag_item_based) {
-		output (",&%s%d", CB_PREFIX_BASE, fp->id);
+		emit_sym_adrs ("&%s%d", CB_PREFIX_BASE, fp->id);
 	} else
 	if (fp->storage == CB_STORAGE_LINKAGE) {
 		if (f->flag_any_numeric
 		 || f->flag_any_length) {
-			output (",&%s%d", CB_PREFIX_FIELD, f->id);
+			emit_sym_adrs ("&%s%d", CB_PREFIX_FIELD, f->id);
 			offset = 0;
 			is_indirect = SYM_ADRS_FIELD;
 		} else
 		if (f->flag_cob_field) {
-			output (",&%s%d.data", CB_PREFIX_FIELD, f->id);
+			emit_sym_adrs ("&%s%d.data", CB_PREFIX_FIELD, f->id);
 			offset = 0;
 		} else
 		if (fp->flag_cob_field) {
-			output (",&%s%d.data", CB_PREFIX_FIELD, fp->id);
+			emit_sym_adrs ("&%s%d.data", CB_PREFIX_FIELD, fp->id);
 		} else {
-			output (",&%s%d", CB_PREFIX_BASE, fp->id);
+			emit_sym_adrs ("&%s%d", CB_PREFIX_BASE, fp->id);
 		}
 	} else 
 	if (fp->storage == CB_STORAGE_LOCAL) {
-		output (",&cob_local_save");
+		emit_sym_adrs ("&cob_local_save");
 	} else 
 	if (fp->flag_external) {
-		output (",&%s%d", CB_PREFIX_BASE, fp->id);
+		emit_sym_adrs ("&%s%d", CB_PREFIX_BASE, fp->id);
 	} else 
 	if (f->flag_cob_field) {
-		output (",&%s%d.data", CB_PREFIX_FIELD, f->id);
+		emit_sym_adrs ("&%s%d.data", CB_PREFIX_FIELD, f->id);
 		offset = 0;
 	} else 
 	if (fp->flag_cob_field) {
-		output (",&%s%d.data", CB_PREFIX_FIELD, fp->id);
+		emit_sym_adrs ("&%s%d.data", CB_PREFIX_FIELD, fp->id);
 	} else
 	if (f->flag_indexed_by
 	 || f->flag_local) {
-		output (",&%s%d", CB_PREFIX_BASE, f->id);
+		emit_sym_adrs ("&%s%d", CB_PREFIX_BASE, f->id);
 		offset = 0;
 		is_indirect = SYM_ADRS_DATA;
 	} else
 	if (f->children
 	 && f->children->flag_cob_field
 	 && f->children->offset == 0) {
-		output (",&%s%d.data", CB_PREFIX_FIELD, f->children->id);
+		emit_sym_adrs ("&%s%d.data", CB_PREFIX_FIELD, f->children->id);
 	} else {
 		is_indirect = SYM_ADRS_DATA;
-		output (",%s%d", CB_PREFIX_BASE, fp->id);
+		emit_sym_adrs ("%s%d", CB_PREFIX_BASE, fp->id);
 	}
 	output (",");
 	output_attr (cb_build_field_reference (f, NULL));
@@ -2546,11 +2617,12 @@ emit_mod_symtab (struct cb_program *prog)
 			sym_storage = CB_STORAGE_FILE;
 			output_line ("/* FILE */");
 		}
+		sym_cur = num_symtab;
 		output ("/*%4d*/ {",num_symtab++);
 		output ("%4d",0);
 		output (",%4d",fl->record->sister?fl->record->sister->symtab:0);
 		output (",\"%s\"",wrk);
-		output (",&%s%s",CB_PREFIX_FILE, fl->cname);
+		emit_sym_adrs ("&%s%s",CB_PREFIX_FILE, fl->cname);
 		output (",NULL,0,1,1,\t\t00,%d,0,0,0,0,0,0,0,0",CB_STORAGE_FILE);
 		output ("}");
 		sym_comma = 1;
@@ -3250,12 +3322,21 @@ output_local_fields (struct cb_program *prog)
 		max = num_symtab;
 		output_target = svout;
 		clear_mod_symtab (prog);
-		output_line ("/* Symbol table for %s */",prog->orig_program_id);
-		output_line ("static cob_symbol %s_sym_tab [] = {",prog->program_id);
+		output_line ("/* Symbol table for %s (template, the addresses are set in the instance) */",
+			prog->orig_program_id);
+		output_line ("static const cob_symbol %s_sym_tab_tpl [] = {",prog->program_id);
 		emit_mod_symtab (prog);
 		emit_comma ();
 		output_line ("         {%4d,%4d,NULL,NULL,NULL,0,0,0,0}",0,0);
 		output_line ("};");
+		{
+			char	name[COB_MINI_BUFF];
+			snprintf (name, sizeof (name), "%s_sym_tab", prog->program_id);
+			output_prog_member (name, "cob_symbol\t%s[%d];", name, max + 1);
+			/* first in cob_unit_prog_init: before the addresses */
+			unit_text_prepend (&prog_inits, &prog_inits_last,
+				"memcpy (%s, %s_tpl, sizeof (%s_tpl));", name, name, name);
+		}
 		output_line ("static unsigned int %s_num_sym = %d;",prog->program_id,max);
 		output_newline ();
 	}
@@ -10884,31 +10965,35 @@ output_stmt (cb_tree x)
 static int
 output_file_allocation (struct cb_file *f)
 {
+	char	name[COB_MINI_BUFF], recnum[COB_MINI_BUFF], recfld[COB_MINI_BUFF];
+
+	snprintf (name, sizeof (name), "%s%s", CB_PREFIX_FILE, f->cname);
+	snprintf (recnum, sizeof (recnum), "%s%s_recnum", CB_PREFIX_SEQUENCE, f->cname);
+	snprintf (recfld, sizeof (recfld), "%s%s_recnum", CB_PREFIX_FIELD, f->cname);
 	if (f->flag_global) {
-		output_storage ("\n/* Global file %s */\n", f->name);
-		output_storage ("static cob_file\t\t*%s%s = NULL;\n",CB_PREFIX_FILE, f->cname);
+		/* shared by the programs of the compilation unit */
+		output_unit_member (name, "cob_file\t\t*%s;\t/* Global file %s */",
+			name, f->name);
 		if (f->organization == COB_ORG_RELATIVE
 		 && f->key == NULL) {
 			int i = lookup_attr (COB_TYPE_NUMERIC_DISPLAY, 0, 0, 0, NULL, 0);
-			output_storage ("static unsigned char\t%s%s_recnum[12+1] = \"000000000000\";\n",
-				CB_PREFIX_SEQUENCE, f->cname);
-			output_storage ("static cob_field %s%s_recnum = { 12, (cob_u8_ptr)%s%s_recnum, &%s%d };\n",
-				CB_PREFIX_FIELD, f->cname,
-				CB_PREFIX_SEQUENCE, f->cname,
-				CB_PREFIX_ATTR, i);
+			output_unit_member (recnum, "unsigned char\t%s[12+1];", recnum);
+			output_unit_init ("memcpy (%s, \"000000000000\", 12+1);", recnum);
+			output_unit_member (recfld, "cob_field\t%s;", recfld);
+			output_unit_init ("%s.size = 12; %s.data = (cob_u8_ptr)%s; %s.attr = &%s%d;",
+				recfld, recfld, recnum, recfld, CB_PREFIX_ATTR, i);
 		}
 	} else {
 		output_local ("\n/* File %s */\n", f->name);
-		output_local ("static cob_file\t\t*%s%s = NULL;\n",CB_PREFIX_FILE, f->cname);
+		output_prog_member (name, "cob_file\t\t*%s;", name);
 		if (f->organization == COB_ORG_RELATIVE
 		 && f->key == NULL) {
 			int i = lookup_attr (COB_TYPE_NUMERIC_DISPLAY, 0, 0, 0, NULL, 0);
-			output_local ("static unsigned char\t%s%s_recnum[12+1] = \"000000000000\";\n",
-				CB_PREFIX_SEQUENCE, f->cname);
-			output_local ("static cob_field %s%s_recnum = { 12, (cob_u8_ptr)%s%s_recnum, &%s%d };\n",
-				CB_PREFIX_FIELD, f->cname,
-				CB_PREFIX_SEQUENCE, f->cname,
-				CB_PREFIX_ATTR, i);
+			output_prog_member (recnum, "unsigned char\t%s[12+1];", recnum);
+			output_prog_init ("memcpy (%s, \"000000000000\", 12+1);", recnum);
+			output_prog_member (recfld, "cob_field\t%s;", recfld);
+			output_prog_init ("%s.size = 12; %s.data = (cob_u8_ptr)%s; %s.attr = &%s%d;",
+				recfld, recfld, recnum, recfld, CB_PREFIX_ATTR, i);
 		}
 	}
 

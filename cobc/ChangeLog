@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (unit_text_add, output_unit_member, unit_text_add_str,
+	  output_prog_member, output_unit_prog_end, output_unit_instance, ...):
+	  files and symbol table of the programs in the instance
 	* codegen.c (output_unit_init, output_unit_instance,
 	  output_internal_function, codegen_internal): data of each program in
 	  the instance, first family last_b_*
