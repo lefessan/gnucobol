@@ -233,9 +233,16 @@ dynamique (deux ABI à mémoriser).
    `cob_unit_enter (&ctx, &cob_unit_slot, sizeof (struct
    cob_unit_instance), cob_unit_init, (void **)&unit, auto_init)` ;
    chemin rapide : `ctx->units[slot]` déjà alloué.
-5. **Reste `static`** : données `const` ; caches des cibles de CALL
-   résolues (`call_X`, `func_X` : même valeur dans tous les contextes) ;
-   table des programmes imbriqués ; `cob_module_path` ; le slot.
+5. **Reste `static`** : données `const` (dont les constantes
+   figuratives `cob_all_*` et les champs des tables de collation, jamais
+   écrits) ; caches des cibles de CALL résolues (`call_X`, `func_X` :
+   même valeur dans tous les contextes) ; table des programmes
+   imbriqués ; `cob_module_path` ; le slot ; `cob_reference_count`
+   (nombre de programmes initialisés de l'unité, tous contextes
+   confondus, qui empêche le `dlclose` : niveau processus, atomique en
+   T1.4). Les paramètres de `-fsticky-linkage` (`cob_parm_N`) vont dans
+   l'instance : la fonction d'entrée, qui les positionne, obtient
+   l'instance elle-même par `cob_unit_enter`.
 6. **RECURSIVE / LOCAL-STORAGE** : leurs variables locales non statiques
    ne changent pas ; leur WS va dans l'instance.
 7. **CANCEL** : s'applique à l'instance du contexte courant (recherche
