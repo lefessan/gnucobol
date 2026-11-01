@@ -945,6 +945,200 @@ output_unit_prog_end (struct cb_program *prog)
 	prog_inits = prog_inits_last = NULL;
 }
 
+/* Conversion of a static declaration with an initializer into a member
+   of the instance initialized by assignments (the generated code is C89:
+   no non-constant aggregate initializer): the text of the declaration is
+   captured, then split into its values, each one assigned to the member
+   of the same position */
+
+static FILE	*capture_fp = NULL;
+static FILE	*capture_saved_target = NULL;
+static FILE	*capture_saved_local = NULL;
+
+static void
+capture_begin (void)
+{
+	capture_fp = tmpfile ();
+	if (capture_fp == NULL) {
+		cobc_err_msg (_("cannot create temporary file"));
+		COBC_ABORT ();
+	}
+	capture_saved_target = output_target;
+	capture_saved_local = cb_local_file;
+	output_target = capture_fp;
+	cb_local_file = capture_fp;
+}
+
+static char *
+capture_end (void)
+{
+	long	len;
+	char	*buff;
+
+	fflush (capture_fp);
+	len = ftell (capture_fp);
+	rewind (capture_fp);
+	buff = cobc_main_malloc ((size_t)len + 1);
+	if (len > 0 && fread (buff, 1, (size_t)len, capture_fp) != (size_t)len) {
+		cobc_err_msg (_("cannot read temporary file"));
+		COBC_ABORT ();
+	}
+	buff[len] = 0;
+	fclose (capture_fp);
+	capture_fp = NULL;
+	output_target = capture_saved_target;
+	cb_local_file = capture_saved_local;
+	return buff;
+}
+
+/* members of the structures initialized in the generated code, in the
+   order of their declaration (libcob/common.h) */
+static const char *const members_cob_field[] = {
+	"size", "data", "attr", NULL
+};
+static const char *const members_report_field[] = {
+	"next", "f", "from", "sum", "control", "litval", "litlen", "flags",
+	"line", "column", "step_count", "next_group_line", "level",
+	"group_indicate", "suppress", "present_now", NULL
+};
+static const char *const members_report_line[] = {
+	"sister", "child", "fields", "control", "f", "use_decl", "flags",
+	"line", "step_count", "next_group_line", "report_flags", "suppress",
+	"use_source", "lineid", NULL
+};
+static const char *const members_report_control_ref[] = {
+	"next", "ref_line", NULL
+};
+static const char *const members_report_control[] = {
+	"next", "name", "f", "val", "sf", "control_ref", "sequence",
+	"data_change", "has_heading", "has_footing", "suppress", NULL
+};
+static const char *const members_report_sum_ctr[] = {
+	"next", "name", "fsum", "counter", "f", "control", "reset_final",
+	"control_final", "subtotal", "crossfoot", "computed", NULL
+};
+static const char *const members_report[] = {
+	"report_ver", "report_name", "next", "go_label", "report_file",
+	"page_counter", "line_counter", "first_line", "heading_final",
+	"footing_final", "controls", "sum_counters", "sum_exec", "def_lines",
+	"def_cols", "def_heading", "def_first_detail", "def_last_control",
+	"def_last_detail", "def_footing", "curr_page", "curr_line",
+	"curr_cols", "curr_status", "next_value", "control_final", "global",
+	"first_detail", "in_page_footing", "in_page_heading",
+	"first_generate", "initiate_done", "next_line", "next_line_plus",
+	"next_page", "next_just_set", "in_report_footing", "incr_line",
+	"foot_next_page", "code_is_present", "incr_page", "unused",
+	"code_len", "code_is", "exec_source", "num_controls", NULL
+};
+
+/* remove the comments from 's' (in place), outside of strings */
+static void
+strip_c_comments (char *s)
+{
+	char	*d = s;
+	char	quote = 0;
+
+	while (*s) {
+		if (quote) {
+			if (*s == '\\' && s[1]) {
+				*d++ = *s++;
+			} else if (*s == quote) {
+				quote = 0;
+			}
+			*d++ = *s++;
+		} else if (*s == '"' || *s == '\'') {
+			quote = *s;
+			*d++ = *s++;
+		} else if (s[0] == '/' && s[1] == '*') {
+			char	*e = strstr (s + 2, "*/");
+			s = e ? e + 2 : s + strlen (s);
+		} else {
+			*d++ = *s++;
+		}
+	}
+	*d = 0;
+}
+
+/* assign the values of the initializer 'init' ("{v1, v2, ...}") to the
+   members of 'name', recursively for nested structures (cob_field) */
+static void
+output_prog_struct_init (const char *name, char *init,
+			 const char *const *members)
+{
+	char		*p, *start;
+	int		depth = 0, idx = 0;
+	char		quote = 0;
+
+	while (*init == ' ' || *init == '\t' || *init == '\n') {
+		init++;
+	}
+	if (*init != '{') {
+		cobc_err_msg ("unexpected initializer for %s: %s", name, init);
+		COBC_ABORT ();
+	}
+	start = ++init;
+	for (p = init; ; p++) {
+		if (quote) {
+			if (*p == '\\' && p[1]) {
+				p++;
+			} else if (*p == quote) {
+				quote = 0;
+			}
+			continue;
+		}
+		if (*p == '"' || *p == '\'') {
+			quote = *p;
+		} else if (*p == '{' || *p == '(') {
+			depth++;
+		} else if ((*p == '}' || *p == ')') && depth > 0) {
+			depth--;
+		} else if ((*p == ',' && depth == 0) || (*p == '}' && depth == 0) || !*p) {
+			const char	saved = *p;
+			char		*v = start, *e = p;
+			*p = 0;
+			while (*v == ' ' || *v == '\t' || *v == '\n') v++;
+			while (e > v && (e[-1] == ' ' || e[-1] == '\t' || e[-1] == '\n')) *--e = 0;
+			if (*v) {
+				if (members[idx] == NULL) {
+					cobc_err_msg ("too many values for %s", name);
+					COBC_ABORT ();
+				}
+				if (*v == '{') {
+					char	sub[COB_SMALL_BUFF];
+					snprintf (sub, sizeof (sub), "%s.%s", name, members[idx]);
+					output_prog_struct_init (sub, v, members_cob_field);
+				} else if (strcmp (v, "NULL") && strcmp (v, "0")
+					&& strcmp (v, "00") && strcmp (v, "0x0")) {
+					output_prog_init ("%s.%s = %s;", name, members[idx], v);
+				}
+			}
+			idx++;
+			if (saved != ',') {
+				break;
+			}
+			start = p + 1;
+		}
+	}
+}
+
+/* the captured text 'decl' ("static TYPE NAME = {...};") becomes the
+   member NAME of type 'type' of the instance of the program */
+static void
+output_prog_struct (const char *type, const char *name, char *decl,
+		    const char *const *members)
+{
+	char	*init;
+
+	strip_c_comments (decl);
+	init = strchr (decl, '=');
+	if (init == NULL) {
+		cobc_err_msg ("unexpected declaration for %s: %s", name, decl);
+		COBC_ABORT ();
+	}
+	output_prog_member (name, "%s\t%s;", type, name);
+	output_prog_struct_init (name, init + 1, members);
+}
+
 /* output the instance of the compilation unit, at the end of the main
    include file (included at the beginning of the C file) */
 static void
@@ -11777,6 +11971,7 @@ output_report_control (struct cb_report *p, int id, cb_tree ctl, cb_tree nx)
 				} else if(f->report_flag & COB_REPORT_CONTROL_FOOTING) {
 					output_local("/* CONTROL FOOTING: %s */\n",s->name);
 				}
+				capture_begin ();
 				output_local("static cob_report_control_ref %s%d = {",
 						CB_PREFIX_REPORT_REF,p->line_ids[i]->id);
 				if(prvid == 0) {
@@ -11786,10 +11981,17 @@ output_report_control (struct cb_report *p, int id, cb_tree ctl, cb_tree nx)
 				}
 				output_local("&%s%d",CB_PREFIX_REPORT_LINE,p->line_ids[i]->id);
 				output_local("};\n");
+				{
+					char	*decl = capture_end ();
+					char	name[COB_MINI_BUFF];
+					snprintf (name, sizeof (name), "%s%d", CB_PREFIX_REPORT_REF, p->line_ids[i]->id);
+					output_prog_struct ("cob_report_control_ref", name, decl, members_report_control_ref);
+				}
 				prvid = p->line_ids[i]->id;
 			}
 		}
 	}
+	capture_begin ();
 	output_local ("static cob_report_control   %s%d_%d\t= {", CB_PREFIX_REPORT_CONTROL,id,s->id);
 	if(nx) {
 		output_local("&%s%d_%d,",CB_PREFIX_REPORT_CONTROL,id,cb_code_field(CB_VALUE(nx))->id);
@@ -11826,6 +12028,12 @@ output_report_control (struct cb_report *p, int id, cb_tree ctl, cb_tree nx)
 	}
 	output_local(",%d,0,0,0,0",seq);
 	output_local("};\n");
+	{
+		char	*decl = capture_end ();
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "%s%d_%d", CB_PREFIX_REPORT_CONTROL, id, s->id);
+		output_prog_struct ("cob_report_control", name, decl, members_report_control);
+	}
 }
 
 static void
@@ -11887,6 +12095,7 @@ output_report_one_field (struct cb_report *r, struct cb_field *f, int idx, int o
 			}
 		}
 
+		capture_begin ();
 		output_local ("static cob_report_field %s\t= {%s,", field_name, report_field_name);
 		if (idx > 1)
 			output_local ("&%s%d_%d,", CB_PREFIX_FIELD, f->id, idx);
@@ -12015,6 +12224,12 @@ output_report_one_field (struct cb_report *r, struct cb_field *f, int idx, int o
 		output_local (",%d", f->level);
 		output_local (",0,0,0"); /* reportio flags: group_indicate, suppress, present_now */
 		output_local ("};\n");
+		{
+			char	*decl = capture_end ();
+			char	name[COB_MINI_BUFF];
+			snprintf (name, sizeof (name), "%s", field_name);
+			output_prog_struct ("cob_report_field", name, decl, members_report_field);
+		}
 		if (idx > 0 && idx < occ) {
 			idx++;
 			sprintf (field_name, "%s%d", CB_PREFIX_REPORT_FIELD, ++report_field_id);
@@ -12257,6 +12472,7 @@ output_report_define_lines (int top, struct cb_report *r, struct cb_field *f, in
 			}
 		}
 	}
+	capture_begin ();
 	output_local ("static cob_report_line  %s%d\t= {", CB_PREFIX_REPORT_LINE, f->id);
 	if (n == NULL) {
 		output_local ("NULL,");
@@ -12284,6 +12500,12 @@ output_report_define_lines (int top, struct cb_report *r, struct cb_field *f, in
 	output_local (", %d", f->report_source_id);
 	output_local (",%5d", f->common.source_line);
 	output_local ("};\n");
+	{
+		char	*decl = capture_end ();
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "%s%d", CB_PREFIX_REPORT_LINE, f->id);
+		output_prog_struct ("cob_report_line", name, decl, members_report_line);
+	}
 }
 
 static int sum_prv = 0;
@@ -12403,6 +12625,7 @@ output_report_sum_counters (const int top, struct cb_field *f, struct cb_report 
 		}
 	}
 
+	capture_begin ();
 	output_local ("static cob_report_sum_ctr %s%d = {", CB_PREFIX_REPORT_SUM_CTR, ++sum_nxt);
 	if (sum_prv) {
 		output_local ("&%s%d,", CB_PREFIX_REPORT_SUM_CTR, sum_prv);
@@ -12451,6 +12674,12 @@ output_report_sum_counters (const int top, struct cb_field *f, struct cb_report 
 	}
 	output_local (",%d,%d,%d,%d", ctl_foot, sub_ttl, cross_foot, computed);
 	output_local ("};\n");
+	{
+		char	*decl = capture_end ();
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "%s%d", CB_PREFIX_REPORT_SUM_CTR, sum_nxt);
+		output_prog_struct ("cob_report_sum_ctr", name, decl, members_report_sum_ctr);
+	}
 	sum_prv = sum_nxt;
 }
 
@@ -12483,6 +12712,7 @@ output_report_definition (struct cb_report *p, struct cb_report *n)
 	}
 
 	output_local ("\n");
+	capture_begin ();
 	output_local ("static cob_report %s%s = {0x%X,\t",
 							CB_PREFIX_REPORT, p->cname, COB_REPORT_VERSION);
 	output_local ("\"%s\",\n\t\t", p->name);
@@ -12539,6 +12769,12 @@ output_report_definition (struct cb_report *p, struct cb_report *n)
 	output_local ("\t\t0,0,0,0,0,");
 	output_local ("%d,%d\n", p->control_final, p->global);
 	output_local ("};\n");
+	{
+		char	*decl = capture_end ();
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "%s%s", CB_PREFIX_REPORT, p->cname);
+		output_prog_struct ("cob_report", name, decl, members_report);
+	}
 }
 
 static void

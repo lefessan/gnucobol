@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_unit_prog_end, output_report_control,
+	  output_report_one_field, output_report_define_lines,
+	  output_report_sum_counters, output_report_definition): report
+	  structures in the instance
 	* codegen.c (output_globext_cache, output_internal_function,
 	  output_function_prototypes): EXTERNAL, BASED and LINKAGE pointers in
 	  the instance
