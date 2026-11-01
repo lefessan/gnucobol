@@ -3718,7 +3718,7 @@ static void
 output_low_value (void)
 {
 	if (gen_figurative & CB_NEED_LOW) {
-		output_local ("static cob_field cob_all_low\t= ");
+		output_local ("static const cob_field cob_all_low\t= ");
 		output_local ("{1, ");
 		output_local ("(cob_u8_ptr)\"\\x%02x\", ", current_prog->low_value);
 		output_local ("&cob_all_attr};");
@@ -3730,7 +3730,7 @@ static void
 output_high_value (void)
 {
 	if (gen_figurative & CB_NEED_HIGH) {
-		output_local ("static cob_field cob_all_high\t= ");
+		output_local ("static const cob_field cob_all_high\t= ");
 		output_local ("{1, ");
 		output_local ("(cob_u8_ptr)\"\\x%02x\", ", current_prog->high_value);
 		output_local ("&cob_all_attr};");
@@ -3742,7 +3742,7 @@ static void
 output_quote (void)
 {
 	if (gen_figurative & CB_NEED_QUOTE) {
-		output ("static cob_field cob_all_quote\t= ");
+		output ("static const cob_field cob_all_quote\t= ");
 		output ("{1, ");
 		if (cb_flag_apostrophe) {
 			output ("(cob_u8_ptr)\"'\", ");
@@ -3758,7 +3758,7 @@ static void
 output_space (void)
 {
 	if (gen_figurative & CB_NEED_SPACE) {
-		output ("static cob_field cob_all_space\t= ");
+		output ("static const cob_field cob_all_space\t= ");
 		output ("{1, ");
 		output ("(cob_u8_ptr)\" \", ");
 		output ("&cob_all_attr};");
@@ -3770,7 +3770,7 @@ static void
 output_zero (void)
 {
 	if (gen_figurative & CB_NEED_ZERO) {
-		output ("static cob_field cob_all_zero\t= ");
+		output ("static const cob_field cob_all_zero\t= ");
 		output ("{1, ");
 		output ("(cob_u8_ptr)\"0\", ");
 		output ("&cob_all_attr};");
@@ -3830,7 +3830,7 @@ static void
 output_colseq_table_field (const char * field_name, const char * table_name)
 {
 	const int i = lookup_attr (COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL, 0);
-	output_storage ("static cob_field %s = { 256, (cob_u8_ptr)%s, &%s%d };\n",
+	output_storage ("static const cob_field %s = { 256, (cob_u8_ptr)%s, &%s%d };\n",
 			field_name, table_name, CB_PREFIX_ATTR, i);
 }
 
@@ -4988,20 +4988,20 @@ output_param (cb_tree x, int id)
 			case CB_ALPHABET_ASCII:
 #ifdef	COB_EBCDIC_MACHINE
 				gen_ebcdic_ascii |= 2;
-				output ("&f_ebcdic_ascii");
+				output ("(cob_field *)&f_ebcdic_ascii");
 				break;
 #endif
 			/* Fall through for ASCII */
 			case CB_ALPHABET_NATIVE:
 				gen_native |= 2;
-				output ("&f_native");
+				output ("(cob_field *)&f_native");
 				break;
 			case CB_ALPHABET_EBCDIC:
 #ifdef	COB_EBCDIC_MACHINE
 				gen_native |= 2;
-				output ("&f_native");
+				output ("(cob_field *)&f_native");
 #else
-				output ("&f_ascii_ebcdic");
+				output ("(cob_field *)&f_ascii_ebcdic");
 				gen_ascii_ebcdic |= 2;
 #endif
 				break;
