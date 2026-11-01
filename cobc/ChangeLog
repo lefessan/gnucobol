@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_internal_function, codegen_internal): initialized
+	  and module of the programs in the instance
 	* codegen.c (output_unit_instance, output_call_cache,
 	  compute_align_size, output_local_ws_group, output_local_base_cache,
 	  output_nonlocal_base_cache): data areas of the programs in the

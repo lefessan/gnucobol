@@ -14060,14 +14060,16 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 
 	/* Module initialization indicator */
 
+	/* Module initialization indicator: one per instance, so the
+	   program is initialized once in each context */
 	output_local ("/* Module initialization indicator */\n");
-	output_local ("static unsigned int\tinitialized = 0;\n\n");
+	output_prog_member ("initialized", "unsigned int\tinitialized;");
 	if (prog->flag_recursive) {
 		output_local ("/* Module structure pointer for recursive */\n");
 		output_local ("cob_module\t\t*module = NULL;\n\n");
 	} else {
 		output_local ("/* Module structure pointer */\n");
-		output_local ("static cob_module\t*module = NULL;\n\n");
+		output_prog_member ("module", "cob_module\t*module;");
 	}
 
 	output_local ("/* Execution context, instance of the compilation unit"
@@ -15256,7 +15258,8 @@ prog_cancel_end:
 	}
 	output_line ("/* End %s '%s' */", s, prog->orig_program_id);
 	output_newline ();
-	output_module_init_function (prog);
+	/* note: output_module_init_function is called after the #undef of the
+	   macros of the data of the program, see codegen_internal */
 }
 
 /* Output the entry function for a COBOL function. */
@@ -16350,6 +16353,15 @@ codegen_internal (struct cb_program *prog, const int subsequent_call)
 	output_high_value ();
 
 	output_unit_prog_end (prog);
+
+	/* after the #undef of the macros of the data of the program: the
+	   C name of the program may be one of them (for example 'module') */
+	{
+		FILE	*target = output_target;
+		output_target = yyout;
+		output_module_init_function (prog);
+		output_target = target;
+	}
 }
 
 void
