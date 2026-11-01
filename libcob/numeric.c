@@ -5109,8 +5109,9 @@ cob_s64_pow (cob_s64_t base, cob_s64_t power)
 
 /* Init/Exit routines */
 
+/* free the state of numeric.c of a context */
 void
-cob_exit_numeric (cob_context *ctx)
+cob_exit_numeric_context (cob_context *ctx)
 {
 	cob_decimal	*d1;
 	size_t		i;
@@ -5138,12 +5139,6 @@ cob_exit_numeric (cob_context *ctx)
 	mpz_clear (cob_mpzt2);
 	mpz_clear (cob_mpzt);
 
-	mpz_clear (cob_mpz_ten34m1);
-	mpz_clear (cob_mpz_ten16m1);
-	for (i = 0; i <= COB_MAX_BINARY; i++) {
-		mpz_clear (cob_mpze10[i]);
-	}
-
 	mpf_clear (cob_mpft_get);
 	mpf_clear (cob_mpft);
 
@@ -5151,8 +5146,27 @@ cob_exit_numeric (cob_context *ctx)
 	ctx->numeric = NULL;
 }
 
+/* end of the runtime: state of the main context and constants */
 void
-cob_init_numeric (cob_context *ctx, cob_global *lptr)
+cob_exit_numeric (cob_context *ctx)
+{
+	size_t		i;
+
+	if (ctx == NULL || ctx->numeric == NULL) {
+		return;
+	}
+	cob_exit_numeric_context (ctx);
+
+	mpz_clear (cob_mpz_ten34m1);
+	mpz_clear (cob_mpz_ten16m1);
+	for (i = 0; i <= COB_MAX_BINARY; i++) {
+		mpz_clear (cob_mpze10[i]);
+	}
+}
+
+/* allocate the state of numeric.c of a context */
+void
+cob_init_numeric_context (cob_context *ctx)
 {
 	cob_decimal	*d1;
 	cob_u32_t	i;
@@ -5160,20 +5174,10 @@ cob_init_numeric (cob_context *ctx, cob_global *lptr)
 	ctx->numeric = cob_malloc (sizeof (struct cob_numeric_state));
 
 	memset (&packed_value, 0, sizeof(packed_value));
-	memset (&i64_spaced_out, ' ' , sizeof (i64_spaced_out));
 	last_packed_val = 0;
 
 	mpf_init2 (cob_mpft, COB_MPF_PREC);
 	mpf_init2 (cob_mpft_get, COB_MPF_PREC);
-
-	for (i = 0; i <= COB_MAX_BINARY; i++) {
-		mpz_init2 (cob_mpze10[i], 128UL);
-		mpz_ui_pow_ui (cob_mpze10[i], 10UL, (cob_uli_t)i);
-	}
-	mpz_init_set (cob_mpz_ten16m1, cob_mpze10[16]);
-	mpz_sub_ui (cob_mpz_ten16m1, cob_mpz_ten16m1, 1UL);
-	mpz_init_set (cob_mpz_ten34m1, cob_mpze10[34]);
-	mpz_sub_ui (cob_mpz_ten34m1, cob_mpz_ten34m1, 1UL);
 
 	mpz_init2 (cob_mpzt, COB_MPZ_DEF);
 	mpz_init2 (cob_mpzt2, COB_MPZ_DEF);
@@ -5191,6 +5195,27 @@ cob_init_numeric (cob_context *ctx, cob_global *lptr)
 	for (i = 0; i < COB_MAX_DEC_STRUCT; d1++, i++) {
 		cob_decimal_init_ctx (ctx, d1);
 	}
+}
+
+/* initialization of the runtime: constants and state of the main context */
+void
+cob_init_numeric (cob_context *ctx, cob_global *lptr)
+{
+	cob_u32_t	i;
+
+	COB_UNUSED (lptr);
+
+	memset (&i64_spaced_out, ' ' , sizeof (i64_spaced_out));
+	for (i = 0; i <= COB_MAX_BINARY; i++) {
+		mpz_init2 (cob_mpze10[i], 128UL);
+		mpz_ui_pow_ui (cob_mpze10[i], 10UL, (cob_uli_t)i);
+	}
+	mpz_init_set (cob_mpz_ten16m1, cob_mpze10[16]);
+	mpz_sub_ui (cob_mpz_ten16m1, cob_mpz_ten16m1, 1UL);
+	mpz_init_set (cob_mpz_ten34m1, cob_mpze10[34]);
+	mpz_sub_ui (cob_mpz_ten34m1, cob_mpz_ten34m1, 1UL);
+
+	cob_init_numeric_context (ctx);
 }
 
 /* BIT-WISE functions */
