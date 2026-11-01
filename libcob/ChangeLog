@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_exit_fileio), fileio.c (cob_exit_fileio_closeall,
+	  cob_exit_fileio): cob_exit_fileio_context, end of fileio for one
+	  context
 	* common.c (conf_runtime_error, cob_exit_common): cob_context_free,
 	  freeing the memory of a context
 	* coblocal.h, common.c (cob_exit_common, cob_context_leave), common.h
