@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (conf_runtime_error, cob_exit_common): cob_context_free,
+	  freeing the memory of a context
 	* coblocal.h, common.c (cob_exit_common, cob_context_leave), common.h
 	  (cob_context_leave): instances of compilation units in the context
 	* coblocal.h, common.c: runtime configuration value tables are constant
