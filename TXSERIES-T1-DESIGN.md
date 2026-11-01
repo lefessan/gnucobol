@@ -196,44 +196,71 @@ Elle évitait la lecture TLS, mais changeait le mécanisme de détection
 C / COBOL, doublait les symboles exportés et compliquait le `CALL`
 dynamique (deux ABI à mémoriser).
 
-### 4.2 Instances de programmes
+### 4.2 Instances de programmes (révisé le 2026-11-01)
 
-- Chaque programme a un descripteur statique constant et un slot :
-```c
-static const cob_program_desc P_desc = {
-	"P", sizeof (struct P_instance), P_instance_init, P_instance_free, P_cancel
-};
-static unsigned int P_slot;	/* liste blanche : écrit une seule fois, atomiquement */
-```
-- `P_slot` est attribué au premier appel (dans n'importe quel contexte)
-  par `cob_program_slot (rt, &P_slot)` : compare-and-swap sur un
-  compteur de `rt`. C'est la seule donnée modifiable du code généré, et
-  elle est identique pour tous les contextes (pas d'état de tâche).
-- Accès en tête de `P_` :
-```c
-struct P_instance *inst = (P_slot && P_slot < ctx->inst_size && ctx->inst[P_slot])
-	? ctx->inst[P_slot] : cob_program_instance (ctx, &P_desc, &P_slot);
-```
-  Chemin rapide : deux tests et une indirection. `cob_program_instance`
-  attribue le slot si besoin, agrandit `ctx->inst`, alloue et initialise
-  l'instance.
-- Contenu de `struct P_instance` : `cob_module`, `initialized`, WS,
-  FILE SECTION, REPORT, SCREEN, registres spéciaux, `cob_field`
-  modifiables, pointeurs `d0..dN` vers les décimaux, `prof_info`,
-  pointeurs EXTERNAL, `last_b_*`, LINKAGE hors USING.
-- Reste `static const` : attributs, littéraux, tables de noms, hash,
-  `cob_module_path`, descripteurs.
-- `cob_field` vers la WS : **copies par instance**, initialisées par
-  `P_instance_init` depuis une table constante de gabarits
-  `{taille, offset dans l'instance, attr}`. L'alternative base + offset
-  sera mesurée en T1.7.
-- Programmes imbriqués : chaque programme imbriqué a sa propre instance ;
-  l'accès aux éléments GLOBAL du parent passe par un pointeur
-  `parent_inst` obtenu par le slot du parent (même mécanisme).
-- `CANCEL` : `cob_cancel (ctx, name)` appelle `P_cancel (ctx, inst)`
-  (fermeture des fichiers) puis libère l'instance du contexte.
-  `IS INITIAL` : réinitialisation de l'instance à chaque entrée.
-- LOCAL-STORAGE et RECURSIVE : inchangés (alloués par invocation).
+**Constat sur le code généré actuel** :
+- `prog.c.lN.h` est inclus *dans* la fonction `P_` du programme N : toutes
+  ses données y sont des `static` locales (`initialized`, `module`, WS
+  `b_*`, champs `f_*`, fichiers `h_*`, décimaux, rapports `r_*`, `rl_*`,
+  `rf_*`, écrans `fs_*`, arbres XML/JSON, pointeurs LINKAGE et EXTERNAL,
+  `last_b_*`, `label_*`, profiling…) ;
+- `prog.c.h` contient, au niveau du fichier, les données **partagées par
+  les programmes d'une même unité de compilation** (éléments GLOBAL,
+  RETURN-CODE, … — vu avec un programme imbriqué) ;
+- les initialiseurs statiques se référencent : un champ pointe vers sa
+  donnée (`f_21 = {4, b_21, &a_2}`), un rapport vers ses champs
+  (`rf_1 = {…, &f_28, …}`), un écran vers ses champs.
+
+**Schéma retenu** :
+1. **Une instance par unité de compilation et par contexte** :
+   `struct cob_unit_instance` contient les données modifiables de
+   `prog.c.h` et une sous-structure par programme (`p_N`) pour celles de
+   `prog.c.lN.h`. Elle est émise dans un nouvel en-tête `prog.c.i.h`,
+   inclus au niveau du fichier.
+2. **Accès par macros, le reste du code généré ne change pas** : pour
+   chaque donnée, `cobc` émet `#define b_17 (unit->b_17)` (donnée
+   partagée) ou `#define b_21 (unit->p_2.b_21)` (donnée du programme 2).
+   Les noms communs à tous les programmes (`initialized`, `module`, …)
+   sont définis au début de `P_` et annulés (`#undef`) à la fin.
+3. **Initialiseurs → affectations** exécutées à l'initialisation de
+   l'instance : pour les données d'un programme, dans `P_initialize`
+   (déjà exécuté une fois par instance puisque `initialized` devient
+   membre de l'instance) ; pour les données partagées, dans une fonction
+   générée `cob_unit_init (ctx, unit)` appelée à la création.
+4. **Obtention de l'instance** : un slot par unité de compilation
+   (`static unsigned int cob_unit_slot;`, liste blanche, écrit une fois)
+   et, en tête de `P_`, avant `cob_module_global_enter_ctx` :
+   `cob_unit_enter (&ctx, &cob_unit_slot, sizeof (struct
+   cob_unit_instance), cob_unit_init, (void **)&unit, auto_init)` ;
+   chemin rapide : `ctx->units[slot]` déjà alloué.
+5. **Reste `static`** : données `const` ; caches des cibles de CALL
+   résolues (`call_X`, `func_X` : même valeur dans tous les contextes) ;
+   table des programmes imbriqués ; `cob_module_path` ; le slot.
+6. **RECURSIVE / LOCAL-STORAGE** : leurs variables locales non statiques
+   ne changent pas ; leur WS va dans l'instance.
+7. **CANCEL** : s'applique à l'instance du contexte courant (recherche
+   sans création ; rien à faire s'il n'y en a pas) ; CANCEL physique
+   (`dlclose`) → compteur de références (T1.4).
+8. **Conversion incrémentale** possible grâce aux macros, à condition de
+   déplacer d'abord les données qui en référencent d'autres : rapports,
+   écrans, arbres XML/JSON, puis champs, puis données (WS, fichiers…),
+   enfin `initialized` / `module`. Chaque étape compile et passe les
+   tests (un seul contexte).
+
+**Étapes** :
+- T1.5a (libcob) : `cob_unit_enter` / recherche d'instance, tableau
+  `ctx->units`, attribution atomique des slots dans `cob_runtime`,
+  libération à la destruction du contexte.
+- T1.5b (cobc) : infrastructure d'émission de `prog.c.i.h` (membres,
+  macros, initialisations) et appel de `cob_unit_enter`.
+- T1.5c (cobc) : conversion des déclarations, par famille, dans l'ordre
+  du point 8 (un commit par famille).
+- T1.5d : `initialized`, `module`, IS INITIAL, CANCEL ; tests avec deux
+  contextes (banc de T1.6, qui demande `cob_context_create`).
+
+Alternative écartée : une instance par programme avec un pointeur vers
+l'instance du parent pour les GLOBAL ; plus complexe, car les données
+partagées sont aujourd'hui au niveau du fichier sans propriétaire.
 
 ### 4.3 CALL
 
