@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_context_free, cob_exit_common, cob_context_leave,
+	  cob_init): cob_exit_common_state and cob_init_switches
 	* coblocal.h (cob_init_numeric, cob_exit_numeric, cob_exit_intrinsic),
 	  intrinsic.c (cob_intr_standard_compare, cob_exit_intrinsic),
 	  numeric.c (cob_s64_pow, cob_exit_numeric, cob_init_numeric): separate
