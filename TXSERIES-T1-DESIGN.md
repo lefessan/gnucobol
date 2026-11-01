@@ -150,6 +150,24 @@ int main (int argc, char **argv)
   `create` → `enter` → appel → `leave` → `destroy` (ou contexte conservé
   entre deux activations pseudo-conversationnelles si besoin).
 
+**État au 2026-11-01 (T1.6)** : `cob_init` garde son rôle (initialisation
+du processus et création du contexte principal) ; `cob_runtime_init` /
+`cob_runtime_finish` ne sont pas encore introduits, et
+`cob_context_create (void)` utilise le runtime du processus (il n'y en a
+qu'un). Un nouveau contexte partage avec le contexte principal :
+le runtime, les réglages (copie par contexte : T1.4), les valeurs de
+niveau processus de `glob` (`cob_main_argv0`, locales, possédées par le
+contexte principal) ; il a en propre : instances des programmes, unité
+d'exécution (EXTERNAL, fichiers ouverts, allocations, SWITCH), états de
+travail (`numeric`, `intrinsic`, et les états alloués au premier usage),
+tampon terminal. `cob_context_destroy` entre dans le contexte (le rappel
+CANCEL des programmes prend le contexte courant), ferme ses fichiers
+ouverts sans arrêter les backends, libère les décimaux des programmes,
+puis la mémoire. Le contexte principal est détruit par la fin du runtime
+(`STOP RUN`, `cob_tidy`). Les initialisations sont séparées en partie
+processus (constantes : puissances de 10, pi…) et partie contexte
+(`cob_init_numeric_context`, `cob_exit_intrinsic_context`…).
+
 ## 4. Code généré
 
 ### 4.1 Points d'entrée : un seul, comme aujourd'hui (révisé le 2026-10-28)
