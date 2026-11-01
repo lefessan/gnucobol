@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_unit_init, output_unit_instance,
+	  output_internal_function, codegen_internal): data of each program in
+	  the instance, first family last_b_*
 	* codegen.c (output_local, output_internal_function, codegen_finalize):
 	  instance of the compilation unit in the generated code
 	* codegen.c (output_integer, output_long_integer, output_param,
