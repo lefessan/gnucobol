@@ -841,6 +841,15 @@ cob_exit_common (cob_context *ctx)
 		if (cob_current_context == cob_main_context) {
 			cob_current_context = NULL;
 		}
+		if (cob_main_context->units) {
+			unsigned int	i;
+			for (i = 0; i < cob_main_context->units_size; i++) {
+				if (cob_main_context->units[i]) {
+					cob_free (cob_main_context->units[i]);
+				}
+			}
+			cob_free (cob_main_context->units);
+		}
 		cob_free (cob_main_context->common);
 		cob_free (cob_main_context->termio);
 		cob_free (cob_main_context->prof);
@@ -3874,6 +3883,62 @@ void
 cob_context_leave (cob_context *prev)
 {
 	cob_current_context = prev;
+}
+
+/* Get the instance of a compilation unit (the mutable data of its
+   programs) in the current context, creating it on first use with
+   'init'; '*slot' identifies the unit, it is set on the first call in
+   any context; returns the context in '*pctx' and the instance in
+   '*unit'; initializes the runtime if needed and 'auto_init' is set */
+int
+cob_unit_enter (cob_context **pctx, unsigned int *slot, const size_t size,
+		void (*init) (cob_context *, void *), void **unit,
+		const int auto_init)
+{
+	cob_context	*ctx = cob_current_context;
+
+	if (ctx == NULL && !cob_initialized && auto_init) {
+		cob_init (0, NULL);
+		ctx = cob_current_context;
+	}
+	if (ctx == NULL) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
+	}
+	*pctx = ctx;
+
+	if (*slot == 0) {
+		*slot = ++ctx->rt->last_unit_slot;
+	}
+	if (*slot >= ctx->units_size) {
+		const unsigned int	new_size = *slot + 16;
+		if (ctx->units == NULL) {
+			ctx->units = cob_malloc (new_size * sizeof (void *));
+		} else {
+			ctx->units = cob_realloc (ctx->units,
+				ctx->units_size * sizeof (void *),
+				new_size * sizeof (void *));
+		}
+		ctx->units_size = new_size;
+	}
+	if (ctx->units[*slot] == NULL) {
+		ctx->units[*slot] = cob_malloc (size);
+		if (init) {
+			init (ctx, ctx->units[*slot]);
+		}
+	}
+	*unit = ctx->units[*slot];
+	return 0;
+}
+
+/* Get the instance of a compilation unit in a context, NULL if it was
+   not created in this context */
+void *
+cob_unit_get (cob_context *ctx, const unsigned int slot)
+{
+	if (ctx == NULL || slot == 0 || slot >= ctx->units_size) {
+		return NULL;
+	}
+	return ctx->units[slot];
 }
 
 int

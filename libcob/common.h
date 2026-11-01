@@ -1915,6 +1915,9 @@ struct cob_termio_state;	/* opaque, termio.c */
 typedef struct cob_context {
 	cob_runtime		*rt;
 	cob_global		glob;
+	void			**units;	/* instances of the compilation units,
+						   indexed by their slot */
+	unsigned int		units_size;
 	struct __cob_settings		*settings;	/* runtime settings */
 	struct cob_common_state		*common;	/* allocated with the context */
 	struct cob_numeric_state	*numeric;	/* allocated with the context */
@@ -1996,6 +1999,12 @@ COB_EXPIMP void	cob_common_init		(void *);
 COB_EXPIMP cob_context	*cob_get_current_context	(void);
 COB_EXPIMP cob_context	*cob_context_enter	(cob_context *);
 COB_EXPIMP void		cob_context_leave	(cob_context *);
+
+COB_EXPIMP int		cob_unit_enter		(cob_context **, unsigned int *,
+						 const size_t,
+						 void (*) (cob_context *, void *),
+						 void **, const int);
+COB_EXPIMP void		*cob_unit_get		(cob_context *, const unsigned int);
 
 COB_EXPIMP int	cob_module_global_enter	(cob_module **, cob_global **,
 						 const int, const int, const unsigned int *);

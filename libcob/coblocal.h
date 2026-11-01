@@ -243,7 +243,8 @@
 /* Runtime structure (one per process), opaque outside of libcob;
    filled in T1.3 when the global state is moved */
 struct cob_runtime {
-	int		reserved;
+	unsigned int	last_unit_slot;	/* slots of the compilation units,
+					   TODO (T1.4): atomic */
 };
 
 /* Global settings structure */
