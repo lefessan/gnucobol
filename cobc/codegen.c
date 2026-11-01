@@ -1063,7 +1063,8 @@ strip_c_comments (char *s)
    members of 'name', recursively for nested structures (cob_field) */
 static void
 output_prog_struct_init (const char *name, char *init,
-			 const char *const *members)
+			 const char *const *members,
+			 void (*emit) (const char *, ...))
 {
 	char		*p, *start;
 	int		depth = 0, idx = 0;
@@ -1106,10 +1107,10 @@ output_prog_struct_init (const char *name, char *init,
 				if (*v == '{') {
 					char	sub[COB_SMALL_BUFF];
 					snprintf (sub, sizeof (sub), "%s.%s", name, members[idx]);
-					output_prog_struct_init (sub, v, members_cob_field);
+					output_prog_struct_init (sub, v, members_cob_field, emit);
 				} else if (strcmp (v, "NULL") && strcmp (v, "0")
 					&& strcmp (v, "00") && strcmp (v, "0x0")) {
-					output_prog_init ("%s.%s = %s;", name, members[idx], v);
+					emit ("%s.%s = %s;", name, members[idx], v);
 				}
 			}
 			idx++;
@@ -1136,7 +1137,29 @@ output_prog_struct (const char *type, const char *name, char *decl,
 		COBC_ABORT ();
 	}
 	output_prog_member (name, "%s\t%s;", type, name);
-	output_prog_struct_init (name, init + 1, members);
+	output_prog_struct_init (name, init + 1, members, output_prog_init);
+}
+
+/* the value of a field ('{size, data, attr}', output by 'emit_value'
+   from 'x' and 'sub') becomes the member 'name' of the instance of the
+   program (shared: of the compilation unit), initialized by assignments */
+static void
+output_instance_field (const char *name, const int shared,
+		       void (*emit_value) (cb_tree, const int), cb_tree x, const int sub)
+{
+	char	*value;
+
+	capture_begin ();
+	emit_value (x, sub);
+	value = capture_end ();
+	strip_c_comments (value);
+	if (shared) {
+		output_unit_member (name, "cob_field\t%s;", name);
+		output_prog_struct_init (name, value, members_cob_field, output_unit_init);
+	} else {
+		output_prog_member (name, "cob_field\t%s;", name);
+		output_prog_struct_init (name, value, members_cob_field, output_prog_init);
+	}
 }
 
 /* output the instance of the compilation unit, at the end of the main
@@ -3310,6 +3333,42 @@ output_field_sub (struct cb_field *f, cb_tree x, int subscript)
 	output ("}");
 }
 
+/* emitters of field values, for output_instance_field */
+static void
+emit_field_value (cb_tree x, const int sub)
+{
+	COB_UNUSED (sub);
+	output_field (x);
+}
+
+static void
+emit_field_sub_value (cb_tree x, const int sub)
+{
+	output_field_sub (cb_code_field (x), x, sub);
+}
+
+/* value of a field without data (LINKAGE): set at run time */
+static void
+emit_field_nodata_value (cb_tree x, const int sub)
+{
+	COB_UNUSED (sub);
+	output ("{");
+	output_size (x);
+	output (", NULL, ");
+	output_attr (x);
+	output ("}");
+}
+
+/* value of a field of variable size and location */
+static void
+emit_field_variable_value (cb_tree x, const int sub)
+{
+	COB_UNUSED (sub);
+	output ("{0, NULL, ");
+	output_attr (x);
+	output ("}");
+}
+
 static void
 output_emit_one_field (struct cb_field *f, const char *cmt, int sub)
 {
@@ -3339,12 +3398,16 @@ output_emit_one_field (struct cb_field *f, const char *cmt, int sub)
 	if (f->step_count < f->size) {
 		f->step_count = f->size;
 	}
-	if (sub > 1)
-		output ("static cob_field %s%d_%d\t= ", CB_PREFIX_FIELD, f->id, sub);
-	else
-		output ("static cob_field %s%d\t= ", CB_PREFIX_FIELD, f->id);
-	output_field_sub (f, cb_build_field_reference (f, NULL), sub);
-	output_local (";\t/* ");
+	{
+		char	name[COB_MINI_BUFF];
+		if (sub > 1)
+			snprintf (name, sizeof (name), "%s%d_%d", CB_PREFIX_FIELD, f->id, sub);
+		else
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_FIELD, f->id);
+		output_instance_field (name, 0, emit_field_sub_value,
+			cb_build_field_reference (f, NULL), sub);
+	}
+	output_local ("\t/* ");
 	output_local ("%s ", get_field_name (f));
 	if ((f->report_flag & COB_REPORT_COLUMN_RIGHT)) {
 		output_local (", RIGHT %d",f->report_column);
@@ -3411,6 +3474,7 @@ output_local_field_cache (struct cb_program *prog)
 					     &field_cache_cmp);
 	for (field = local_field_cache; field; field = field->next) {
 		int		needs_comment = 1;
+		int		instance_member = 0;
 		f = field->f;
 		if (!f->flag_local
 		 && !f->flag_external) {
@@ -3426,15 +3490,20 @@ output_local_field_cache (struct cb_program *prog)
 				output_emit_field (cb_build_field_reference (f, NULL), NULL);
 				needs_comment = 0;
 			} else {
+				char	name[COB_MINI_BUFF];
 				f->flag_cob_field = 1;
-				output ("static cob_field %s%d\t= ", CB_PREFIX_FIELD, f->id);
-				output_field (field->x);
+				snprintf (name, sizeof (name), "%s%d", CB_PREFIX_FIELD, f->id);
+				output_instance_field (name, 0, emit_field_value, field->x, 0);
+				instance_member = 1;
 			}
+		} else if (!prog->flag_recursive) {
+			char	name[COB_MINI_BUFF];
+			f->flag_cob_field = 1;
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_FIELD, f->id);
+			output_instance_field (name, 0, emit_field_nodata_value, field->x, 0);
+			instance_member = 1;
 		} else {
-			if (!prog->flag_recursive)
-				f->flag_cob_field = 1;
-			output ("%scob_field %s%d\t= ", prog->flag_recursive ? "\t" : "static ",
-				CB_PREFIX_FIELD, f->id);
+			output ("\tcob_field %s%d\t= ", CB_PREFIX_FIELD, f->id);
 			output ("{");
 			output_size (field->x);
 			output (", NULL, ");
@@ -3443,7 +3512,9 @@ output_local_field_cache (struct cb_program *prog)
 		}
 
 		if (needs_comment) {
-			output (";");
+			if (!instance_member) {
+				output (";");
+			}
 			if (!f->flag_filler) {
 				output ("\t/* %s */", field->f->name);
 			}
@@ -3475,12 +3546,12 @@ output_local_fields (struct cb_program *prog)
 		if (!f->flag_field
 		 && (chk_field_variable_size (f)
 		  || chk_field_variable_address (f))) {
+			char	name[COB_MINI_BUFF];
 			f->flag_cob_field = 1;
-			output ("static cob_field %s%d\t= ", CB_PREFIX_FIELD, f->id);
-			output ("{");
-			output ("0, NULL, ");
-			output_attr (cb_build_field_reference (f, NULL));
-			output ("}; /* %s */",f->name);
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_FIELD, f->id);
+			output_instance_field (name, 0, emit_field_variable_value,
+				cb_build_field_reference (f, NULL), 0);
+			output ("/* %s */",f->name);
 			output_newline ();
 		}
 
@@ -3562,20 +3633,16 @@ output_nonlocal_field_cache (void)
 		}
 
 		field->f->flag_cob_field = 1;
-		output ("static cob_field %s%d\t= ", CB_PREFIX_FIELD, field->f->id);
-		if (!field->f->flag_local) {
-			output_field (field->x);
-		} else {
-			output ("{");
-			output_size (field->x);
-			output (", NULL, ");
-			output_attr (field->x);
-			output ("}");
+		{
+			char	name[COB_MINI_BUFF];
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_FIELD, field->f->id);
+			output_instance_field (name, 1, field->f->flag_local
+				? emit_field_nodata_value : emit_field_value, field->x, 0);
 		}
 		if (field->f->flag_filler) {
-			output (";\t/* Implicit FILLER */");
+			output ("/* Implicit FILLER */");
 		} else {
-			output (";\t/* %s */", field->f->name);
+			output ("/* %s */", field->f->name);
 		}
 		output_newline ();
 	}

@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_prog_struct_init, output_prog_struct,
+	  output_field_sub, output_emit_one_field, output_local_field_cache,
+	  output_local_fields, ...): fields of the programs in the instance
 	* codegen.c (output_unit_prog_end, output_report_control,
 	  output_report_one_field, output_report_define_lines,
 	  output_report_sum_counters, output_report_definition): report
