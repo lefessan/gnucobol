@@ -809,6 +809,101 @@ output_unit_init (const char *fmt, ...)
 	va_end (ap);
 }
 
+/* data of the current program in the instance: members of the
+   sub-structure p_<program>, names (to #undef their macros after the
+   program), initializations (done at the initialization of the
+   program, see cob_unit_prog_init) */
+static struct unit_text	*prog_members = NULL;
+static struct unit_text	*prog_members_last = NULL;
+static struct unit_text	*prog_names = NULL;
+static struct unit_text	*prog_names_last = NULL;
+static struct unit_text	*prog_inits = NULL;
+static struct unit_text	*prog_inits_last = NULL;
+
+struct unit_prog {
+	struct unit_prog	*next;
+	const char		*id;
+	struct unit_text	*members;
+};
+static struct unit_prog	*unit_progs = NULL;
+static struct unit_prog	*unit_progs_last = NULL;
+
+static void
+unit_text_add_str (struct unit_text **first, struct unit_text **last,
+		   const char *fmt, ...)
+{
+	va_list		ap;
+	va_start (ap, fmt);
+	unit_text_add (first, last, fmt, ap);
+	va_end (ap);
+}
+
+/* add the member 'name' of the current program to the instance
+   (declaration without 'static' given by fmt), and its access macro */
+static void
+output_prog_member (const char *name, const char *fmt, ...)
+{
+	va_list		ap;
+	va_start (ap, fmt);
+	unit_text_add (&prog_members, &prog_members_last, fmt, ap);
+	va_end (ap);
+	unit_text_add_str (&prog_names, &prog_names_last, "%s", name);
+	output_local ("#define %s\t(unit->p_%s.%s)\n",
+		name, current_prog->program_id, name);
+}
+
+/* add a statement initializing a member of the current program */
+static void
+output_prog_init (const char *fmt, ...)
+{
+	va_list		ap;
+	va_start (ap, fmt);
+	unit_text_add (&prog_inits, &prog_inits_last, fmt, ap);
+	va_end (ap);
+}
+
+/* end of the data of the current program: definition of
+   cob_unit_prog_init in the local include file, #undef of the macros
+   after the program, sub-structure kept for output_unit_instance */
+static void
+output_unit_prog_end (struct cb_program *prog)
+{
+	struct unit_text	*t;
+	FILE			*target = output_target;
+
+	output_target = prog->local_include->local_fp;
+	output_local ("\n/* Initialization of the data of the program in the instance */\n");
+	output_local ("#define cob_unit_prog_init()\tdo { \\\n");
+	for (t = prog_inits; t; t = t->next) {
+		output_local ("\t%s \\\n", t->text);
+	}
+	output_local ("\t} ONCE_COB\n");
+
+	output_target = yyout;
+	output_newline ();
+	for (t = prog_names; t; t = t->next) {
+		output_line ("#undef %s", t->text);
+	}
+	output_line ("#undef cob_unit_prog_init");
+	output_newline ();
+	output_target = target;
+
+	if (prog_members) {
+		struct unit_prog	*up = cobc_main_malloc (sizeof (struct unit_prog));
+		up->id = cobc_main_strdup (prog->program_id);
+		up->members = prog_members;
+		if (unit_progs_last) {
+			unit_progs_last->next = up;
+		} else {
+			unit_progs = up;
+		}
+		unit_progs_last = up;
+	}
+	prog_members = prog_members_last = NULL;
+	prog_names = prog_names_last = NULL;
+	prog_inits = prog_inits_last = NULL;
+}
+
 /* output the instance of the compilation unit, at the end of the main
    include file (included at the beginning of the C file) */
 static void
@@ -821,6 +916,16 @@ output_unit_instance (void)
 	output_storage ("\tint\tcob_unit_reserved;\n");
 	for (t = unit_members; t; t = t->next) {
 		output_storage ("\t%s\n", t->text);
+	}
+	{
+		struct unit_prog	*up;
+		for (up = unit_progs; up; up = up->next) {
+			output_storage ("\tstruct {\t/* data of program %s */\n", up->id);
+			for (t = up->members; t; t = t->next) {
+				output_storage ("\t\t%s\n", t->text);
+			}
+			output_storage ("\t} p_%s;\n", up->id);
+		}
 	}
 	output_storage ("};\n");
 	output_storage ("\n/* Slot of the compilation unit, set once for all contexts */\n");
@@ -839,6 +944,7 @@ output_unit_instance (void)
 
 	unit_members = unit_members_last = NULL;
 	unit_inits = unit_inits_last = NULL;
+	unit_progs = unit_progs_last = NULL;
 }
 
 /* Field */
@@ -13928,8 +14034,11 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 			output_base (f, 0);
 			output (";");
 			output_newline ();
-			output_local ("static unsigned char\t*last_%s%d;\n",
-				CB_PREFIX_BASE, f->id);
+			{
+				char	name[COB_MINI_BUFF];
+				snprintf (name, sizeof (name), "last_%s%d", CB_PREFIX_BASE, f->id);
+				output_prog_member (name, "unsigned char\t*%s;", name);
+			}
 		}
 		output_newline ();
 	}
@@ -14314,6 +14423,9 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	output_newline ();
 	output_line ("/* Program initialization */");
 	output_line ("P_initialize:");
+	output_newline ();
+	output_line ("/* Initialize the data of the program in the instance */");
+	output_line ("cob_unit_prog_init ();");
 	output_newline ();
 
 	/* Check matching version in program init */
@@ -15742,6 +15854,8 @@ codegen_internal (struct cb_program *prog, const int subsequent_call)
 
 	output_low_value ();
 	output_high_value ();
+
+	output_unit_prog_end (prog);
 }
 
 void
