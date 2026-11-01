@@ -759,6 +759,31 @@ static void		cob_debug_open	(cob_context *);
 static void		conf_runtime_error_value	(cob_context *, const char *value, const int conf_pos);
 static void		conf_runtime_error	(cob_context *, const int finish_error, const char *fmt, ...);
 
+/* free the memory of the context itself, its instances of the
+   compilation units and the states that are not freed by the exit
+   function of their file */
+static void
+cob_context_free (cob_context *ctx)
+{
+	if (ctx->units) {
+		unsigned int	i;
+		for (i = 0; i < ctx->units_size; i++) {
+			if (ctx->units[i]) {
+				cob_free (ctx->units[i]);
+			}
+		}
+		cob_free (ctx->units);
+	}
+	cob_free (ctx->common);
+	if (ctx->termio) {
+		cob_free (ctx->termio);
+	}
+	if (ctx->prof) {
+		cob_free (ctx->prof);
+	}
+	cob_free (ctx);
+}
+
 static void
 cob_exit_common (cob_context *ctx)
 {
@@ -841,19 +866,7 @@ cob_exit_common (cob_context *ctx)
 		if (cob_current_context == cob_main_context) {
 			cob_current_context = NULL;
 		}
-		if (cob_main_context->units) {
-			unsigned int	i;
-			for (i = 0; i < cob_main_context->units_size; i++) {
-				if (cob_main_context->units[i]) {
-					cob_free (cob_main_context->units[i]);
-				}
-			}
-			cob_free (cob_main_context->units);
-		}
-		cob_free (cob_main_context->common);
-		cob_free (cob_main_context->termio);
-		cob_free (cob_main_context->prof);
-		cob_free (cob_main_context);
+		cob_context_free (cob_main_context);
 		cob_main_context = NULL;
 	}
 	if (cob_main_runtime) {
