@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_local, output_internal_function, codegen_finalize):
+	  instance of the compilation unit in the generated code
 	* codegen.c (output_integer, output_long_integer, output_param,
 	  output_funcall_typed_report, output_funcall_typed,
 	  output_funcall_item, ...), codeoptim.c (cob_gen_optim): suffix _ctx
