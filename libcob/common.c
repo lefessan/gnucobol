@@ -3932,6 +3932,78 @@ cob_init_switches (cob_context *ctx)
 	}
 }
 
+/* create a new execution context (for example one per task of a
+   transaction monitor), after the initialization of the runtime by
+   cob_init; the new context shares the runtime, and for now the runtime
+   settings, with the main context, but has its own instances of the
+   programs, run unit (EXTERNAL items, files...) and working states;
+   it is used by entering it with cob_context_enter */
+cob_context *
+cob_context_create (void)
+{
+	cob_context	*ctx;
+	const cob_global	*mglob;
+
+	if (!cob_main_context) {
+		return NULL;
+	}
+	mglob = &cob_main_context->glob;
+
+	ctx = cob_malloc (sizeof (cob_context));
+	ctx->rt = cob_main_runtime;
+	/* TODO (T1.4): per-context copy of the settings */
+	ctx->settings = cobsetptr;
+	ctx->common = cob_malloc (sizeof (struct cob_common_state));
+	ctx->common->current_arg = 1;
+	cob_init_switches (ctx);
+
+	/* process level values, owned by the main context */
+	ctx->glob.cob_main_argv0 = mglob->cob_main_argv0;
+	ctx->glob.cob_locale = mglob->cob_locale;
+	ctx->glob.cob_locale_orig = mglob->cob_locale_orig;
+	ctx->glob.cob_locale_ctype = mglob->cob_locale_ctype;
+	ctx->glob.cob_locale_collate = mglob->cob_locale_collate;
+	ctx->glob.cob_locale_messages = mglob->cob_locale_messages;
+	ctx->glob.cob_locale_monetary = mglob->cob_locale_monetary;
+	ctx->glob.cob_locale_numeric = mglob->cob_locale_numeric;
+	ctx->glob.cob_locale_time = mglob->cob_locale_time;
+	ctx->glob.cob_physical_cancel = mglob->cob_physical_cancel;
+
+	ctx->glob.cob_term_buff = cob_malloc ((size_t)COB_MEDIUM_BUFF);
+	cob_init_numeric_context (ctx);
+	cob_init_intrinsic (ctx, &ctx->glob);
+	return ctx;
+}
+
+/* destroy a context created by cob_context_create: end of its run unit
+   (its open files are closed), then its memory is freed, including the
+   instances of the programs; the context must not be active in a
+   program; the main context is destroyed by the end of the runtime */
+void
+cob_context_destroy (cob_context *ctx)
+{
+	cob_context	*prev;
+
+	if (ctx == NULL || ctx == cob_main_context) {
+		return;
+	}
+	/* the programs get their context from the current one when they
+	   release their memory (CANCEL callback) */
+	prev = cob_context_enter (ctx);
+
+	cob_exit_fileio_context (ctx);
+	cob_exit_reportio (ctx);
+	cob_exit_intrinsic_context (ctx);
+	cob_exit_strings (ctx);
+	cob_exit_numeric_context (ctx);
+	cob_exit_common_modules (ctx);
+	cob_exit_cobcapi (ctx);
+	cob_exit_common_state (ctx);
+
+	cob_context_leave (prev == ctx ? NULL : prev);
+	cob_context_free (ctx);
+}
+
 /* Get the instance of a compilation unit (the mutable data of its
    programs) in the current context, creating it on first use with
    'init'; '*slot' identifies the unit, it is set on the first call in

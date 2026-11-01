@@ -5329,6 +5329,114 @@ AT_CHECK([$COBCRUN_DIRECT ./caller], [0], [OKOK], [])
 AT_CLEANUP
 
 
+AT_SETUP([CALL in from C, several execution contexts])
+AT_KEYWORDS([runmisc cob_context_create cob_context_destroy cob_context_enter reentrant])
+
+# each context has its own instances of the programs (WORKING-STORAGE,
+# files) and its own run unit (EXTERNAL items); destroying a context
+# closes its open files
+
+AT_DATA([counter.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      counter.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO FNAME
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 FNAME         PIC X(20).
+       01 CNT           PIC 9(4) VALUE 0.
+       01 X             PIC S9(20)V9(5) VALUE 1.
+       01 EXT-CNT       PIC 9(4) EXTERNAL.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           IF CNT = 0
+              STRING "out-" TAG ".txt" DELIMITED SIZE INTO FNAME
+              OPEN OUTPUT OUT-FILE
+           END-IF
+           IF EXT-CNT NOT NUMERIC
+              MOVE 0 TO EXT-CNT
+           END-IF
+           ADD 1 TO CNT EXT-CNT
+           COMPUTE X = X * 3 / 7 + FUNCTION PI
+           MOVE TAG TO OUT-REC
+           WRITE OUT-REC
+           DISPLAY TAG ": " CNT " " EXT-CNT
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_counter (const char *tag)
+{
+   void *argv[1];
+   argv[0] = (void *)tag;
+   (void)cob_call ("counter", 1, argv);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx2, *ctx3, *prev;
+
+   cob_init (argc, argv);
+
+   call_counter ("main");
+   call_counter ("main");
+
+   ctx2 = cob_context_create ();
+   prev = cob_context_enter (ctx2);
+   call_counter ("ctx2");
+   cob_context_leave (prev);
+
+   call_counter ("main");
+
+   prev = cob_context_enter (ctx2);
+   call_counter ("ctx2");
+   cob_context_leave (prev);
+   cob_context_destroy (ctx2);
+
+   ctx3 = cob_context_create ();
+   prev = cob_context_enter (ctx3);
+   call_counter ("ctx3");
+   cob_context_leave (prev);
+   cob_context_destroy (ctx3);
+
+   call_counter ("main");
+
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE counter.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[main: 0001 0001
+main: 0002 0002
+ctx2: 0001 0001
+main: 0003 0003
+ctx2: 0002 0002
+ctx3: 0001 0001
+main: 0004 0004
+], [libcob: counter.cob:33: warning: implicit CLOSE of OUT-FILE ('out-main.txt')
+])
+AT_CHECK([cat out-ctx2.txt out-ctx3.txt], [0],
+[ctx2
+ctx2
+ctx3
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([CALL C with callback, PROCEDURE DIVISION EXTERN])
 AT_KEYWORDS([runmisc extensions call-convention])
 
