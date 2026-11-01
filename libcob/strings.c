@@ -1502,7 +1502,6 @@ cob_exit_strings (cob_context *ctx)
 	}
 	cob_free (st);
 	ctx->strings = NULL;
-	st->figurative_size = 0;
 }
 
 void
