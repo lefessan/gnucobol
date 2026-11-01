@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_get_env_ctx): no static scratch buffer in
+	  cob_get_env_ctx
 	* common.c (cob_init_switches), common.h (cob_context_leave):
 	  cob_context_create and cob_context_destroy
 	* common.c (cob_context_free, cob_exit_common, cob_context_leave,
