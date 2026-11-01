@@ -21,8 +21,6 @@
 
 #include "config.h"
 
-#define cobglobptr file_globptr
-#define cobsetptr file_setptr
 
 #define _LFS64_LARGEFILE		1
 #define _LFS64_STDIO			1
@@ -135,38 +133,36 @@ typedef struct _cob_file_api {
 	struct cob_fileio_funcs **io_funcs;
 	char			**file_paths;
 	char			*file_open_buff;
-	void	(*add_file_cache)	(cob_file *);
-	void	(*del_file_cache)	(cob_file *);
-	void	(*chk_file_mapping)	(cob_file *f, char *filename);
-	int		(*cob_write_dict)	(cob_file *f, char *filename);
-	int		(*cob_read_dict)	(cob_file *f, char *filename, int updt);
-	int		(*cob_file_write_opt) (cob_file *f, const int opt);
+	void	(*add_file_cache)	(cob_context *, cob_file *);
+	void	(*del_file_cache)	(cob_context *, cob_file *);
+	void	(*chk_file_mapping)	(cob_context *, cob_file *f, char *filename);
+	int		(*cob_write_dict)	(cob_context *, cob_file *f, char *filename);
+	int		(*cob_read_dict)	(cob_context *, cob_file *f, char *filename, int updt);
+	int		(*cob_file_write_opt) (cob_context *, cob_file *f, const int opt);
 } cob_file_api;
 
 /* File I/O function pointer structure */
 struct cob_fileio_funcs {
-	int	(*open)			(cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
-	int	(*close)		(cob_file_api *, cob_file *, const int);
-	int	(*start)		(cob_file_api *, cob_file *, const int, cob_field *);
-	int	(*read)			(cob_file_api *, cob_file *, cob_field *, const int);
-	int	(*read_next)	(cob_file_api *, cob_file *, const int);
-	int	(*write)		(cob_file_api *, cob_file *, const int);
-	int	(*rewrite)		(cob_file_api *, cob_file *, const int);
-	int	(*recdelete)	(cob_file_api *, cob_file *);
+	int	(*open)			(cob_context *, cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
+	int	(*close)		(cob_context *, cob_file_api *, cob_file *, const int);
+	int	(*start)		(cob_context *, cob_file_api *, cob_file *, const int, cob_field *);
+	int	(*read)			(cob_context *, cob_file_api *, cob_file *, cob_field *, const int);
+	int	(*read_next)	(cob_context *, cob_file_api *, cob_file *, const int);
+	int	(*write)		(cob_context *, cob_file_api *, cob_file *, const int);
+	int	(*rewrite)		(cob_context *, cob_file_api *, cob_file *, const int);
+	int	(*recdelete)	(cob_context *, cob_file_api *, cob_file *);
 
-	int	(*fildelete)	(cob_file_api *, cob_file *, char *);
-	void (*ioinit)		(cob_file_api *);
-	void (*ioexit)		(cob_file_api *);
-	int	(*iofork)		(cob_file_api *);
-	int	(*iosync)		(cob_file_api *, cob_file *);
-	int	(*commit)		(cob_file_api *, cob_file *);
-	int	(*rollback)		(cob_file_api *, cob_file *);
-	int	(*iounlock)		(cob_file_api *, cob_file *);
+	int	(*fildelete)	(cob_context *, cob_file_api *, cob_file *, char *);
+	void (*ioinit)		(cob_context *, cob_file_api *);
+	void (*ioexit)		(cob_context *, cob_file_api *);
+	int	(*iofork)		(cob_context *, cob_file_api *);
+	int	(*iosync)		(cob_context *, cob_file_api *, cob_file *);
+	int	(*commit)		(cob_context *, cob_file_api *, cob_file *);
+	int	(*rollback)		(cob_context *, cob_file_api *, cob_file *);
+	int	(*iounlock)		(cob_context *, cob_file_api *, cob_file *);
 	char * (*ioversion)	(void);
 };
 
-COB_EXPIMP	cob_global		*file_globptr;
-COB_EXPIMP	cob_settings	*file_setptr;
 
 static const int	status_exception[] = {
 	0,				/* 0x */
@@ -192,18 +188,18 @@ enum cob_status_extended {
 	COB_XSTATUS_MAX
 };
 
-COB_HIDDEN int cob_write_dict	(cob_file *f, char *filename);
-COB_HIDDEN int cob_read_dict	(cob_file *f, char *filename, int updt);
-COB_HIDDEN int indexed_file_type	(cob_file *f, char *filename);
-COB_HIDDEN void cob_chk_file_mapping	(cob_file *f, char *filename);
-COB_HIDDEN void cob_file_save_status	(cob_file *f, cob_field *fnstatus, const int status);
-COB_HIDDEN void cob_file_sync	(cob_file *f);
+COB_HIDDEN int cob_write_dict	(cob_context *, cob_file *f, char *filename);
+COB_HIDDEN int cob_read_dict	(cob_context *, cob_file *f, char *filename, int updt);
+COB_HIDDEN int indexed_file_type	(cob_context *, cob_file *f, char *filename);
+COB_HIDDEN void cob_chk_file_mapping	(cob_context *, cob_file *f, char *filename);
+COB_HIDDEN void cob_file_save_status	(cob_context *, cob_file *f, cob_field *fnstatus, const int status);
+COB_HIDDEN void cob_file_sync	(cob_context *, cob_file *f);
 
 #ifdef	WITH_DB
-COB_EXPIMP void	cob_bdb_init_fileio (cob_file_api *);
+COB_EXPIMP void	cob_bdb_init_fileio (cob_context *, cob_file_api *);
 #endif
 #ifdef	WITH_LMDB
-COB_EXPIMP void	cob_lmdb_init_fileio (cob_file_api *);
+COB_EXPIMP void	cob_lmdb_init_fileio (cob_context *, cob_file_api *);
 #endif
 
 COB_HIDDEN int cob_findkey_attr (cob_file *f, cob_field *kf, int *fullkeylen, int *partlen);
@@ -212,7 +208,7 @@ COB_HIDDEN int cob_findkey_attr (cob_file *f, cob_field *kf, int *fullkeylen, in
 /* Routines in fsqlxfd.c common to all Database interfaces */
 COB_HIDDEN int db_keylen (cob_file *f, int idx);
 COB_HIDDEN int db_savekey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx);
-COB_HIDDEN int db_cmpkey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, int partlen);
+COB_HIDDEN int db_cmpkey (cob_context *, cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, int partlen);
 #endif
 #if defined(WITH_ODBC) || defined(WITH_OCI)
 #ifndef FALSE
@@ -439,18 +435,18 @@ struct file_xfd {
 };
 
 /* Routines in fsqlxfd.c common to ODBC/OCI interfaces */
-COB_HIDDEN struct file_xfd* cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, 
+COB_HIDDEN struct file_xfd* cob_load_xfd (cob_context *, struct db_state *db, cob_file *fl, char *alt_name, 
 											int indsize, int skiprid);
 COB_HIDDEN void 	cob_dump_xfd (struct file_xfd *fx, FILE *fo);
-COB_HIDDEN void 	cob_load_ddl (struct db_state *db, struct file_xfd *fx);
-COB_HIDDEN char *	getSchemaEnvName (struct db_state *db, char *envnm, const char *suf, char *out);
-COB_HIDDEN void 	logSchemaEnvName (struct db_state *db, const char *suffix);
-COB_HIDDEN char *	cob_sql_stmt (struct db_state *, struct file_xfd *, char *, int, int, int);
-COB_HIDDEN SQL_STMT *	cob_sql_select (struct db_state *, struct file_xfd *, int, int, int, void (*freeit)());
-COB_HIDDEN void 	cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl);
+COB_HIDDEN void 	cob_load_ddl (cob_context *, struct db_state *db, struct file_xfd *fx);
+COB_HIDDEN char *	getSchemaEnvName (cob_context *, struct db_state *db, char *envnm, const char *suf, char *out);
+COB_HIDDEN void 	logSchemaEnvName (cob_context *, struct db_state *db, const char *suffix);
+COB_HIDDEN char *	cob_sql_stmt (cob_context *, struct db_state *, struct file_xfd *, char *, int, int, int);
+COB_HIDDEN SQL_STMT *	cob_sql_select (cob_context *, struct db_state *, struct file_xfd *, int, int, int, void (*freeit)());
+COB_HIDDEN void 	cob_xfd_to_file (cob_context *, struct db_state *db, struct file_xfd *fx, cob_file *fl);
 COB_HIDDEN void 	cob_xfd_to_ddl (struct db_state *db, struct file_xfd *fx, FILE *fo);
-COB_HIDDEN void 	cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl);
-COB_HIDDEN void		cob_index_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl, 
+COB_HIDDEN void 	cob_file_to_xfd (cob_context *, struct db_state *db, struct file_xfd *fx, cob_file *fl);
+COB_HIDDEN void		cob_index_to_xfd (cob_context *, struct db_state *db, struct file_xfd *fx, cob_file *fl, 
 					int idx, int cond);
 COB_HIDDEN void		cob_index_clear (struct db_state *db, struct file_xfd *fx, cob_file *fl, int idx);
 COB_HIDDEN void		cob_xfd_swap_data (char *p1, char *p2, int len);
@@ -462,14 +458,14 @@ COB_HIDDEN void 	cob_sql_dump_index (struct db_state *db, struct file_xfd *fx, i
 #endif
 
 #ifdef	WITH_ODBC
-COB_EXPIMP void	cob_odbc_init_fileio (cob_file_api *);
+COB_EXPIMP void	cob_odbc_init_fileio (cob_context *, cob_file_api *);
 #endif
 #ifdef	WITH_OCI
-COB_EXPIMP void	cob_oci_init_fileio (cob_file_api *);
+COB_EXPIMP void	cob_oci_init_fileio (cob_context *, cob_file_api *);
 #endif
 
 #if defined(WITH_CISAM) || defined(WITH_DISAM) || defined(WITH_VBISAM) || defined(WITH_VISAM)
-COB_EXPIMP void	cob_isam_init_fileio (cob_file_api *);
+COB_EXPIMP void	cob_isam_init_fileio (cob_context *, cob_file_api *);
 #endif
 
 /* cob_file_dict values */

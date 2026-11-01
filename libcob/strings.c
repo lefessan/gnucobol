@@ -94,84 +94,97 @@ struct cob_unstring_state {
 
 /* Local variables */
 
-static cob_global		*cobglobptr = NULL;
 
 static const cob_field_attr	const_alpha_attr =
 				{COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
 static const cob_field_attr	const_strall_attr =
 				{COB_TYPE_ALPHANUMERIC_ALL, 0, 0, 0, NULL};
 
-/* Static structures for string related statements */
-COB_TLS struct cob_inspect_state	share_inspect_state;
-COB_TLS struct cob_string_state		share_string_state;
-COB_TLS struct cob_unstring_state	share_unstring_state;
+/* State of the string related statements, one per context */
+struct cob_strings_state {
+	struct cob_inspect_state	inspect;
+	struct cob_string_state		string;
+	struct cob_unstring_state	unstring;
+	unsigned char			*figurative_ptr;
+	size_t				figurative_size;
+	cob_field			alpha_fld;
+	cob_field			str_cob_low;	/* LOW-VALUE of the current collating sequence */
+};
 
-static unsigned char		*figurative_ptr;
-static size_t			figurative_size;
-
-static cob_field		alpha_fld;
-static cob_field		str_cob_low;
+static struct cob_strings_state *
+strings_state (cob_context *ctx)
+{
+	if (ctx->strings == NULL) {
+		ctx->strings = cob_malloc (sizeof (struct cob_strings_state));
+		ctx->strings->alpha_fld.attr = &const_alpha_attr;
+		ctx->strings->str_cob_low.size = 1;
+		ctx->strings->str_cob_low.data = (cob_u8_ptr)"\0";
+		ctx->strings->str_cob_low.attr = &const_strall_attr;
+	}
+	return ctx->strings;
+}
 
 /* Local functions */
 
 static COB_INLINE COB_A_INLINE void
-cob_update_low_value (void)
+cob_update_low_value (cob_context *ctx)
 {
 	if (COB_MODULE_PTR && COB_MODULE_PTR->collating_sequence != NULL) {
-		str_cob_low.data = (cob_u8_ptr)&COB_MODULE_PTR->collating_sequence[0];
+		strings_state (ctx)->str_cob_low.data = (cob_u8_ptr)&COB_MODULE_PTR->collating_sequence[0];
 	} else {
-		str_cob_low.data = (cob_u8_ptr)"\0";
+		strings_state (ctx)->str_cob_low.data = (cob_u8_ptr)"\0";
 	}
 }
 
 static void
-cob_str_memcpy (cob_field *dst, unsigned char *src, const int size)
+cob_str_memcpy (cob_context *ctx, cob_field *dst, unsigned char *src, const int size)
 {
 	cob_field	temp;
 
 	temp.size = size;
 	temp.data = src;
 	temp.attr = &const_alpha_attr;
-	cob_move (&temp, dst);
+	cob_move_ctx (ctx, &temp, dst);
 }
 
 static void
-alloc_figurative (const cob_field *f1, const cob_field *f2)
+alloc_figurative (cob_context *ctx, const cob_field *f1, const cob_field *f2)
 {
+	struct cob_strings_state	*st = strings_state (ctx);
 	const size_t		size2 = f2->size;
 
 #if 1	/* size1 is always 1 here, so several optimizations possible */
 	if (*f1->data == ' ' && size2 <= COB_SPACES_ALPHABETIC_BYTE_LENGTH) {
-		alpha_fld.size = size2;
-		alpha_fld.data = (unsigned char *) COB_SPACES_ALPHABETIC;
+		st->alpha_fld.size = size2;
+		st->alpha_fld.data = (unsigned char *) COB_SPACES_ALPHABETIC;
 		return;
 	}
 	if (*f1->data == '0' && size2 <= COB_ZEROES_ALPHABETIC_BYTE_LENGTH) {
-		alpha_fld.size = size2;
-		alpha_fld.data = (unsigned char *) COB_ZEROES_ALPHABETIC;
+		st->alpha_fld.size = size2;
+		st->alpha_fld.data = (unsigned char *) COB_ZEROES_ALPHABETIC;
 		return;
 	}
 
-	if (size2 > figurative_size) {
-		if (figurative_ptr) {
-			cob_free (figurative_ptr);
+	if (size2 > st->figurative_size) {
+		if (st->figurative_ptr) {
+			cob_free (st->figurative_ptr);
 		}
-		figurative_ptr = cob_malloc (size2);
-		figurative_size = size2;
+		st->figurative_ptr = cob_malloc (size2);
+		st->figurative_size = size2;
 	}
 
-	memset (figurative_ptr, *f1->data, size2);
+	memset (st->figurative_ptr, *f1->data, size2);
 #else
-	if (size2 > figurative_size) {
-		if (figurative_ptr) {
-			cob_free (figurative_ptr);
+	if (size2 > st->figurative_size) {
+		if (st->figurative_ptr) {
+			cob_free (st->figurative_ptr);
 		}
-		figurative_ptr = cob_malloc (size2);
-		figurative_size = size2;
+		st->figurative_ptr = cob_malloc (size2);
+		st->figurative_size = size2;
 	}
 
 	{
-		unsigned char	*s = figurative_ptr;
+		unsigned char	*s = st->figurative_ptr;
 		size_t		n = size2;
 		size_t		size1 = 0;
 		while (n != 0) {
@@ -184,8 +197,8 @@ alloc_figurative (const cob_field *f1, const cob_field *f2)
 	}
 #endif
 
-	alpha_fld.size = size2;
-	alpha_fld.data = figurative_ptr;
+	st->alpha_fld.size = size2;
+	st->alpha_fld.data = st->figurative_ptr;
 }
 
 /* (re-)allocates the used replace buffer as necessary
@@ -289,7 +302,7 @@ is_marked (struct cob_inspect_state *st, size_t pos, size_t length)
 }
 
 static void
-inspect_common_no_replace (
+inspect_common_no_replace (cob_context *ctx,
 	struct cob_inspect_state *st,
 	cob_field *f1,
 	cob_field *f2,
@@ -366,7 +379,7 @@ inspect_common_no_replace (
 	}
 
 	if (n != 0) {
-		cob_add_int (f1, n, 0);
+		cob_add_int_ctx (ctx, f1, n, 0);
 	}
 }
 
@@ -454,7 +467,7 @@ inspect_common_replacing (
 }
 
 static void
-inspect_common (
+inspect_common (cob_context *ctx,
 	struct cob_inspect_state *st,
 	cob_field *f1,
 	cob_field *f2
@@ -470,12 +483,12 @@ inspect_common (
 	}
 
 	if (!f1) {
-		cob_update_low_value ();
-		f1 = &str_cob_low;
+		cob_update_low_value (ctx);
+		f1 = &strings_state (ctx)->str_cob_low;
 	}
 	if (!f2) {
-		cob_update_low_value ();
-		f2 = &str_cob_low;
+		cob_update_low_value (ctx);
+		f2 = &strings_state (ctx)->str_cob_low;
 	}
 
 	/* note: inspect_common_no_replace and inspect_common_replacing share most
@@ -486,14 +499,14 @@ inspect_common (
 		if (f2->size > len) {
 			return;
 		}
-		inspect_common_no_replace (st, f1, f2, pos, len);
+		inspect_common_no_replace (ctx, st, f1, f2, pos, len);
 	} else {
 		if (f1->size != f2->size) {
 			if (COB_FIELD_TYPE (f1) == COB_TYPE_ALPHANUMERIC_ALL) {
-				alloc_figurative (f1, f2);
-				f1 = &alpha_fld;
+				alloc_figurative (ctx, f1, f2);
+				f1 = &strings_state (ctx)->alpha_fld;
 			} else {
-				cob_set_exception (COB_EC_RANGE_INSPECT_SIZE);
+				cob_set_exception_ctx (ctx, COB_EC_RANGE_INSPECT_SIZE);
 				return;
 			}
 		}
@@ -519,7 +532,7 @@ inspect_common (
    one-time cob_inspect_finish (copying the REPLACING characters back) */
 
 static COB_INLINE COB_A_INLINE void
-cob_inspect_init_common_intern (struct cob_inspect_state *st, cob_field *var)
+cob_inspect_init_common_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *var)
 {
 	if (COB_FIELD_HAVE_SIGN (var) && !COB_FIELD_SIGN_SEPARATE(var)) {
 		/* it is allowed to TRANSFORM / INSPECT a numeric display signed element;
@@ -530,7 +543,7 @@ cob_inspect_init_common_intern (struct cob_inspect_state *st, cob_field *var)
                    different cob_inspect_* functions */
 		st->var_copy = *var;
 		st->var = &st->var_copy;
-		st->sign = cob_real_get_sign (var, 0);
+		st->sign = cob_real_get_sign (ctx, var, 0);
 	} else {
 		st->var = NULL;
 	}
@@ -540,12 +553,12 @@ cob_inspect_init_common_intern (struct cob_inspect_state *st, cob_field *var)
 	st->end = NULL;
 	st->repdata_size = 0;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 }
 static void
-cob_inspect_init_intern (struct cob_inspect_state *st, cob_field *var, const cob_u32_t replacing)
+cob_inspect_init_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *var, const cob_u32_t replacing)
 {
-	cob_inspect_init_common_intern (st, var);
+	cob_inspect_init_common_intern (ctx, st, var);
 	st->replacing = replacing;
 
 	if (st->size > st->mark_size) {
@@ -566,9 +579,16 @@ cob_inspect_init_intern (struct cob_inspect_state *st, cob_field *var, const cob
 	st->mark_min = st->mark_max = 0;
 }
 void
+cob_inspect_init_ctx (cob_context *ctx, cob_field *var, const cob_u32_t replacing)
+{
+	cob_inspect_init_intern (ctx, &strings_state (ctx)->inspect, var, replacing);
+}
+
+/* compatibility: cob_inspect_init without context */
+void
 cob_inspect_init (cob_field *var, const cob_u32_t replacing)
 {
-	cob_inspect_init_intern (&share_inspect_state, var, replacing);
+	cob_inspect_init_ctx (COB_CTX_COMPAT, var, replacing);
 }
 
 /* an INSPECT CONVERTING / TRANSFORM is split into multiple parts:
@@ -581,15 +601,22 @@ cob_inspect_init (cob_field *var, const cob_u32_t replacing)
    one-time cob_inspect_converting/cob_inspect_translating (actual conversion) */
 
 static void
-cob_inspect_init_converting_intern (struct cob_inspect_state *st, cob_field *var)
+cob_inspect_init_converting_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *var)
 {
-	cob_inspect_init_common_intern (st, var);
+	cob_inspect_init_common_intern (ctx, st, var);
 	st->replacing = 0;	/* only set for pre 3.2 compat because of cob_inspect_finish */
 }
 void
+cob_inspect_init_converting_ctx (cob_context *ctx, cob_field *var)
+{
+	cob_inspect_init_converting_intern (ctx, &strings_state (ctx)->inspect, var);
+}
+
+/* compatibility: cob_inspect_init_converting without context */
+void
 cob_inspect_init_converting (cob_field *var)
 {
-	cob_inspect_init_converting_intern (&share_inspect_state, var);
+	cob_inspect_init_converting_ctx (COB_CTX_COMPAT, var);
 }
 
 static void
@@ -599,9 +626,16 @@ cob_inspect_start_intern (struct cob_inspect_state *st)
 	st->end = st->data + st->size;
 }
 void
+cob_inspect_start_ctx (cob_context *ctx)
+{
+	cob_inspect_start_intern (&strings_state (ctx)->inspect);
+}
+
+/* compatibility: cob_inspect_start without context */
+void
 cob_inspect_start (void)
 {
-	cob_inspect_start_intern (&share_inspect_state);
+	cob_inspect_start_ctx (COB_CTX_COMPAT);
 }
 
 static void
@@ -612,9 +646,16 @@ cob_inspect_before_intern (struct cob_inspect_state *st, const cob_field *str)
 		st->end = data_pos;
 }
 void
+cob_inspect_before_ctx (cob_context *ctx, const cob_field *str)
+{
+	cob_inspect_before_intern (&strings_state (ctx)->inspect, str);
+}
+
+/* compatibility: cob_inspect_before without context */
+void
 cob_inspect_before (const cob_field *str)
 {
-	cob_inspect_before_intern (&share_inspect_state, str);
+	cob_inspect_before_ctx (COB_CTX_COMPAT, str);
 }
 
 static void
@@ -627,13 +668,20 @@ cob_inspect_after_intern (struct cob_inspect_state *st, const cob_field *str)
 		st->start = st->end;
 }
 void
+cob_inspect_after_ctx (cob_context *ctx, const cob_field *str)
+{
+	cob_inspect_after_intern (&strings_state (ctx)->inspect, str);
+}
+
+/* compatibility: cob_inspect_after without context */
+void
 cob_inspect_after (const cob_field *str)
 {
-	cob_inspect_after_intern (&share_inspect_state, str);
+	cob_inspect_after_ctx (COB_CTX_COMPAT, str);
 }
 
 static void
-cob_inspect_characters_intern (struct cob_inspect_state *st, cob_field *f1)
+cob_inspect_characters_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *f1)
 {
 	const size_t	pos = st->start - st->data;
 	const size_t	len = st->end - st->start;
@@ -679,71 +727,106 @@ cob_inspect_characters_intern (struct cob_inspect_state *st, cob_field *f1)
 				}
 			}
 			if (n > 0) {
-				cob_add_int (f1, n, 0);
+				cob_add_int_ctx (ctx, f1, n, 0);
 			}
 		} else {
 			/* common case: no markers in the length to check */
-			cob_add_int (f1, (int)len, 0);
+			cob_add_int_ctx (ctx, f1, (int)len, 0);
 		}
 	}
 	set_inspect_mark (st, pos, len);
 }
 void
+cob_inspect_characters_ctx (cob_context *ctx, cob_field *f1)
+{
+	cob_inspect_characters_intern (ctx, &strings_state (ctx)->inspect, f1);
+}
+
+/* compatibility: cob_inspect_characters without context */
+void
 cob_inspect_characters (cob_field *f1)
 {
-	cob_inspect_characters_intern (&share_inspect_state, f1);
+	cob_inspect_characters_ctx (COB_CTX_COMPAT, f1);
 }
 
 static void
-cob_inspect_all_intern (struct cob_inspect_state *st, cob_field *f1, cob_field *f2)
+cob_inspect_all_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *f1, cob_field *f2)
 {
 	st->type = INSPECT_ALL;
-	inspect_common (st, f1, f2);
+	inspect_common (ctx, st, f1, f2);
 }
+void
+cob_inspect_all_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
+{
+	cob_inspect_all_intern (ctx, &strings_state (ctx)->inspect, f1, f2);
+}
+
+/* compatibility: cob_inspect_all without context */
 void
 cob_inspect_all (cob_field *f1, cob_field *f2)
 {
-	cob_inspect_all_intern (&share_inspect_state, f1, f2);
+	cob_inspect_all_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 static void
-cob_inspect_leading_intern (struct cob_inspect_state *st, cob_field *f1, cob_field *f2)
+cob_inspect_leading_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *f1, cob_field *f2)
 {
 	st->type = INSPECT_LEADING;
-	inspect_common (st, f1, f2);
+	inspect_common (ctx, st, f1, f2);
 }
+void
+cob_inspect_leading_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
+{
+	cob_inspect_leading_intern (ctx, &strings_state (ctx)->inspect, f1, f2);
+}
+
+/* compatibility: cob_inspect_leading without context */
 void
 cob_inspect_leading (cob_field *f1, cob_field *f2)
 {
-	cob_inspect_leading_intern (&share_inspect_state, f1, f2);
+	cob_inspect_leading_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 static void
-cob_inspect_first_intern (struct cob_inspect_state *st, cob_field *f1, cob_field *f2)
+cob_inspect_first_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *f1, cob_field *f2)
 {
 	st->type = INSPECT_FIRST;
-	inspect_common (st, f1, f2);
+	inspect_common (ctx, st, f1, f2);
 }
+void
+cob_inspect_first_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
+{
+	cob_inspect_first_intern (ctx, &strings_state (ctx)->inspect, f1, f2);
+}
+
+/* compatibility: cob_inspect_first without context */
 void
 cob_inspect_first (cob_field *f1, cob_field *f2)
 {
-	cob_inspect_first_intern (&share_inspect_state, f1, f2);
+	cob_inspect_first_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 static void
-cob_inspect_trailing_intern (struct cob_inspect_state *st, cob_field *f1, cob_field *f2)
+cob_inspect_trailing_intern (cob_context *ctx, struct cob_inspect_state *st, cob_field *f1, cob_field *f2)
 {
 	st->type = INSPECT_TRAILING;
-	inspect_common (st, f1, f2);
+	inspect_common (ctx, st, f1, f2);
 }
+void
+cob_inspect_trailing_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
+{
+	cob_inspect_trailing_intern (ctx, &strings_state (ctx)->inspect, f1, f2);
+}
+
+/* compatibility: cob_inspect_trailing without context */
 void
 cob_inspect_trailing (cob_field *f1, cob_field *f2)
 {
-	cob_inspect_trailing_intern (&share_inspect_state, f1, f2);
+	cob_inspect_trailing_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 static void
-cob_inspect_converting_intern (
+cob_inspect_converting_intern (cob_context *ctx,
 	struct cob_inspect_state *st,
 	const cob_field *f1,
 	const cob_field *f2
@@ -758,19 +841,19 @@ cob_inspect_converting_intern (
 	}
 
 	if (!f1) {
-		cob_update_low_value ();
-		f1 = &str_cob_low;
+		cob_update_low_value (ctx);
+		f1 = &strings_state (ctx)->str_cob_low;
 	}
 	if (!f2) {
-		cob_update_low_value ();
-		f2 = &str_cob_low;
+		cob_update_low_value (ctx);
+		f2 = &strings_state (ctx)->str_cob_low;
 	}
 	if (f1->size != f2->size) {
 		if (COB_FIELD_TYPE (f2) == COB_TYPE_ALPHANUMERIC_ALL) {
-			alloc_figurative (f2, f1);
-			f2 = &alpha_fld;
+			alloc_figurative (ctx, f2, f1);
+			f2 = &strings_state (ctx)->alpha_fld;
 		} else {
-			cob_set_exception (COB_EC_RANGE_INSPECT_SIZE);
+			cob_set_exception_ctx (ctx, COB_EC_RANGE_INSPECT_SIZE);
 			goto end;
 		}
 	}
@@ -851,18 +934,25 @@ end:
 	if (st->var) {
 		/* FIXME: needs test cases for all "goto end" cases above,
 		   ideally with a SIGN SEPARATE variable */
-		cob_real_put_sign (st->var, st->sign);
+		cob_real_put_sign (ctx, st->var, st->sign);
 	}
 }
 void
+cob_inspect_converting_ctx (cob_context *ctx, const cob_field *f1, const cob_field *f2)
+{
+	cob_inspect_converting_intern (ctx, &strings_state (ctx)->inspect, f1, f2);
+}
+
+/* compatibility: cob_inspect_converting without context */
+void
 cob_inspect_converting (const cob_field *f1, const cob_field *f2)
 {
-	cob_inspect_converting_intern (&share_inspect_state, f1, f2);
+	cob_inspect_converting_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 /* note: currently not used by cobc (disabled unfinished prototype) */
 static void
-cob_inspect_translating_intern (struct cob_inspect_state *st, const unsigned char *conv_table)
+cob_inspect_translating_intern (cob_context *ctx, struct cob_inspect_state *st, const unsigned char *conv_table)
 {
 	const size_t	len = st->end - st->start;
 
@@ -884,17 +974,24 @@ cob_inspect_translating_intern (struct cob_inspect_state *st, const unsigned cha
 	}
 
 	if (st->var) {
-		cob_real_put_sign (st->var, st->sign);
+		cob_real_put_sign (ctx, st->var, st->sign);
 	}
 }
 void
+cob_inspect_translating_ctx (cob_context *ctx, const unsigned char* conv_table)
+{
+	cob_inspect_translating_intern (ctx, &strings_state (ctx)->inspect, conv_table);
+}
+
+/* compatibility: cob_inspect_translating without context */
+void
 cob_inspect_translating (const unsigned char* conv_table)
 {
-	cob_inspect_translating_intern (&share_inspect_state, conv_table);
+	cob_inspect_translating_ctx (COB_CTX_COMPAT, conv_table);
 }
 
 static void
-cob_inspect_finish_intern (struct cob_inspect_state *st)
+cob_inspect_finish_intern (cob_context *ctx, struct cob_inspect_state *st)
 {
 	/* Note: this is not called any more for TRANSFORM/INSPECT CONVERTING
 	         since GnuCOBOL 3.2 codegen (only for "old modules")! */
@@ -919,13 +1016,20 @@ cob_inspect_finish_intern (struct cob_inspect_state *st)
 	}
 
 	if (st->var) {
-		cob_real_put_sign (st->var, st->sign);
+		cob_real_put_sign (ctx, st->var, st->sign);
 	}
 }
 void
+cob_inspect_finish_ctx (cob_context *ctx)
+{
+	cob_inspect_finish_intern (ctx, &strings_state (ctx)->inspect);
+}
+
+/* compatibility: cob_inspect_finish without context */
+void
 cob_inspect_finish (void)
 {
-	cob_inspect_finish_intern (&share_inspect_state);
+	cob_inspect_finish_ctx (COB_CTX_COMPAT);
 }
 
 
@@ -939,7 +1043,7 @@ cob_inspect_finish (void)
    one-time cob_string_finish (setting the string pointer) */
 
 static void
-cob_string_init_intern (struct cob_string_state *st, cob_field *dst, cob_field *ptr)
+cob_string_init_intern (cob_context *ctx, struct cob_string_state *st, cob_field *dst, cob_field *ptr)
 {
 	/* dst and ptr may be temporary fields (created from refmod or indexing),
 	   which might be overwritten between subsequent calls to the
@@ -952,19 +1056,26 @@ cob_string_init_intern (struct cob_string_state *st, cob_field *dst, cob_field *
 		st->ptr = &st->ptr_copy;
 	}
 	st->offset = 0;
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	if (st->ptr) {
-		st->offset = cob_get_int (st->ptr) - 1;
+		st->offset = cob_get_int_ctx (ctx, st->ptr) - 1;
 		if (st->offset < 0 || st->offset >= (int)st->dst->size) {
-			cob_set_exception (COB_EC_OVERFLOW_STRING);
+			cob_set_exception_ctx (ctx, COB_EC_OVERFLOW_STRING);
 		}
 	}
 }
 void
+cob_string_init_ctx (cob_context *ctx, cob_field *dst, cob_field *ptr)
+{
+	cob_string_init_intern (ctx, &strings_state (ctx)->string, dst, ptr);
+}
+
+/* compatibility: cob_string_init without context */
+void
 cob_string_init (cob_field *dst, cob_field *ptr)
 {
-	cob_string_init_intern (&share_string_state, dst, ptr);
+	cob_string_init_ctx (COB_CTX_COMPAT, dst, ptr);
 }
 
 static void
@@ -981,19 +1092,26 @@ cob_string_delimited_intern (struct cob_string_state *st, cob_field *dlm)
 	}
 }
 void
+cob_string_delimited_ctx (cob_context *ctx, cob_field *dlm)
+{
+	cob_string_delimited_intern (&strings_state (ctx)->string, dlm);
+}
+
+/* compatibility: cob_string_delimited without context */
+void
 cob_string_delimited (cob_field *dlm)
 {
-	cob_string_delimited_intern (&share_string_state, dlm);
+	cob_string_delimited_ctx (COB_CTX_COMPAT, dlm);
 }
 
 static void
-cob_string_append_intern (struct cob_string_state *st, cob_field *src)
+cob_string_append_intern (cob_context *ctx, struct cob_string_state *st, cob_field *src)
 {
 	size_t	src_size;
 	int	i;
 	int	size;
 
-	if (cobglobptr->cob_exception_code) {
+	if (ctx->glob.cob_exception_code) {
 		return;
 	}
 
@@ -1019,26 +1137,40 @@ cob_string_append_intern (struct cob_string_state *st, cob_field *src)
 		size = (int)(st->dst->size - st->offset);
 		memcpy (st->dst->data + st->offset, src->data, (size_t)size);
 		st->offset += size;
-		cob_set_exception (COB_EC_OVERFLOW_STRING);
+		cob_set_exception_ctx (ctx, COB_EC_OVERFLOW_STRING);
 	}
 }
+void
+cob_string_append_ctx (cob_context *ctx, cob_field *src)
+{
+	cob_string_append_intern (ctx, &strings_state (ctx)->string, src);
+}
+
+/* compatibility: cob_string_append without context */
 void
 cob_string_append (cob_field *src)
 {
-	cob_string_append_intern (&share_string_state, src);
+	cob_string_append_ctx (COB_CTX_COMPAT, src);
 }
 
 static void
-cob_string_finish_intern (struct cob_string_state *st)
+cob_string_finish_intern (cob_context *ctx, struct cob_string_state *st)
 {
 	if (st->ptr) {
-		cob_set_int (st->ptr, st->offset + 1);
+		cob_set_int_ctx (ctx, st->ptr, st->offset + 1);
 	}
 }
 void
+cob_string_finish_ctx (cob_context *ctx)
+{
+	cob_string_finish_intern (ctx, &strings_state (ctx)->string);
+}
+
+/* compatibility: cob_string_finish without context */
+void
 cob_string_finish (void)
 {
-	cob_string_finish_intern (&share_string_state);
+	cob_string_finish_ctx (COB_CTX_COMPAT);
 }
 
 /* UNSTRING */
@@ -1054,7 +1186,7 @@ cob_string_finish (void)
    one-time cob_unstring_finish (setting the string pointer / overflow exception) */
 
 static void
-cob_unstring_init_intern (
+cob_unstring_init_intern (cob_context *ctx,
 	struct cob_unstring_state *st,
 	cob_field *src,
 	cob_field *ptr,
@@ -1076,7 +1208,7 @@ cob_unstring_init_intern (
 	st->count = 0;
 	st->ndlms = 0;
 	st->dlm_list_size = 0;
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	if (num_dlm > st->dlm_list_size) {
 		if (st->dlm_list) {
 			cob_free (st->dlm_list);
@@ -1090,20 +1222,27 @@ cob_unstring_init_intern (
 	}
 
 	if (st->ptr) {
-		st->offset = cob_get_int (st->ptr) - 1;
+		st->offset = cob_get_int_ctx (ctx, st->ptr) - 1;
 		if (st->offset < 0 || st->offset >= (int)st->src->size) {
-			cob_set_exception (COB_EC_OVERFLOW_UNSTRING);
+			cob_set_exception_ctx (ctx, COB_EC_OVERFLOW_UNSTRING);
 		}
 	}
 }
 void
-cob_unstring_init (
+cob_unstring_init_ctx (cob_context *ctx,
 	cob_field *src,
 	cob_field *ptr,
 	const size_t num_dlm
 )
 {
-	cob_unstring_init_intern (&share_unstring_state, src, ptr, num_dlm);
+	cob_unstring_init_intern (ctx, &strings_state (ctx)->unstring, src, ptr, num_dlm);
+}
+
+/* compatibility: cob_unstring_init without context */
+void
+cob_unstring_init (cob_field *src, cob_field *ptr, const size_t num_dlm)
+{
+	cob_unstring_init_ctx (COB_CTX_COMPAT, src, ptr, num_dlm);
 }
 
 static void
@@ -1114,13 +1253,20 @@ cob_unstring_delimited_intern (struct cob_unstring_state *st, cob_field *dlm, co
 	st->ndlms++;
 }
 void
+cob_unstring_delimited_ctx (cob_context *ctx, cob_field *dlm, const cob_u32_t all)
+{
+	cob_unstring_delimited_intern (&strings_state (ctx)->unstring, dlm, all);
+}
+
+/* compatibility: cob_unstring_delimited without context */
+void
 cob_unstring_delimited (cob_field *dlm, const cob_u32_t all)
 {
-	cob_unstring_delimited_intern (&share_unstring_state, dlm, all);
+	cob_unstring_delimited_ctx (COB_CTX_COMPAT, dlm, all);
 }
 
 static void
-cob_unstring_into_intern (
+cob_unstring_into_intern (cob_context *ctx,
 	struct cob_unstring_state *st,
 	cob_field *dst,
 	cob_field *dlm,
@@ -1132,7 +1278,7 @@ cob_unstring_into_intern (
 	size_t		dlm_size = 0;
 	int		match_size = 0;
 
-	if (cobglobptr->cob_exception_code) {
+	if (ctx->glob.cob_exception_code) {
 		/* commonly COB_EC_OVERFLOW_UNSTRING: the specified WITH POINTER was
 		   too big, all other functions  must be returned early;
 		   TODO: adjust cobc to only call if cob_unstring_init was
@@ -1155,7 +1301,7 @@ cob_unstring_into_intern (
 		   are guaranteed to be < INT_MAX by cobc */
 		match_size = cob_min_int ((int)COB_FIELD_SIZE (dst),
 					  (int)st->src->size - st->offset);
-		cob_str_memcpy (dst, start, match_size);
+		cob_str_memcpy (ctx, dst, start, match_size);
 		st->offset += match_size;
 
 	/* DELIMITED BY [ALL] x [.. OR [ALL] z] */
@@ -1177,7 +1323,7 @@ cob_unstring_into_intern (
 			for (p = start; p < s; ++p) {
 				if (!memcmp (p, dp, (size_t)dlsize)) {         /* delimiter matches */
 					match_size = (int)(p - start);             /* count in */
-					cob_str_memcpy (dst, start, match_size);   /* into */
+					cob_str_memcpy (ctx, dst, start, match_size);   /* into */
 					st->offset += match_size + dlsize;    /* with pointer */
 					dlm_data = dp;
 					dlm_size = dlsize;
@@ -1207,7 +1353,7 @@ cob_unstring_into_intern (
 					dp = dlms.uns_dlm.data;
 					if (!memcmp (p, dp, (size_t)dlsize)) {         /* delimiter matches */
 						match_size = (int)(p - start);             /* count in */
-						cob_str_memcpy (dst, start, match_size);   /* into */
+						cob_str_memcpy (ctx, dst, start, match_size);   /* into */
 						st->offset += match_size + dlsize;    /* with pointer */
 						dlm_data = dp;
 						dlm_size = dlsize;
@@ -1232,7 +1378,7 @@ cob_unstring_into_intern (
 		/* if none of the delimiters matched, match to end */
 		if (!found) {
 			match_size = (int)(st->src->size - st->offset);
-			cob_str_memcpy (dst, start, match_size);
+			cob_str_memcpy (ctx, dst, start, match_size);
 			st->offset = (int) st->src->size;
 		}
 	}
@@ -1245,9 +1391,9 @@ cob_unstring_into_intern (
 	/* set DELIMITER IN */
 	if (dlm) {
 		if (dlm_data) {
-			cob_str_memcpy (dlm, dlm_data, (int) dlm_size);
+			cob_str_memcpy (ctx, dlm, dlm_data, (int) dlm_size);
 		} else if (COB_FIELD_IS_NUMERIC (dlm)) {
-			cob_set_int (dlm, 0);
+			cob_set_int_ctx (ctx, dlm, 0);
 		} else {
 			memset (dlm->data, ' ', dlm->size);
 		}
@@ -1255,55 +1401,84 @@ cob_unstring_into_intern (
 
 	/* set COUNT IN */
 	if (cnt) {
-		cob_set_int (cnt, match_size);
+		cob_set_int_ctx (ctx, cnt, match_size);
 	}
 }
 void
-cob_unstring_into (
+cob_unstring_into_ctx (cob_context *ctx,
 	cob_field *dst,
 	cob_field *dlm,
 	cob_field *cnt
 )
 {
-	cob_unstring_into_intern (&share_unstring_state, dst, dlm, cnt);
+	cob_unstring_into_intern (ctx, &strings_state (ctx)->unstring, dst, dlm, cnt);
+}
+
+/* compatibility: cob_unstring_into without context */
+void
+cob_unstring_into (cob_field *dst, cob_field *dlm, cob_field *cnt)
+{
+	cob_unstring_into_ctx (COB_CTX_COMPAT, dst, dlm, cnt);
 }
 
 static void
-cob_unstring_tallying_intern (struct cob_unstring_state *st, cob_field *f)
+cob_unstring_tallying_intern (cob_context *ctx, struct cob_unstring_state *st, cob_field *f)
 {
-	cob_add_int (f, st->count, 0);
+	cob_add_int_ctx (ctx, f, st->count, 0);
 }
+void
+cob_unstring_tallying_ctx (cob_context *ctx, cob_field *f)
+{
+	cob_unstring_tallying_intern (ctx, &strings_state (ctx)->unstring, f);
+}
+
+/* compatibility: cob_unstring_tallying without context */
 void
 cob_unstring_tallying (cob_field *f)
 {
-	cob_unstring_tallying_intern (&share_unstring_state, f);
+	cob_unstring_tallying_ctx (COB_CTX_COMPAT, f);
 }
 
 static void
-cob_unstring_finish_intern (struct cob_unstring_state *st)
+cob_unstring_finish_intern (cob_context *ctx, struct cob_unstring_state *st)
 {
 	if (st->offset < (int)st->src->size) {
 		/* overflow from any iteration -> overflow exception */
-		cob_set_exception (COB_EC_OVERFLOW_UNSTRING);
+		cob_set_exception_ctx (ctx, COB_EC_OVERFLOW_UNSTRING);
 	}
 
 	if (st->ptr) {
-		cob_set_int (st->ptr, st->offset + 1);
+		cob_set_int_ctx (ctx, st->ptr, st->offset + 1);
 	}
 }
 void
+cob_unstring_finish_ctx (cob_context *ctx)
+{
+	cob_unstring_finish_intern (ctx, &strings_state (ctx)->unstring);
+}
+
+/* compatibility: cob_unstring_finish without context */
+void
 cob_unstring_finish (void)
 {
-	cob_unstring_finish_intern (&share_unstring_state);
+	cob_unstring_finish_ctx (COB_CTX_COMPAT);
 }
 
 /* Initialization/Termination */
 
 void
-cob_exit_strings ()
+cob_exit_strings (cob_context *ctx)
 {
-	struct cob_inspect_state *sti = &share_inspect_state;
-	struct cob_unstring_state *stu = &share_unstring_state;
+	struct cob_strings_state	*st;
+	struct cob_inspect_state *sti;
+	struct cob_unstring_state *stu;
+
+	if (ctx == NULL || ctx->strings == NULL) {
+		return;
+	}
+	st = ctx->strings;
+	sti = &st->inspect;
+	stu = &st->unstring;
 
 	if (sti->mark) {
 		cob_free (sti->mark);
@@ -1322,26 +1497,15 @@ cob_exit_strings ()
 	}
 	stu->dlm_list_size = 0;
 
-	if (figurative_ptr) {
-		cob_free (figurative_ptr);
-		figurative_ptr = NULL;
+	if (st->figurative_ptr) {
+		cob_free (st->figurative_ptr);
 	}
-	figurative_size = 0;
+	cob_free (st);
+	ctx->strings = NULL;
 }
 
 void
 cob_init_strings (cob_global *lptr)
 {
-	cobglobptr = lptr;
 
-	figurative_ptr = NULL;
-	figurative_size = 0;
-
-	alpha_fld.size = 0;
-	alpha_fld.data = NULL;
-	alpha_fld.attr = &const_alpha_attr;
-
-	str_cob_low.size = 1;
-	str_cob_low.data = (cob_u8_ptr)"\0";
-	str_cob_low.attr = &const_strall_attr;
 }

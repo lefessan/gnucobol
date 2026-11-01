@@ -168,8 +168,6 @@ static struct call_hash		**call_table;
 static struct struct_handle	*base_preload_ptr;
 static struct struct_handle	*base_dynload_ptr;
 
-static cob_global		*cobglobptr = NULL;
-static cob_settings		*cobsetptr = NULL;
 
 static char			**resolve_path;
 static char			*resolve_error;
@@ -274,13 +272,13 @@ static const unsigned char	pvalid_char[] =
 /* Local functions */
 
 static void
-set_resolve_error (int module_type)
+set_resolve_error (cob_context *ctx, int module_type)
 {
 	resolve_error = resolve_error_buff;
 	if (module_type == COB_MODULE_TYPE_PROGRAM) {
-		cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
+		cob_set_exception_ctx (ctx, COB_EC_PROGRAM_NOT_FOUND);
 	} else {
-		cob_set_exception (COB_EC_FUNCTION_NOT_FOUND);
+		cob_set_exception_ctx (ctx, COB_EC_FUNCTION_NOT_FOUND);
 	}
 }
 
@@ -301,7 +299,7 @@ static int last_entry_is_working_directory (const char *buff, const char *pstr)
      like CBL_OC_DUMP) [if not included already: appended]
 */
 static void
-cob_set_library_path ()
+cob_set_library_path (cob_context *ctx)
 {
 	char		buff[COB_MEDIUM_BUFF];
 	char		*p;
@@ -323,9 +321,9 @@ cob_set_library_path ()
 	buff[0] = ' ';
 	buff[1] = PATHSEP_CHAR;
 	flag = 0;
-	if (cobsetptr->cob_library_path != NULL
-	 && strcmp (cobsetptr->cob_library_path, ".") != 0) {
-		for (p = cobsetptr->cob_library_path; *p; p++, pstr++) {
+	if (ctx->settings->cob_library_path != NULL
+	 && strcmp (ctx->settings->cob_library_path, ".") != 0) {
+		for (p = ctx->settings->cob_library_path; *p; p++, pstr++) {
 #ifdef	_WIN32
 			if (*p == '/') {
 				*pstr = '\\';
@@ -428,7 +426,7 @@ cob_set_library_path ()
 }
 
 static void
-do_cancel_module (struct call_hash *p, struct call_hash **base_hash,
+do_cancel_module (cob_context *ctx, struct call_hash *p, struct call_hash **base_hash,
 		  struct call_hash *prev)
 {
 	struct struct_handle	*dynptr;
@@ -466,7 +464,7 @@ do_cancel_module (struct call_hash *p, struct call_hash **base_hash,
 	if (nocancel) {
 		return;
 	}
-	if (!cobsetptr->cob_physical_cancel) {
+	if (!ctx->settings->cob_physical_cancel) {
 		return;
 	}
 	if (p->no_phys_cancel) {
@@ -476,7 +474,7 @@ do_cancel_module (struct call_hash *p, struct call_hash **base_hash,
 		return;
 	}
 
-	if (cobsetptr->cob_physical_cancel != -1) {
+	if (ctx->settings->cob_physical_cancel != -1) {
 		lt_dlclose (p->handle);
 
 		dynptr = base_dynload_ptr;
@@ -533,7 +531,7 @@ cache_dynload (const char *path, lt_dlhandle handle)
 }
 
 static void
-add_to_preload (const char *path, lt_dlhandle libhandle, struct struct_handle *last_elem)
+add_to_preload (cob_context *ctx, const char *path, lt_dlhandle libhandle, struct struct_handle *last_elem)
 {
 	struct struct_handle *preptr;
 
@@ -565,11 +563,11 @@ add_to_preload (const char *path, lt_dlhandle libhandle, struct struct_handle *l
 	base_preload_ptr = preptr;
 #endif
 
-	if (!cobsetptr->cob_preload_str) {
-		cobsetptr->cob_preload_str = cob_strdup(path);
+	if (!ctx->settings->cob_preload_str) {
+		ctx->settings->cob_preload_str = cob_strdup(path);
 	} else {
-		cobsetptr->cob_preload_str = cob_strcat((char*) PATHSEP_STR, cobsetptr->cob_preload_str, 2);
-		cobsetptr->cob_preload_str = cob_strcat((char*) path, cobsetptr->cob_preload_str, 2);
+		ctx->settings->cob_preload_str = cob_strcat((char*) PATHSEP_STR, ctx->settings->cob_preload_str, 2);
+		ctx->settings->cob_preload_str = cob_strcat((char*) path, ctx->settings->cob_preload_str, 2);
 	}
 }
 
@@ -580,7 +578,7 @@ add_to_preload (const char *path, lt_dlhandle libhandle, struct struct_handle *l
    * 3 if previously CALLed and not CANCELed, now marked as pre-loaded (no physical cancel)
  */
 static size_t
-cache_preload (const char *path)
+cache_preload (cob_context *ctx, const char *path)
 {
 	struct struct_handle	*preptr;
 	lt_dlhandle		libhandle;
@@ -611,7 +609,7 @@ cache_preload (const char *path)
 				if ((p->path && !strcmp (path, p->path))
 				 || (p->name && !strcmp (path, p->name))) {
 					p->no_phys_cancel = 1;
-					add_to_preload (path, p->handle, last_elem);
+					add_to_preload (ctx, path, p->handle, last_elem);
 					return 3;
 				}
 				p = p->next;
@@ -626,12 +624,12 @@ cache_preload (const char *path)
 
 	libhandle = lt_dlopen (path);
 	if (!libhandle) {
-		cob_runtime_warning (
+		cob_runtime_warning_ctx (ctx,
 			_("preloading from existing path '%s' failed; %s"), path, lt_dlerror());
 		return 0;
 	}
 
-	add_to_preload (path, libhandle, last_elem);
+	add_to_preload (ctx, path, libhandle, last_elem);
 
 	return 1;
 }
@@ -649,7 +647,7 @@ hash (const unsigned char *s)
 }
 
 static void
-insert (const char *name, void *func, lt_dlhandle handle,
+insert (cob_context *ctx, const char *name, void *func, lt_dlhandle handle,
 	cob_module *module, const char *path,
 	const unsigned int nocanc)
 {
@@ -663,7 +661,7 @@ insert (const char *name, void *func, lt_dlhandle handle,
 	p->module = module;
 
 	if (path) {
-		p->path = cob_path_to_absolute (path);
+		p->path = cob_path_to_absolute_ctx (ctx, path);
 	}
 	p->no_phys_cancel = nocanc;
 	val = hash ((const unsigned char *)name);
@@ -777,7 +775,7 @@ cob_encode_program_id (const unsigned char *const name,
 }
 
 static void *
-cob_resolve_internal  (const char *name, const char *dirent,
+cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 	const int fold_case, int module_type, int cache_check)
 {
 	void			*func;
@@ -788,7 +786,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 	unsigned char call_module_buff[COB_MAX_NAMELEN + 1];
 	const unsigned char *s;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Search the cache */
 	if (cache_check) {
@@ -805,7 +803,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 			? _("%s: PROGRAM name exceeds %d characters")
 			: _("%s: FUNCTION name exceeds %d characters"),
 			name, COB_MAX_NAMELEN);
-		set_resolve_error (module_type);
+		set_resolve_error (ctx, module_type);
 		return NULL;
 	}
 
@@ -822,7 +820,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		  currently loaded linked libraries, but possibly not on MSVC! */
 		func = lt_dlsym (mainhandle, call_entry_buff);
 		if (func != NULL) {
-			insert (name, func, mainhandle, NULL, NULL, 1);
+			insert (ctx, name, func, mainhandle, NULL, NULL, 1);
 			resolve_error = NULL;
 			return func;
 		}
@@ -833,7 +831,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 	for (preptr = base_preload_ptr; preptr; preptr = preptr->next) {
 		func = lt_dlsym (preptr->handle, call_entry_buff);
 		if (func != NULL) {
-			insert (name, func, preptr->handle,	NULL, preptr->path, 1);
+			insert (ctx, name, func, preptr->handle,	NULL, preptr->path, 1);
 			resolve_error = NULL;
 			return func;
 		}
@@ -846,7 +844,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		}
 		func = lt_dlsym (preptr->handle, call_entry_buff);
 		if (func != NULL) {
-			insert (name, func, preptr->handle,
+			insert (ctx, name, func, preptr->handle,
 				NULL, preptr->path, 1);
 			resolve_error = NULL;
 			return func;
@@ -857,7 +855,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 #if	defined(USE_LIBDL) && defined (RTLD_DEFAULT)
 	func = lt_dlsym (RTLD_DEFAULT, call_entry_buff);
 	if (func != NULL) {
-		insert (name, func, NULL, NULL, NULL, 1);
+		insert (ctx, name, func, NULL, NULL, NULL, 1);
 		resolve_error = NULL;
 		return func;
 	}
@@ -876,7 +874,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		cache_dynload (call_filename_buff, handle);
 		func = lt_dlsym (handle, call_entry_buff);
 		if (func != NULL) {
-			insert (name, func, handle, NULL, call_filename_buff, 0);
+			insert (ctx, name, func, handle, NULL, call_filename_buff, 0);
 			resolve_error = NULL;
 			return func;
 		}
@@ -885,12 +883,12 @@ cob_resolve_internal  (const char *name, const char *dirent,
 	/* Check if *module name* needs conversion */
 	/* CHECKME: why do we separate this by COB_LOAD_CASE
 	   from the entry points, which are a compile-time setup only? */
-	if (cobsetptr->name_convert != 0) {
+	if (ctx->settings->name_convert != 0) {
 		cob_u8_t* p = call_module_buff;
 		for (s = (const unsigned char *)name; *s; ++s, ++p) {
-			if (cobsetptr->name_convert == 1 && isupper (*s)) {
+			if (ctx->settings->name_convert == 1 && isupper (*s)) {
 				*p = (cob_u8_t)tolower (*s);
-			} else if (cobsetptr->name_convert == 2 && islower (*s)) {
+			} else if (ctx->settings->name_convert == 2 && islower (*s)) {
 				*p = (cob_u8_t)toupper (*s);
 			} else {
 				*p = *s;
@@ -909,7 +907,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		if (access (call_filename_buff, R_OK) != 0) {
 			snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
 				  "module '%s' not found", name);
-			set_resolve_error (module_type);
+			set_resolve_error (ctx, module_type);
 			return NULL;
 		}
 		lt_dlerror ();	/* clear last error conditions */
@@ -919,7 +917,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 			cache_dynload (call_filename_buff, handle);
 			func = lt_dlsym (handle, call_entry_buff);
 			if (func != NULL) {
-				insert (name, func, handle, NULL,
+				insert (ctx, name, func, handle, NULL,
 					call_filename_buff, 0);
 				resolve_error = NULL;
 				return func;
@@ -927,9 +925,9 @@ cob_resolve_internal  (const char *name, const char *dirent,
 		}
 		snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
 			  "entry point '%s' not found", (const char *)s);
-		set_resolve_error (module_type);
+		set_resolve_error (ctx, module_type);
 		/* lt_dlerror will now give either the message from lt_dlopen or lt_dlym */
-		cob_runtime_warning (
+		cob_runtime_warning_ctx (ctx,
 			_("loading from existing path '%s' failed; %s"),
 			call_filename_buff, lt_dlerror ());
 		return NULL;
@@ -952,7 +950,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 				cache_dynload (call_filename_buff, handle);
 				func = lt_dlsym (handle, call_entry_buff);
 				if (func != NULL) {
-					insert (name, func, handle, NULL,
+					insert (ctx, name, func, handle, NULL,
 						call_filename_buff, 0);
 					resolve_error = NULL;
 					return func;
@@ -960,9 +958,9 @@ cob_resolve_internal  (const char *name, const char *dirent,
 			}
 			snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
 				  "entry point '%s' not found", (const char *)s);
-			set_resolve_error (module_type);
+			set_resolve_error (ctx, module_type);
 			/* lt_dlerror will now give either the message from lt_dlopen or lt_dlym */
-			cob_runtime_warning (
+			cob_runtime_warning_ctx (ctx,
 				_("loading from existing path '%s' failed; %s"),
 				call_filename_buff, lt_dlerror ());
 			return NULL;
@@ -971,7 +969,7 @@ cob_resolve_internal  (const char *name, const char *dirent,
 #endif
 	snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
 		  "module '%s' not found", name);
-	set_resolve_error (module_type);
+	set_resolve_error (ctx, module_type);
 	return NULL;
 }
 
@@ -1029,7 +1027,7 @@ cob_chk_call_path (const char *name, char **dirent)
 /* Global functions */
 
 const char *
-cob_resolve_error (void)
+cob_resolve_error_ctx (cob_context *ctx)
 {
 	const char	*p;
 
@@ -1042,15 +1040,29 @@ cob_resolve_error (void)
 	return p;
 }
 
-void
-cob_call_error (void)
+/* compatibility: cob_resolve_error without context */
+const char *
+cob_resolve_error (void)
 {
-	cob_runtime_error ("%s", cob_resolve_error ());
-	cob_hard_failure ();
+	return cob_resolve_error_ctx (COB_CTX_COMPAT);
 }
 
 void
-cob_set_cancel (cob_module *m)
+cob_call_error_ctx (cob_context *ctx)
+{
+	cob_runtime_error_ctx (ctx, "%s", cob_resolve_error_ctx (ctx));
+	cob_hard_failure ();
+}
+
+/* compatibility: cob_call_error without context */
+void
+cob_call_error (void)
+{
+	cob_call_error_ctx (COB_CTX_COMPAT);
+}
+
+void
+cob_set_cancel_ctx (cob_context *ctx, cob_module *m)
 {
 	struct call_hash	*p;
 
@@ -1065,85 +1077,113 @@ cob_set_cancel (cob_module *m)
 			return;
 		}
 	}
-	insert (m->module_name, m->module_entry.funcvoid, NULL, m, NULL, 1);
+	insert (ctx, m->module_name, m->module_entry.funcvoid, NULL, m, NULL, 1);
+}
+
+/* compatibility: cob_set_cancel without context */
+void
+cob_set_cancel (cob_module *m)
+{
+	cob_set_cancel_ctx (COB_CTX_COMPAT, m);
 }
 
 void *
-cob_resolve (const char *name)
+cob_resolve_ctx (cob_context *ctx, const char *name)
 {
 	void	*p;
 	char	*entry;
 	char	*dirent;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
 	entry = cob_chk_call_path (name, &dirent);
-	p = cob_resolve_internal (entry, dirent, 0, COB_MODULE_TYPE_PROGRAM, 1);
+	p = cob_resolve_internal (ctx, entry, dirent, 0, COB_MODULE_TYPE_PROGRAM, 1);
 	if (dirent) {
 		cob_free (dirent);
 	}
 	return p;
 }
 
+/* compatibility: cob_resolve without context */
 void *
-cob_resolve_cobol (const char *name, const int fold_case, const int errind)
+cob_resolve (const char *name)
+{
+	return cob_resolve_ctx (COB_CTX_COMPAT, name);
+}
+
+void *
+cob_resolve_cobol_ctx (cob_context *ctx, const char *name, const int fold_case, const int errind)
 {
 	void	*p;
 	char	*entry;
 	char	*dirent;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	entry = cob_chk_call_path (name, &dirent);
-	p = cob_resolve_internal (entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 1);
+	p = cob_resolve_internal (ctx, entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 1);
 	if (dirent) {
 		cob_free (dirent);
 	}
 	if (!p) {
 		if (errind) {
-			cob_call_error ();
+			cob_call_error_ctx (ctx);
 		}
-		cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
+		cob_set_exception_ctx (ctx, COB_EC_PROGRAM_NOT_FOUND);
 	}
-	cobglobptr->cob_call_name_hash = cob_get_name_hash (name);
+	ctx->glob.cob_call_name_hash = cob_get_name_hash (name);
 	return p;
 }
 
+/* compatibility: cob_resolve_cobol without context */
 void *
-cob_resolve_func (const char *name)
+cob_resolve_cobol (const char *name, const int fold_case, const int errind)
+{
+	return cob_resolve_cobol_ctx (COB_CTX_COMPAT, name, fold_case, errind);
+}
+
+void *
+cob_resolve_func_ctx (cob_context *ctx, const char *name)
 {
 	void	*p;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
-	p = cob_resolve_internal (name, NULL, 0, COB_MODULE_TYPE_FUNCTION, 1);
+	p = cob_resolve_internal (ctx, name, NULL, 0, COB_MODULE_TYPE_FUNCTION, 1);
 	if (!p) {
 		/* Note: exception raised above */
-		cob_runtime_error (_("user-defined FUNCTION '%s' not found"), name);
+		cob_runtime_error_ctx (ctx, _("user-defined FUNCTION '%s' not found"), name);
 		cob_hard_failure ();
 	}
 	return p;
+}
+
+/* compatibility: cob_resolve_func without context */
+void *
+cob_resolve_func (const char *name)
+{
+	return cob_resolve_func_ctx (COB_CTX_COMPAT, name);
 }
 
 /*
  * Load library and return address of entry point
  */
 void *
-cob_load_lib (const char *library, const char *entry, char *reason)
+cob_load_lib_ctx (cob_context *ctx, const char *library, const char *entry, char *reason)
 {
 	void	*p;
 #ifdef RTLD_MEMBER		/* Used on AIX due to shared code inside archive */
@@ -1183,16 +1223,23 @@ cob_load_lib (const char *library, const char *entry, char *reason)
 	return p;
 }
 
+/* compatibility: cob_load_lib without context */
 void *
-cob_call_field (const cob_field *f, const struct cob_call_struct *cs,
+cob_load_lib (const char *library, const char *entry, char *reason)
+{
+	return cob_load_lib_ctx (COB_CTX_COMPAT, library, entry, reason);
+}
+
+void *
+cob_call_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_struct *cs,
 		const unsigned int errind, const int fold_case)
 {
 	char		*name, *entry, *dirent;
 	void		*p;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -1203,7 +1250,7 @@ cob_call_field (const cob_field *f, const struct cob_call_struct *cs,
 	if (*name == ' ') {
 		size_t				len;
 		/* same warning as in cobc/typeck.c */
-		cob_runtime_warning (
+		cob_runtime_warning_ctx (ctx,
 			_("'%s' literal includes leading spaces which are omitted"), name);
 		len = strlen (name);
 		while (*name == ' ') {
@@ -1213,7 +1260,7 @@ cob_call_field (const cob_field *f, const struct cob_call_struct *cs,
 	}
 
 	entry = cob_chk_call_path (name, &dirent);
-	cobglobptr->cob_call_name_hash = cob_get_name_hash (entry);
+	ctx->glob.cob_call_name_hash = cob_get_name_hash (entry);
 
 	/* Check if contained program - which may override otherwise
 	   loaded programs */
@@ -1252,19 +1299,26 @@ cob_call_field (const cob_field *f, const struct cob_call_struct *cs,
 		}
 	}
 
-	p = cob_resolve_internal (entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 0);
+	p = cob_resolve_internal (ctx, entry, dirent, fold_case, COB_MODULE_TYPE_PROGRAM, 0);
 	if (dirent) {
 		cob_free (dirent);
 	}
 	if (!p) {
 		if (errind) {
-			cob_call_error ();
+			cob_call_error_ctx (ctx);
 		} else {
-			cob_set_exception (COB_EC_PROGRAM_NOT_FOUND);
+			cob_set_exception_ctx (ctx, COB_EC_PROGRAM_NOT_FOUND);
 			return NULL;
 		}
 	}
 	return p;
+}
+
+/* compatibility: cob_call_field without context */
+void *
+cob_call_field (const cob_field *f, const struct cob_call_struct *cs, const unsigned int errind, const int fold_case)
+{
+	return cob_call_field_ctx (COB_CTX_COMPAT, f, cs, errind, fold_case);
 }
 
 void
@@ -1291,7 +1345,7 @@ cob_module_clean (cob_module *m)
 }
 
 void
-cob_cancel (const char *name)
+cob_cancel_ctx (cob_context *ctx, const char *name)
 {
 	const char		*entry;
 	struct call_hash	*p;
@@ -1299,11 +1353,11 @@ cob_cancel (const char *name)
 	struct call_hash	*r;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!name) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_cancel");
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_cancel");
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -1325,15 +1379,22 @@ cob_cancel (const char *name)
 	r = NULL;
 	for (; p; p = p->next) {
 		if (strcmp (entry, p->name) == 0) {
-			do_cancel_module (p, q, r);
+			do_cancel_module (ctx, p, q, r);
 			return;
 		}
 		r = p;
 	}
 }
 
+/* compatibility: cob_cancel without context */
 void
-cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
+cob_cancel (const char *name)
+{
+	cob_cancel_ctx (COB_CTX_COMPAT, name);
+}
+
+void
+cob_cancel_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_struct *cs)
 {
 	char				*name;
 	const char			*entry;
@@ -1342,8 +1403,8 @@ cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
 	int	(*cancel_func)(const int);
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	/* LCOV_EXCL_STOP */
 	if (!f || f->size == 0) {
@@ -1363,11 +1424,18 @@ cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
 			return;
 		}
 	}
-	cob_cancel (entry);
+	cob_cancel_ctx (ctx, entry);
+}
+
+/* compatibility: cob_cancel_field without context */
+void
+cob_cancel_field (const cob_field *f, const struct cob_call_struct *cs)
+{
+	cob_cancel_field_ctx (COB_CTX_COMPAT, f, cs);
 }
 
 int
-cob_call (const char *name, const int argc, void **argv)
+cob_call_ctx (cob_context *ctx, const char *name, const int argc, void **argv)
 {
 	void			*pargv[MAX_CALL_FIELD_PARAMS] = { 0 };
 	cob_call_union		unifunc;
@@ -1461,23 +1529,23 @@ cob_call (const char *name, const int argc, void **argv)
 			);
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!name) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_call");
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_call");
 		cob_hard_failure ();
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (_("invalid number of arguments passed to '%s'"), "cob_call");
+		cob_runtime_error_ctx (ctx, _("invalid number of arguments passed to '%s'"), "cob_call");
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
-	unifunc.funcvoid = cob_resolve_cobol (name, 0, 1);
+	unifunc.funcvoid = cob_resolve_cobol_ctx (ctx, name, 0, 1);
 	/* Set number of parameters */
-	cobglobptr->cob_call_params = argc;
-	cobglobptr->cob_call_from_c = 1;
-	cobglobptr->cob_call_name_hash = 0;
+	ctx->glob.cob_call_params = argc;
+	ctx->glob.cob_call_from_c = 1;
+	ctx->glob.cob_call_name_hash = 0;
 	for (i = 0; i < argc; ++i) {
 		pargv[i] = argv[i];
 	}	funcint = (int (*)(
@@ -1634,18 +1702,32 @@ cob_call (const char *name, const int argc, void **argv)
 	return i;
 }
 
+/* compatibility: cob_call without context */
 int
-cob_func (const char *name, const int argc, void **argv)
+cob_call (const char *name, const int argc, void **argv)
 {
-	int	ret;
-
-	ret = cob_call (name, argc, argv);
-	cob_cancel (name);
-	return ret;
+	return cob_call_ctx (COB_CTX_COMPAT, name, argc, argv);
 }
 
 int
-cob_call_cobol (const char *name, const int argc, ...)
+cob_func_ctx (cob_context *ctx, const char *name, const int argc, void **argv)
+{
+	int	ret;
+
+	ret = cob_call_ctx (ctx, name, argc, argv);
+	cob_cancel_ctx (ctx, name);
+	return ret;
+}
+
+/* compatibility: cob_func without context */
+int
+cob_func (const char *name, const int argc, void **argv)
+{
+	return cob_func_ctx (COB_CTX_COMPAT, name, argc, argv);
+}
+
+static int
+cob_call_cobol_va_ctx (cob_context *ctx, const char *name, const int argc, va_list cob_va_args)
 {
 	void			**pargv;
 	cob_call_union		unifunc;
@@ -1653,25 +1735,25 @@ cob_call_cobol (const char *name, const int argc, ...)
 	int			i;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (_("invalid number of arguments passed to '%s'"), "cob_call_cobol");
-		cob_stop_run (1);
+		cob_runtime_error_ctx (ctx, _("invalid number of arguments passed to '%s'"), "cob_call_cobol");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	if (!name) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_call_cobol");
-		cob_stop_run (1);
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_call_cobol");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	/* LCOV_EXCL_STOP */
-	unifunc.funcvoid = cob_resolve_cobol (name, 0, 1);
+	unifunc.funcvoid = cob_resolve_cobol_ctx (ctx, name, 0, 1);
 	pargv = cob_malloc (MAX_CALL_FIELD_PARAMS * sizeof(void *));
 	/* Set number of parameters */
-	cobglobptr->cob_call_params = argc;
-	cobglobptr->cob_call_from_c = 1;
-	cobglobptr->cob_call_name_hash = 0;
-	va_start (ap, argc);
+	ctx->glob.cob_call_params = argc;
+	ctx->glob.cob_call_from_c = 1;
+	ctx->glob.cob_call_name_hash = 0;
+	va_copy (ap, cob_va_args);
 	for (i = 0; i < argc; ++i) {
 		pargv[i] = va_arg (ap, void *);
 	}
@@ -1754,7 +1836,32 @@ cob_call_cobol (const char *name, const int argc, ...)
 }
 
 int
-cob_call_entry (void *entry, const int argc, ...)
+cob_call_cobol_ctx (cob_context *ctx, const char *name, const int argc, ...)
+{
+	va_list		cob_va_args;
+	int	cob_va_ret;
+
+	va_start (cob_va_args, argc);
+	cob_va_ret = cob_call_cobol_va_ctx (ctx, name, argc, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_call_cobol without context */
+int
+cob_call_cobol (const char *name, const int argc, ...)
+{
+	va_list		cob_va_args;
+	int	cob_va_ret;
+
+	va_start (cob_va_args, argc);
+	cob_va_ret = cob_call_cobol_va_ctx (COB_CTX_COMPAT, name, argc, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static int
+cob_call_entry_va_ctx (cob_context *ctx, void *entry, const int argc, va_list cob_va_args)
 {
 	void			**pargv;
 	cob_call_union		unifunc;
@@ -1762,25 +1869,25 @@ cob_call_entry (void *entry, const int argc, ...)
 	int			i;
 
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (argc < 0 || argc > MAX_CALL_FIELD_PARAMS) {
-		cob_runtime_error (_("invalid number of arguments passed to '%s'"), "cob_call_entry");
-		cob_stop_run (1);
+		cob_runtime_error_ctx (ctx, _("invalid number of arguments passed to '%s'"), "cob_call_entry");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	if (!entry) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_call_entry");
-		cob_stop_run (1);
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_call_entry");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	/* LCOV_EXCL_STOP */
 	unifunc.funcvoid = entry;
 	pargv = cob_malloc (MAX_CALL_FIELD_PARAMS * sizeof(void *));
 	/* Set number of parameters */
-	cobglobptr->cob_call_params = argc;
-	cobglobptr->cob_call_from_c = 1;
-	cobglobptr->cob_call_name_hash = 0;
-	va_start (ap, argc);
+	ctx->glob.cob_call_params = argc;
+	ctx->glob.cob_call_from_c = 1;
+	ctx->glob.cob_call_name_hash = 0;
+	va_copy (ap, cob_va_args);
 	for (i = 0; i < argc; ++i) {
 		pargv[i] = va_arg (ap, void *);
 	}
@@ -1860,24 +1967,49 @@ cob_call_entry (void *entry, const int argc, ...)
 				);
 	cob_free (pargv);
 	return i;
+}
+
+int
+cob_call_entry_ctx (cob_context *ctx, void *entry, const int argc, ...)
+{
+	va_list		cob_va_args;
+	int	cob_va_ret;
+
+	va_start (cob_va_args, argc);
+	cob_va_ret = cob_call_entry_va_ctx (ctx, entry, argc, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_call_entry without context */
+int
+cob_call_entry (void *entry, const int argc, ...)
+{
+	va_list		cob_va_args;
+	int	cob_va_ret;
+
+	va_start (cob_va_args, argc);
+	cob_va_ret = cob_call_entry_va_ctx (COB_CTX_COMPAT, entry, argc, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
 }
 
 
 #ifndef COB_WITHOUT_JMP
 /* save jump structure, normally called by cobsetjmp which wraps it into setjmp */
 void *
-cob_savenv (struct cobjmp_buf *jbuf)
+cob_savenv_ctx (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!jbuf) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_savenv");
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_savenv");
 		cob_hard_failure ();
 	}
 	if (cob_jmp_primed) {
-		cob_runtime_error (_("multiple call to 'cob_setjmp'"));
+		cob_runtime_error_ctx (ctx, _("multiple call to 'cob_setjmp'"));
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
@@ -1885,36 +2017,57 @@ cob_savenv (struct cobjmp_buf *jbuf)
 	return jbuf->cbj_jmp_buf;
 }
 
+/* compatibility: cob_savenv without context */
+void *
+cob_savenv (struct cobjmp_buf *jbuf)
+{
+	return cob_savenv_ctx (COB_CTX_COMPAT, jbuf);
+}
+
+void *
+cob_savenv2_ctx (cob_context *ctx, struct cobjmp_buf *jbuf, const int jsize)
+{
+	COB_UNUSED (jsize);
+	return cob_savenv_ctx (ctx, jbuf);
+}
+
+/* compatibility: cob_savenv2 without context */
 void *
 cob_savenv2 (struct cobjmp_buf *jbuf, const int jsize)
 {
-	COB_UNUSED (jsize);
-	return cob_savenv (jbuf);
+	return cob_savenv2_ctx (COB_CTX_COMPAT, jbuf, jsize);
 }
 
 void
-cob_longjmp (struct cobjmp_buf *jbuf)
+cob_longjmp_ctx (cob_context *ctx, struct cobjmp_buf *jbuf)
 {
 	/* LCOV_EXCL_START */
-	if (!cobglobptr) {
-		cob_fatal_error (COB_FERROR_INITIALIZED);
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
 	if (!jbuf) {
-		cob_runtime_error (_("NULL parameter passed to '%s'"), "cob_longjmp");
+		cob_runtime_error_ctx (ctx, _("NULL parameter passed to '%s'"), "cob_longjmp");
 		cob_hard_failure ();
 	}
 	if (!cob_jmp_primed) {
-		cob_runtime_error (_("call to 'cob_longjmp' with no prior 'cob_setjmp'"));
+		cob_runtime_error_ctx (ctx, _("call to 'cob_longjmp' with no prior 'cob_setjmp'"));
 		cob_hard_failure ();
 	}
 	/* LCOV_EXCL_STOP */
 	cob_jmp_primed = 0;
 	longjmp (jbuf->cbj_jmp_buf, 1);
 }
+
+/* compatibility: cob_longjmp without context */
+void
+cob_longjmp (struct cobjmp_buf *jbuf)
+{
+	cob_longjmp_ctx (COB_CTX_COMPAT, jbuf);
+}
 #endif
 
 static void
-close_and_free_module_list (struct struct_handle ** module_list_ptr)
+close_and_free_module_list (cob_context *ctx, struct struct_handle ** module_list_ptr)
 {
 	struct struct_handle	*h = *module_list_ptr;
 
@@ -1924,7 +2077,7 @@ close_and_free_module_list (struct struct_handle ** module_list_ptr)
 			cob_free ((void*)h->path);
 		}
 		if (h->handle
-		 && cobsetptr->cob_physical_cancel != -1) {
+		 && ctx->settings->cob_physical_cancel != -1) {
 			lt_dlclose (h->handle);
 		}
 		h = h->next;
@@ -1934,7 +2087,7 @@ close_and_free_module_list (struct struct_handle ** module_list_ptr)
 }
 
 void
-cob_exit_call (void)
+cob_exit_call (cob_context *ctx)
 {
 	if (call_filename_buff) {
 		cob_free (call_filename_buff);
@@ -1981,11 +2134,11 @@ cob_exit_call (void)
 		}
 		call_table = NULL;
 	}
-	close_and_free_module_list (&base_preload_ptr);
-	close_and_free_module_list (&base_dynload_ptr);
+	close_and_free_module_list (ctx, &base_preload_ptr);
+	close_and_free_module_list (ctx, &base_dynload_ptr);
 
 #if	!defined(_WIN32) && !defined(USE_LIBDL)
-	if (cobsetptr->cob_physical_cancel != -1) {
+	if (ctx->settings->cob_physical_cancel != -1) {
 		lt_dlexit ();
 	}
 #if	0	/* RXWRXW - ltdl leak */
@@ -2003,7 +2156,7 @@ cob_exit_call (void)
 /* try to load specified module from all entries in COB_LIBRARY_PATH
    return values see cache_preload */
 static
-size_t cob_try_preload (const char* module_name)
+size_t cob_try_preload (cob_context *ctx, const char* module_name)
 {
 	char		buff[COB_MEDIUM_BUFF];
 
@@ -2016,7 +2169,7 @@ size_t cob_try_preload (const char* module_name)
 	}
 	*b = 0;
 
-	return cache_preload (buff);
+	return cache_preload (ctx, buff);
 #else
 	size_t				i, ret;
 
@@ -2024,30 +2177,28 @@ size_t cob_try_preload (const char* module_name)
 		snprintf (buff, (size_t)COB_MEDIUM_MAX,
 			"%s%c%s.%s",
 			resolve_path[i], SLASH_CHAR, module_name, COB_MODULE_EXT);
-		ret = cache_preload (buff);
+		ret = cache_preload (ctx, buff);
 		if (ret) {
 			return ret;
 		}
 	}
 	/* If not found, try just using the name as-is */
-	ret = cache_preload (module_name);
+	ret = cache_preload (ctx, module_name);
 
 	if (ret == 0) {
-		cob_runtime_warning (_("preloading of '%s' failed"), module_name);
+		cob_runtime_warning_ctx (ctx, _("preloading of '%s' failed"), module_name);
 	}
 	return ret;
 #endif
 }
 
 void
-cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
+cob_init_call (cob_context *ctx, cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
 {
 #ifndef	HAVE_DESIGNATED_INITS
 	const unsigned char		*pv;
 #endif
 
-	cobglobptr = lptr;
-	cobsetptr = sptr;
 
 	base_preload_ptr = NULL;
 	base_dynload_ptr = NULL;
@@ -2081,7 +2232,7 @@ cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
 	}
 
 	/* set static vars resolve_path (data in resolve_alloc) and resolve_size */
-	cob_set_library_path ();
+	cob_set_library_path (ctx);
 
 	lt_dlinit ();
 
@@ -2098,21 +2249,21 @@ cob_init_call (cob_global *lptr, cob_settings* sptr, const int check_mainhandle)
 
 	call_filename_buff = cob_malloc ((size_t)COB_NORMAL_BUFF);
 
-	if (cobsetptr->cob_preload_str != NULL) {
+	if (ctx->settings->cob_preload_str != NULL) {
 		char	*p;
 		char	*s;
 
 		/* using temporary buffer as cob_preload_str
 		   will be adjusted in the call and contains only
 		   the loaded modules after this call */
-		p = cob_strdup (cobsetptr->cob_preload_str);
+		p = cob_strdup (ctx->settings->cob_preload_str);
 
-		cob_free (cobsetptr->cob_preload_str);
-		cobsetptr->cob_preload_str = NULL;
+		cob_free (ctx->settings->cob_preload_str);
+		ctx->settings->cob_preload_str = NULL;
 
 		s = strtok (p, PATHSEP_STR);
 		for (; s; s = strtok (NULL, PATHSEP_STR)) {
-			(void)cob_try_preload (s);
+			(void)cob_try_preload (ctx, s);
 		}
 		cob_free (p);
 	}

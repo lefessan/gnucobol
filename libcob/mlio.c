@@ -180,13 +180,12 @@ enum json_code_status {
 };
 
 
-static cob_global		*cobglobptr;
 
 /* Local functions */
 
 /* set special register XML-CODE */
 static COB_INLINE COB_A_INLINE void
-set_xml_code (const enum xml_code_status code)
+set_xml_code (cob_context *ctx, const enum xml_code_status code)
 {
 	/* LCOV_EXCL_START */
 	if (!COB_MODULE_PTR->xml_code) {
@@ -194,27 +193,27 @@ set_xml_code (const enum xml_code_status code)
 		return;
 	}
 	/* LCOV_EXCL_STOP */
-	cob_set_int (COB_MODULE_PTR->xml_code, (int)code);
+	cob_set_int_ctx (ctx, COB_MODULE_PTR->xml_code, (int)code);
 }
 
 /* set internal XML exception and special register XML-CODE */
 static void
-set_xml_exception (const enum xml_code_status code)
+set_xml_exception (cob_context *ctx, const enum xml_code_status code)
 {
-	cob_set_exception (COB_EC_XML_IMP);
-	set_xml_code (code);
+	cob_set_exception_ctx (ctx, COB_EC_XML_IMP);
+	set_xml_code (ctx, code);
 }
 
 /* get special register XML-CODE */
 static COB_INLINE COB_A_INLINE int
-get_xml_code (void)
+get_xml_code (cob_context *ctx)
 {
-	return cob_get_int (COB_MODULE_PTR->xml_code);
+	return cob_get_int_ctx (ctx, COB_MODULE_PTR->xml_code);
 }
 
 /* set special register XML-EVENT */
 static void
-set_xml_event (enum cob_xml_event event)
+set_xml_event (cob_context *ctx, enum cob_xml_event event)
 {
 	/* note: it is up to the compiler to ensure that this constant
 	   is read-only (and therefore no overwriting of const data happens) */
@@ -403,7 +402,7 @@ add_xml_event_data_tag (struct xml_state *state, const xmlChar *name, size_t siz
    the size is calculated if not explicit specified (size -> -1)
    if the state is given then the text is copied to its buffer */
 static void
-set_xml_text (const int ntext, const void *data, const size_t size)
+set_xml_text (cob_context *ctx, const int ntext, const void *data, const size_t size)
 {
 	if (ntext) {
 		/* TODO (later): convert input data (libxml2 uses UTF8) to UTF-16
@@ -427,7 +426,7 @@ set_xml_text (const int ntext, const void *data, const size_t size)
    as optional XML-NAMESPACE-PREFIX / XML-NNAMESPACE-PREFIX
    the size is auto-calculated  */
 static void
-set_xml_namespace (const int ntext, const void *nsdata, const size_t ns_size,
+set_xml_namespace (cob_context *ctx, const int ntext, const void *nsdata, const size_t ns_size,
 		const void *prefix, const size_t prefix_size)
 {
 	if (ntext) {
@@ -470,7 +469,7 @@ set_xml_namespace (const int ntext, const void *nsdata, const size_t ns_size,
 
 /* set register special JSON-CODE */
 static COB_INLINE COB_A_INLINE void
-set_json_code (const enum json_code_status code)
+set_json_code (cob_context *ctx, const enum json_code_status code)
 {
 	/* LCOV_EXCL_START */
 	if (!COB_MODULE_PTR->json_code) {
@@ -478,15 +477,15 @@ set_json_code (const enum json_code_status code)
 		return;
 	}
 	/* LCOV_EXCL_STOP */
-	cob_set_int (COB_MODULE_PTR->json_code, (int)code);
+	cob_set_int_ctx (ctx, COB_MODULE_PTR->json_code, (int)code);
 }
 
 /* set internal JSON exception and special register JSON-CODE */
 static void
-set_json_exception (const enum json_code_status code)
+set_json_exception (cob_context *ctx, const enum json_code_status code)
 {
-	cob_set_exception (COB_EC_JSON_IMP);
-	set_json_code (code);
+	cob_set_exception_ctx (ctx, COB_EC_JSON_IMP);
+	set_json_code (ctx, code);
 }
 
 /* check if given cob_field has zero-length or is all spaces */
@@ -597,7 +596,7 @@ is_valid_xml_name (const cob_field * const f)
 #if defined (WITH_XML2) || defined (WITH_CJSON) || defined (WITH_JSON_C)
 
 static cob_pic_symbol *
-get_pic_for_num_field (const size_t num_int_digits, const size_t num_dec_digits)
+get_pic_for_num_field (cob_context *ctx, const size_t num_int_digits, const size_t num_dec_digits)
 {
 	size_t	num_pic_symbols = (size_t)2 + (2 * !!num_dec_digits) + 1;
 	cob_pic_symbol	*pic = cob_malloc (num_pic_symbols * sizeof (cob_pic_symbol));
@@ -627,7 +626,7 @@ get_pic_for_num_field (const size_t num_int_digits, const size_t num_dec_digits)
 }
 
 static void *
-get_num (cob_field * const f, void * (*strndup_func)(const char *, size_t),
+get_num (cob_context *ctx, cob_field * const f, void * (*strndup_func)(const char *, size_t),
 	 const char decimal_point)
 {
 	const size_t	num_integer_digits
@@ -649,7 +648,7 @@ get_num (cob_field * const f, void * (*strndup_func)(const char *, size_t),
 	if (num_integer_digits == 0)
 		attr.digits++;
 
-	attr.pic = get_pic_for_num_field (num_integer_digits,
+	attr.pic = get_pic_for_num_field (ctx, num_integer_digits,
 					  num_decimal_digits);
 
 	/* Initialize field for nicely edited version */
@@ -661,7 +660,7 @@ get_num (cob_field * const f, void * (*strndup_func)(const char *, size_t),
 	edited_field.data = cob_malloc (edited_field.size);
 
 	/* Set field */
-	cob_move (f, &edited_field);
+	cob_move_ctx (ctx, f, &edited_field);
 
 	/* Replace decimal point in num with given decimal_point */
 	dp_pos = memchr (edited_field.data, COB_MODULE_PTR->decimal_point,
@@ -736,7 +735,7 @@ get_xml_name (const cob_field * const f)
 	} ONCE_COB
 
 static int
-generate_xml_from_tree (xmlTextWriterPtr, cob_ml_tree *, xmlChar *, xmlChar *,
+generate_xml_from_tree (cob_context *, xmlTextWriterPtr, cob_ml_tree *, xmlChar *, xmlChar *,
 			const char, unsigned int *);
 
 static xmlChar *
@@ -826,7 +825,7 @@ generate_normal_attribute (xmlTextWriterPtr writer, cob_ml_attr *attr, unsigned 
 }
 
 static int
-generate_attributes (xmlTextWriterPtr writer, cob_ml_attr *attr, unsigned int *count)
+generate_attributes (cob_context *ctx, xmlTextWriterPtr writer, cob_ml_attr *attr, unsigned int *count)
 {
 	int	status;
 
@@ -836,7 +835,7 @@ generate_attributes (xmlTextWriterPtr writer, cob_ml_attr *attr, unsigned int *c
 		}
 
 		if (has_invalid_xml_char (attr->value)) {
-			set_xml_code (XML_INVALID_CHAR_REPLACED);
+			set_xml_code (ctx, XML_INVALID_CHAR_REPLACED);
 			status = generate_hex_attribute (writer, attr, count);
 		} else {
 			status = generate_normal_attribute (writer, attr, count);
@@ -851,7 +850,7 @@ generate_attributes (xmlTextWriterPtr writer, cob_ml_attr *attr, unsigned int *c
 }
 
 static int
-generate_hex_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
+generate_hex_element (cob_context *ctx, xmlTextWriterPtr writer, cob_ml_tree *tree,
 		      xmlChar *x_ns, xmlChar *x_ns_prefix, unsigned int *count)
 {
 	xmlChar		*hex_name;
@@ -863,7 +862,7 @@ generate_hex_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
 							       hex_name, x_ns));
 	xmlFree (hex_name);
 
-	status = generate_attributes (writer, tree->attrs, count);
+	status = generate_attributes (ctx, writer, tree->attrs, count);
 	if (status < 0) {
 		return status;
 	}
@@ -879,13 +878,13 @@ generate_hex_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
 
 
 static xmlChar *
-get_xml_num (cob_field * const f, const char decimal_point)
+get_xml_num (cob_context *ctx, cob_field * const f, const char decimal_point)
 {
-	return get_num (f, &xmlCharStrndup_void, decimal_point);
+	return get_num (ctx, f, &xmlCharStrndup_void, decimal_point);
 }
 
 static int
-generate_content (xmlTextWriterPtr writer, cob_ml_tree *tree,
+generate_content (cob_context *ctx, xmlTextWriterPtr writer, cob_ml_tree *tree,
 		  const char decimal_point, unsigned int *count)
 {
 	cob_field	*content = tree->content;
@@ -894,10 +893,10 @@ generate_content (xmlTextWriterPtr writer, cob_ml_tree *tree,
 	if (COB_FIELD_IS_FP (content)) {
 		/* TO-DO: Implement! */
 		/* TO-DO: Stop compilation if float in field */
-		cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-		cob_fatal_error (COB_FERROR_XML);
+		cob_set_exception_ctx (ctx, COB_EC_IMP_FEATURE_MISSING);
+		cob_fatal_error_ctx (ctx, COB_FERROR_XML);
 	} else if (COB_FIELD_IS_NUMERIC (content)) {
-		x_content = get_xml_num (content, decimal_point);
+		x_content = get_xml_num (ctx, content, decimal_point);
 	} else {
 		x_content = get_trimmed_xml_data (content);
 	}
@@ -910,7 +909,7 @@ generate_content (xmlTextWriterPtr writer, cob_ml_tree *tree,
 
 
 static int
-generate_normal_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
+generate_normal_element (cob_context *ctx, xmlTextWriterPtr writer, cob_ml_tree *tree,
 			 xmlChar *x_ns, xmlChar *x_ns_prefix,
 			 const char decimal_point, unsigned int *count)
 {
@@ -924,7 +923,7 @@ generate_normal_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
 							       x_name, x_ns));
 	xmlFree (x_name);
 
-	status = generate_attributes (writer, tree->attrs, count);
+	status = generate_attributes (ctx, writer, tree->attrs, count);
 	if (status < 0) {
 		return status;
 	}
@@ -936,7 +935,7 @@ generate_normal_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
 			  Note we only have a namespace attribute on the
 			  outermost element.
 			*/
-			status = generate_xml_from_tree (writer, child, NULL,
+			status = generate_xml_from_tree (ctx, writer, child, NULL,
 							 x_ns_prefix,
 							 decimal_point, count);
 			if (status < 0) {
@@ -944,7 +943,7 @@ generate_normal_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
 			}
 		}
 	} else if (tree->content) {
-		status = generate_content (writer, tree, decimal_point, count);
+		status = generate_content (ctx, writer, tree, decimal_point, count);
 		if (status < 0) {
 			return status;
 		}
@@ -957,7 +956,7 @@ generate_normal_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
 }
 
 static int
-generate_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
+generate_element (cob_context *ctx, xmlTextWriterPtr writer, cob_ml_tree *tree,
 		  xmlChar *x_ns, xmlChar *x_ns_prefix, const char decimal_point,
 		  unsigned int *count)
 {
@@ -965,18 +964,18 @@ generate_element (xmlTextWriterPtr writer, cob_ml_tree *tree,
 	if (tree->content
 	 && !COB_FIELD_IS_NUMERIC (tree->content)
 	 && has_invalid_xml_char (tree->content)) {
-		set_xml_code (XML_INVALID_CHAR_REPLACED);
-		return generate_hex_element (writer, tree, x_ns, x_ns_prefix,
+		set_xml_code (ctx, XML_INVALID_CHAR_REPLACED);
+		return generate_hex_element (ctx, writer, tree, x_ns, x_ns_prefix,
 					     count);
 	} else {
-		return generate_normal_element (writer, tree, x_ns,
+		return generate_normal_element (ctx, writer, tree, x_ns,
 						x_ns_prefix, decimal_point,
 						count);
 	}
 }
 
 static int
-generate_xml_from_tree (xmlTextWriterPtr writer, cob_ml_tree *tree,
+generate_xml_from_tree (cob_context *ctx, xmlTextWriterPtr writer, cob_ml_tree *tree,
 			xmlChar *ns, xmlChar *ns_prefix,
 			const char decimal_point, unsigned int *count)
 {
@@ -985,10 +984,10 @@ generate_xml_from_tree (xmlTextWriterPtr writer, cob_ml_tree *tree,
 	}
 
 	if (tree->name) {
-		return generate_element (writer, tree, ns, ns_prefix,
+		return generate_element (ctx, writer, tree, ns, ns_prefix,
 					 decimal_point, count);
 	} else {
-		return generate_content (writer, tree, decimal_point, count);
+		return generate_content (ctx, writer, tree, decimal_point, count);
 	}
 }
 
@@ -1013,14 +1012,14 @@ get_trimmed_json_data (const cob_field * const f)
 }
 
 static char *
-get_json_num (cob_field * const f, const char decimal_point)
+get_json_num (cob_context *ctx, cob_field * const f, const char decimal_point)
 {
-	return (char *) get_num (f, &json_strndup, decimal_point);
+	return (char *) get_num (ctx, f, &json_strndup, decimal_point);
 }
 
 #if defined (WITH_CJSON)
 static int
-generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, cJSON *out)
+generate_json_from_tree (cob_context *ctx, cob_ml_tree *tree, const char decimal_point, cJSON *out)
 {
 	cob_ml_tree	*child;
 	char		*name = NULL;
@@ -1043,7 +1042,7 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, cJSON *out
 			children_json = out;
 		}
 		for (child = tree->children; child; child = child->sibling) {
-			status = generate_json_from_tree (child, decimal_point,
+			status = generate_json_from_tree (ctx, child, decimal_point,
 							  children_json);
 			if (status < 0) {
 				cJSON_Delete (children_json);
@@ -1056,16 +1055,16 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, cJSON *out
 	} else if (tree->content) {
 		if (name == NULL) {
 			/* TO-DO: Handle correctly, that's possibly an internal error! */
-			cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_FERROR_JSON);
+			cob_set_exception_ctx (ctx, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error_ctx (ctx, COB_FERROR_JSON);
 		}
 		if (COB_FIELD_IS_FP (tree->content)) {
 			/* TO-DO: Implement! */
 			/* TO-DO: Stop compilation if float in field */
-			cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_FERROR_JSON);
+			cob_set_exception_ctx (ctx, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error_ctx (ctx, COB_FERROR_JSON);
 		} else if (COB_FIELD_IS_NUMERIC (tree->content)) {
-			content = get_json_num (tree->content, decimal_point);
+			content = get_json_num (ctx, tree->content, decimal_point);
 			/*
 			  We use AddRaw instead of AddNumber because a PIC 9(32)
 			  may not be representable using the double AddNumber
@@ -1095,7 +1094,7 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, cJSON *out
 }
 #elif defined (WITH_JSON_C)
 static int
-generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, json_object *out)
+generate_json_from_tree (cob_context *ctx, cob_ml_tree *tree, const char decimal_point, json_object *out)
 {
 	cob_ml_tree	*child;
 	char		*name = NULL;
@@ -1118,7 +1117,7 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, json_objec
 			children_json = out;
 		}
 		for (child = tree->children; child; child = child->sibling) {
-			status = generate_json_from_tree (child, decimal_point, children_json);
+			status = generate_json_from_tree (ctx, child, decimal_point, children_json);
 			if (status < 0) {
 				json_object_put (children_json);
 				goto end;
@@ -1130,16 +1129,16 @@ generate_json_from_tree (cob_ml_tree *tree, const char decimal_point, json_objec
 	} else if (tree->content) {
 		if (name == NULL) {
 			/* TO-DO: Handle correctly, that's possibly an internal error! */
-			cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_FERROR_JSON);
+			cob_set_exception_ctx (ctx, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error_ctx (ctx, COB_FERROR_JSON);
 		}
 		if (COB_FIELD_IS_FP (tree->content)) {
 			/* TO-DO: Implement! */
 			/* TO-DO: Stop compilation if float in field */
-			cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-			cob_fatal_error (COB_FERROR_JSON);
+			cob_set_exception_ctx (ctx, COB_EC_IMP_FEATURE_MISSING);
+			cob_fatal_error_ctx (ctx, COB_FERROR_JSON);
 		} else if (COB_FIELD_IS_NUMERIC (tree->content)) {
-			content = get_json_num (tree->content, decimal_point);
+			content = get_json_num (ctx, tree->content, decimal_point);
 			/*
 			  Since we're only going to serialise the JSON, we don't
 			  care how JSON-C represents it internally. So, we tell
@@ -1232,13 +1231,13 @@ cob_is_valid_uri (const char *str)
 #endif
 }
 
-static void xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+static void xml_generate (cob_context *, cob_field *out, cob_ml_tree *tree, cob_field *count,
 	const int with_xml_dec, const char *ns_data, cob_field *ns_prefix,
 	const char decimal_point);
 
 /* entry function for XML GENERATE */
 void
-cob_xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_xml_generate_ctx (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 	const int with_xml_dec, cob_field *ns, cob_field *ns_prefix,
 	const char decimal_point)
 {
@@ -1246,17 +1245,17 @@ cob_xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 
 	/* no field */
 	if (!out || !tree) {
-		set_xml_exception (XML_INTERNAL_ERROR);
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
+		cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 	}
 	/* LINKAGE or BASED item without data */
 	if (!out->data) {
-		set_xml_exception (XML_INTERNAL_ERROR);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
 		return;
 	}
 	/* likely a separate error case: emtpy variable length item */
 	if (out->size == 0) {
-		set_xml_exception (XML_INTERNAL_ERROR);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
 		return;
 	}
 
@@ -1264,12 +1263,12 @@ cob_xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 		if (is_empty (ns)) {
 			ns_data = NULL;
 		} else if (has_invalid_xml_char (ns)) {
-			set_xml_exception (XML_INVALID_NAMESPACE);
+			set_xml_exception (ctx, XML_INVALID_NAMESPACE);
 			return;
 		} else {
 			ns_data = get_trimmed_data (ns, &copy_data_as_string);
 			if (!cob_is_valid_uri (ns_data)) {
-				set_xml_exception (XML_INVALID_NAMESPACE);
+				set_xml_exception (ctx, XML_INVALID_NAMESPACE);
 				cob_free ((void *)ns_data);
 				return;
 			}
@@ -1285,46 +1284,53 @@ cob_xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 			if (ns_data) {
 				cob_free ((void *)ns_data);
 			}
-			set_xml_exception (XML_INVALID_NAMESPACE_PREFIX);
+			set_xml_exception (ctx, XML_INVALID_NAMESPACE_PREFIX);
 			return;
 		}
 	}
-	xml_generate (out, tree, count, with_xml_dec, ns_data, ns_prefix, decimal_point);
+	xml_generate (ctx, out, tree, count, with_xml_dec, ns_data, ns_prefix, decimal_point);
 	if (ns_data) {
 		cob_free ((void *)ns_data);
 	}
 }
 
-static void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
+/* compatibility: cob_xml_generate without context */
+void
+cob_xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count, const int with_xml_dec, cob_field *ns, cob_field *ns_prefix, const char decimal_point)
+{
+	cob_xml_generate_ctx (COB_CTX_COMPAT, out, tree, count, with_xml_dec, ns, ns_prefix, decimal_point);
+}
+
+static void xml_parse (cob_context *, cob_field *in, cob_field *encoding, cob_field *validation,
 	const int flags, struct xml_state *state);
 static void xml_free_parse_memory (struct xml_state *state);
 
 #if defined (WITH_XML2)
-static void xml_process_next_event (struct xml_state *state);
+static void xml_process_next_event (cob_context *, struct xml_state *state);
 #endif
 
 /* entry function for XML PARSE */
-int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
+int cob_xml_parse_ctx (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field *validation,
 		const int flags, void **saved_state)
 {
 	struct xml_state *state;
-	int xml_code = get_xml_code ();
+	int xml_code = get_xml_code (ctx);
 
 	/* initial setup of registers, ensuring they are available in the
 		processing procedure */
-	set_xml_text (0, "", 0);
-	set_xml_namespace (0, "", 0, NULL, 0);
+	set_xml_text (ctx, 0, "", 0);
+	set_xml_namespace (ctx, 0, "", 0, NULL, 0);
 
 	/* no state yet ? first call */
 	if (*saved_state == NULL) {
 		/* no field */
 		if (!in) {
 #if 0	/* seems like a codegen error, which should not happen */
-			set_xml_exception (XML_INTERNAL_ERROR);
-			set_xml_event (EVENT_EXCEPTION);
+			set_xml_exception (ctx, XML_INTERNAL_ERROR);
+			set_xml_event (ctx, EVENT_EXCEPTION);
 			return -1;
 #else
-			cob_fatal_error (COB_FERROR_CODEGEN);
+			cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 #endif
 		}
 		*saved_state = cob_malloc (sizeof (struct xml_state));
@@ -1337,15 +1343,15 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 	/* LINKAGE or BASED item without data */
 	if (!in->data) {
 		state->last_xml_code = XML_INTERNAL_ERROR;
-		set_xml_exception (XML_INTERNAL_ERROR);
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		return 0;
 	}
 	/* likely a separate error case: emtpy item */
 	if (is_empty (in)) {
 		state->last_xml_code = XML_INTERNAL_ERROR;
-		set_xml_exception (XML_INTERNAL_ERROR);
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		return 0;
 	}
 
@@ -1355,7 +1361,7 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 
 	/* parser function had fatal error */
 	if (state->state == XML_PARSER_HAD_FATAL_ERROR) {
-		set_xml_code (state->last_xml_code);
+		set_xml_code (ctx, state->last_xml_code);
 		xml_free_parse_memory (state);
 		*saved_state = NULL;
 		return 1;
@@ -1366,7 +1372,7 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		if (xml_code != 0) {
 			/* TODO: recheck !COB_XML_XMLNSS has one
 			  "Parses using the difference as the encoding value" */
-			set_xml_code (state->last_xml_code);
+			set_xml_code (ctx, state->last_xml_code);
 			xml_free_parse_memory (state);
 			*saved_state = NULL;
 			return 1;
@@ -1392,8 +1398,8 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 	/* we reached "end of input" (xmlss only?) and were not told to go on */
 	if (state->state == XML_PARSER_HAD_END_OF_INPUT) {
 		if (xml_code == 0) {
-			set_xml_event (EVENT_END_OF_DOCUMENT);
-			set_xml_code (0);
+			set_xml_event (ctx, EVENT_END_OF_DOCUMENT);
+			set_xml_code (ctx, 0);
 			state->state = XML_PARSER_FINISHED;
 			return 1;
 		}
@@ -1403,7 +1409,7 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		} else {
 			/* fatal runtime error,
 			   TODO: at least a runtime warning, likely runtime exit */
-			cob_set_exception (COB_EC_XML);
+			cob_set_exception_ctx (ctx, COB_EC_XML);
 			xml_free_parse_memory (state);
 			*saved_state = NULL;
 			return 1;
@@ -1416,9 +1422,9 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		if (COB_MODULE_PTR->xml_mode == COB_XML_XMLNSS) {
 			/* fatal runtime error,
 			   TODO: at least a runtime warning, likely runtime exit */
-			cob_set_exception (COB_EC_XML);
+			cob_set_exception_ctx (ctx, COB_EC_XML);
 		} else {
-			set_xml_code (-1);
+			set_xml_code (ctx, -1);
 		}
 		xml_free_parse_memory (state);
 		*saved_state = NULL;
@@ -1436,23 +1442,29 @@ int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 	if (state->event
 	 && state->event->event != EVENT_UNKNOWN) {
 		/* if there are still events in the queue -> get next one */
-		xml_process_next_event (state);
+		xml_process_next_event (ctx, state);
 	} else {
 		/* do actual parsing */
-		xml_parse (in, encoding, validation, flags, state);
+		xml_parse (ctx, in, encoding, validation, flags, state);
 	}
 #else
-	xml_parse (in, encoding, validation, flags, state);
+	xml_parse (ctx, in, encoding, validation, flags, state);
 #endif
 
 	return 0;
+}
+
+/* compatibility: cob_xml_parse without context */
+int cob_xml_parse (cob_field *in, cob_field *encoding, cob_field *validation, const int flags, void **saved_state)
+{
+	return cob_xml_parse_ctx (COB_CTX_COMPAT, in, encoding, validation, flags, saved_state);
 }
 
 #if defined (WITH_XML2)
 
 /* actual handling of XML GENERATE */
 void
-xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 		  const int with_xml_dec, const char *ns_data, cob_field *ns_prefix,
 		  const char decimal_point)
 {
@@ -1466,11 +1478,11 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 	int			copy_len;
 	int			num_newlines = 0;
 
-	set_xml_code (XML_STMT_SUCCESSFULL);
+	set_xml_code (ctx, XML_STMT_SUCCESSFULL);
 
 	buff = xmlBufferCreate ();
 	if (buff == NULL) {
-		set_xml_exception (XML_INTERNAL_ERROR);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
 		goto end;
 	}
 
@@ -1483,7 +1495,7 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 		/* TO-DO: Support encoding */
 		status = xmlTextWriterStartDocument (writer, NULL, NULL, NULL);
 		if (status < 0) {
-			set_xml_exception (XML_INTERNAL_ERROR);
+			set_xml_exception (ctx, XML_INTERNAL_ERROR);
 			goto end;
 		} else {
 			chars_written += status;
@@ -1498,16 +1510,16 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 		x_ns_prefix = get_trimmed_xml_data (ns_prefix);
 	}
 
-	status = generate_xml_from_tree (writer, tree, x_ns, x_ns_prefix,
+	status = generate_xml_from_tree (ctx, writer, tree, x_ns, x_ns_prefix,
 				decimal_point, &chars_written);
 	if (status < 0) {
-		set_xml_exception (XML_INTERNAL_ERROR);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
 		goto end;
 	}
 
 	status = xmlTextWriterEndDocument (writer);
 	if (status < 0) {
-		set_xml_exception (XML_INTERNAL_ERROR);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
 		goto end;
 	} else {
 		chars_written += status;
@@ -1532,7 +1544,7 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 	   the full size and the complete data is inserted; instead only data up
 	   to a tag end (opening or ending) should be copied */
 	if (buff_len - num_newlines > copy_len) {
-		set_xml_exception (XML_OUT_FIELD_TOO_SMALL);
+		set_xml_exception (ctx, XML_OUT_FIELD_TOO_SMALL);
 		goto end;
 	}
 
@@ -1553,12 +1565,12 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 		/* FIXME: COUNT IN may never be bigger than the field size! See above. */
 		/* TODO: for NATIONAL data (UTF-16): bytes / 2;
 		         otherwise - including UTF-8 amount of bytes */
-		cob_set_int (count, chars_written);
+		cob_set_int_ctx (ctx, count, chars_written);
 	}
 }
 
 static void
-set_xml_code_parsing_error (const int libxml2_err) {
+set_xml_code_parsing_error (cob_context *ctx, const int libxml2_err) {
 	int xml_err = 0x00000018 /* 24 COMP in split field per IBM doc */
 				+ (libxml2_err << 8); /* second part with error number */
 #ifdef WORDS_BIGENDIAN	/* CHECKME: is that correct? */
@@ -1583,8 +1595,9 @@ xml_error_handling (struct xml_state *state, const xmlError *err) {
 }
 
 static void
-xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
-	struct xml_state *parse_state = ctx;
+xml_error_handler (void *user_data, LIBXML_CONST_ERROR_PTR err) {
+	cob_context	*ctx = COB_CTX_TODO;
+	struct xml_state *parse_state = user_data;
 	enum xml_parser_state state = parse_state->state;
 	static int last_error_code = 0;
 
@@ -1606,24 +1619,24 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 	switch (state) {
 	case XML_PARSER_VALIDATION_SETUP:
 		if (err->file) {
-			cob_runtime_warning (_("XML PARSE setup for VALIDATE FILE %s:%d (%d): %s"),
+			cob_runtime_warning_ctx (ctx, _("XML PARSE setup for VALIDATE FILE %s:%d (%d): %s"),
 				err->file, err->line, err->code, err->message);
 		} else {
-			cob_runtime_warning (_("XML PARSE setup for VALIDATE FILE (%d): %s"),
+			cob_runtime_warning_ctx (ctx, _("XML PARSE setup for VALIDATE FILE (%d): %s"),
 				err->code, err->message);
 		}		
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		parse_state->last_xml_code = XML_PARSE_ERROR_FATAL;
 		parse_state->state = XML_PARSER_HAD_FATAL_ERROR;
-		set_xml_code_parsing_error (err->code);
+		set_xml_code_parsing_error (ctx, err->code);
 		break;
 	case XML_PARSER_VALIDATION_SETUP_MEM:
-		cob_runtime_warning (_("XML PARSE setup for VALIDATE (%d): %s"),
+		cob_runtime_warning_ctx (ctx, _("XML PARSE setup for VALIDATE (%d): %s"),
 			err->code, err->message);
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		parse_state->last_xml_code = XML_PARSE_ERROR_FATAL;
 		parse_state->state = XML_PARSER_HAD_FATAL_ERROR;
-		set_xml_code_parsing_error (err->code);
+		set_xml_code_parsing_error (ctx, err->code);
 		break;
 	case XML_PARSER_JUST_STARTED:
 	case XML_PARSER_DOCUMENT_START:
@@ -1633,7 +1646,7 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 		break;
 	default:
 		/* not translated as unplanned */
-		cob_runtime_warning ("XML PARSE state %d on %s:%d (%d): %s",
+		cob_runtime_warning_ctx (ctx, "XML PARSE state %d on %s:%d (%d): %s",
 			state, err->file, err->line, err->code, err->message);
 	}
 
@@ -1641,22 +1654,22 @@ xml_error_handler (void *ctx, LIBXML_CONST_ERROR_PTR err) {
 }
 
 static void
-xml_startDocument (void *ctx) {
-	struct xml_state *state = ctx;
+xml_startDocument (void *user_data) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_START_OF_DOCUMENT);
 	state->state = XML_PARSER_DOCUMENT_START;
 }
 
 static void
-xml_endDocument (void *ctx) {
-	struct xml_state *state = ctx;
+xml_endDocument (void *user_data) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_END_OF_DOCUMENT);
 	state->state = XML_PARSER_HAD_END_OF_INPUT;
 }
 
 static void
-xml_comment (void *ctx, const xmlChar *content) {
-	struct xml_state *state = ctx;
+xml_comment (void *user_data, const xmlChar *content) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_COMMENT);
 	add_xml_event_data (state, content, xmlStrlen (content), 0);
 }
@@ -1673,49 +1686,49 @@ xml_element_ns_handling (struct xml_state *state,
 }
 
 static void
-xml_startElementNs (void *ctx,
+xml_startElementNs (void *user_data,
 		const xmlChar *localname, const xmlChar *prefix, const xmlChar *URI,
 		int nb_namespaces, const xmlChar **namespaces,
 		int nb_attributes, int nb_defaulted, const xmlChar **attributes) {
-	struct xml_state *state = ctx;
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_START_OF_ELEMENT);
 	xml_element_ns_handling (state, localname, prefix, URI, nb_namespaces, namespaces,
 		 nb_attributes, nb_defaulted, attributes);
 }
 
 static void
-xml_endElementNs (void *ctx,
+xml_endElementNs (void *user_data,
 		const xmlChar *localname, const xmlChar *prefix, const xmlChar *URI) {
-	struct xml_state *state = ctx;
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_END_OF_ELEMENT);
 	xml_element_ns_handling (state, localname, prefix, URI,
 		0, NULL, 0, 0, NULL);
 }
 
 static void
-xml_startElement (void *ctx, const xmlChar *name, const xmlChar **atts) {
-	struct xml_state *state = ctx;
+xml_startElement (void *user_data, const xmlChar *name, const xmlChar **atts) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_START_OF_ELEMENT);
 	add_xml_event_data_tag (state, name, xmlStrlen (name));
 }
 
 static void
-xml_endElement (void *ctx, const xmlChar *name) {
-	struct xml_state *state = ctx;
+xml_endElement (void *user_data, const xmlChar *name) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_END_OF_ELEMENT);
 	add_xml_event_data_tag (state, name, xmlStrlen (name));
 }
 
 static void
-xml_characters (void *ctx, const xmlChar *content, int len) {
-	struct xml_state *state = ctx;
+xml_characters (void *user_data, const xmlChar *content, int len) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_CONTENT_CHARACTERS);
 	add_xml_event_data (state, content, len, 0);
 }
 
 static void
-xml_cdata (void *ctx, const xmlChar *content, int len) {
-	struct xml_state *state = ctx;
+xml_cdata (void *user_data, const xmlChar *content, int len) {
+	struct xml_state *state = user_data;
 	new_xml_event (state, EVENT_START_OF_CDATA_SECTION);
 	new_xml_event (state, EVENT_CONTENT_CHARACTERS);
 	add_xml_event_data (state, content, len, 0);
@@ -1723,7 +1736,7 @@ xml_cdata (void *ctx, const xmlChar *content, int len) {
 }
 
 /* actual handling of XML PARSE (not implemented yet) */
-void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
+void xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field *validation,
 		const int flags, struct xml_state *state)
 {
 	static int first_xml = 1;
@@ -1732,7 +1745,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		char	*enc = NULL;
 		if (encoding) {
 			/* CHECKME: is there a reasonable array size to use instead? */
-			enc = cob_get_picx (encoding->data, encoding->size, NULL, 0);
+			enc = cob_get_picx_ctx (ctx, encoding->data, encoding->size, NULL, 0);
 		}
 
 		/* setup sax-parser callbacks */
@@ -1768,11 +1781,11 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 		if (state->ctx == NULL) {
 			state->last_xml_code = XML_PARSER_HAD_FATAL_ERROR;
 			if (COB_MODULE_PTR->xml_mode == COB_XML_XMLNSS) {
-				set_xml_exception (XML_PARSE_ERROR_FATAL);
+				set_xml_exception (ctx, XML_PARSE_ERROR_FATAL);
 			} else {
-				set_xml_exception (XML_PARSE_ERROR_MISC_COMPAT);
+				set_xml_exception (ctx, XML_PARSE_ERROR_MISC_COMPAT);
 			}
-			set_xml_event (EVENT_EXCEPTION);
+			set_xml_event (ctx, EVENT_EXCEPTION);
 			return;
 		}
 
@@ -1788,14 +1801,14 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 			if (validation->data == NULL
 			 || is_empty (validation)) {
 				state->last_xml_code = XML_INVALID_NAMESPACE;
-				set_xml_exception (XML_INVALID_NAMESPACE);
+				set_xml_exception (ctx, XML_INVALID_NAMESPACE);
 				state->state = XML_PARSER_HAD_FATAL_ERROR;
 				return;
 			}
 
 			/* create parser context from file or memory */
 			if (flags & COB_XML_PARSE_VALIDATE_FILE) {
-				const char	*file_name = cob_setup_filename (validation);
+				const char	*file_name = cob_setup_filename (ctx, validation);
 				state->state = XML_PARSER_VALIDATION_SETUP;
 				schema_ctx = xmlSchemaNewParserCtxt (file_name);
 			} else {
@@ -1815,7 +1828,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 				if (state->state != XML_PARSER_HAD_FATAL_ERROR) {
 					state->last_xml_code = XML_INVALID_NAMESPACE;
 					state->state = XML_PARSER_HAD_FATAL_ERROR;
-					set_xml_exception (XML_INVALID_NAMESPACE);
+					set_xml_exception (ctx, XML_INVALID_NAMESPACE);
 				}
 				return;
 			}
@@ -1829,7 +1842,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 				if (state->state != XML_PARSER_HAD_FATAL_ERROR) {
 					state->last_xml_code = XML_INVALID_NAMESPACE;
 					state->state = XML_PARSER_HAD_FATAL_ERROR;
-					set_xml_exception (XML_INVALID_NAMESPACE);
+					set_xml_exception (ctx, XML_INVALID_NAMESPACE);
 				}
 				return;
 			}
@@ -1845,7 +1858,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 				state->schema = NULL;
 				state->last_xml_code = XML_INTERNAL_ERROR;
 				state->state = XML_PARSER_HAD_FATAL_ERROR;
-				set_xml_exception (XML_INTERNAL_ERROR);
+				set_xml_exception (ctx, XML_INTERNAL_ERROR);
 				return;
 			}
 		}
@@ -1858,7 +1871,7 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (_("%s is unfinished"),
+		cob_runtime_warning_ctx (ctx, _("%s is unfinished"),
 			"XML PARSE");
 	}
 
@@ -1887,12 +1900,12 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 	}
 
 	state->event = state->first_event;
-	xml_process_next_event (state);
+	xml_process_next_event (ctx, state);
 }
 
 /* processing of parsed XML events from the queue */
 void
-xml_process_next_event (struct xml_state *state)
+xml_process_next_event (cob_context *ctx, struct xml_state *state)
 {
 	struct xml_event *event = state->event;
 	struct xml_event_data *data = event->first;
@@ -1903,8 +1916,8 @@ xml_process_next_event (struct xml_state *state)
 
 	state->event = event->next;
 
-	set_xml_event (event->event);
-	set_xml_code (0);
+	set_xml_event (ctx, event->event);
+	set_xml_code (ctx, 0);
 
 	switch (event->event) {
 
@@ -1965,7 +1978,7 @@ xml_process_next_event (struct xml_state *state)
 		   second data is the libxml2 error code */
 		data = data->next;
 		if (data && data->data_len == 4) {
-			set_xml_code_parsing_error (atoi (data->data_ptr));
+			set_xml_code_parsing_error (ctx, atoi (data->data_ptr));
 		}
 		break;
 	/* TODO */
@@ -1982,13 +1995,13 @@ xml_process_next_event (struct xml_state *state)
 	case EVENT_VERSION_INFORMATION:
 	default:
 		state->last_xml_code = XML_INTERNAL_ERROR;
-		set_xml_exception (XML_INTERNAL_ERROR);
-		set_xml_event (EVENT_EXCEPTION);
+		set_xml_exception (ctx, XML_INTERNAL_ERROR);
+		set_xml_event (ctx, EVENT_EXCEPTION);
 		state->state = XML_PARSER_HAD_NONFATAL_ERROR;
 		return;
 	}
 
-	set_xml_text (ntext, text_data , text_len);
+	set_xml_text (ctx, ntext, text_data , text_len);
 }
 
 void xml_free_parse_memory (struct xml_state* state)
@@ -2028,7 +2041,7 @@ void xml_free_parse_memory (struct xml_state* state)
 
 /* actual (non) handling of XML GENERATE */
 void
-xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 		  const int with_xml_dec, const char *ns_data, cob_field *ns_prefix,
 		  const char decimal_point)
 {
@@ -2043,15 +2056,15 @@ xml_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 	COB_UNUSED (decimal_point);
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (_("runtime is not configured to support %s"),
+		cob_runtime_warning_ctx (ctx, _("runtime is not configured to support %s"),
 			"XML");
 	}
-	set_xml_exception (XML_INTERNAL_ERROR);
-	cob_add_exception (COB_EC_IMP_FEATURE_DISABLED);
+	set_xml_exception (ctx, XML_INTERNAL_ERROR);
+	cob_add_exception (ctx, COB_EC_IMP_FEATURE_DISABLED);
 }
 
 /* actual (non) handling of XML PARSE */
-void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
+void xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field *validation,
 		const int flags, struct xml_state *state)
 {
 	static int first_xml = 1;
@@ -2063,14 +2076,14 @@ void xml_parse (cob_field *in, cob_field *encoding, cob_field *validation,
 
 	if (first_xml) {
 		first_xml = 0;
-		cob_runtime_warning (_("runtime is not configured to support %s"),
+		cob_runtime_warning_ctx (ctx, _("runtime is not configured to support %s"),
 			"XML");
 	}
 
 	state->last_xml_code = XML_INTERNAL_ERROR;
-	set_xml_exception (XML_INTERNAL_ERROR);
-	cob_add_exception (COB_EC_IMP_FEATURE_DISABLED);
-	set_xml_event (EVENT_EXCEPTION);
+	set_xml_exception (ctx, XML_INTERNAL_ERROR);
+	cob_add_exception (ctx, COB_EC_IMP_FEATURE_DISABLED);
+	set_xml_event (ctx, EVENT_EXCEPTION);
 	state->state = XML_PARSER_HAD_FATAL_ERROR;
 }
 
@@ -2084,7 +2097,7 @@ void xml_free_parse_memory (struct xml_state* state)
 #if defined (WITH_CJSON) || defined (WITH_JSON_C)
 /* entry function for JSON GENERATE */
 void
-cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_json_generate_ctx (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 		   const char decimal_point)
 {
 	const char	*printed_json = NULL;
@@ -2098,18 +2111,18 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 	json_object	*json = NULL;
 #endif
 
-	set_json_code (0);
+	set_json_code (ctx, 0);
 
 #if defined (WITH_CJSON)
 	json = cJSON_CreateObject ();
 	if (!json) {
-		set_json_exception (JSON_INTERNAL_ERROR);
+		set_json_exception (ctx, JSON_INTERNAL_ERROR);
 		goto end;
 	}
 
-	status = generate_json_from_tree (tree, decimal_point, json);
+	status = generate_json_from_tree (ctx, tree, decimal_point, json);
 	if (status < 0) {
-		set_json_exception (JSON_INTERNAL_ERROR);
+		set_json_exception (ctx, JSON_INTERNAL_ERROR);
 		goto end;
 	}
 
@@ -2119,9 +2132,9 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 #elif defined (WITH_JSON_C)
 
 	json = json_object_new_object ();
-	status = generate_json_from_tree (tree, decimal_point, json);
+	status = generate_json_from_tree (ctx, tree, decimal_point, json);
 	if (status < 0) {
-		set_json_exception (JSON_INTERNAL_ERROR);
+		set_json_exception (ctx, JSON_INTERNAL_ERROR);
 		goto end;
 	}
 
@@ -2129,7 +2142,7 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 #endif
 
 	if (!printed_json) {
-		set_json_exception (JSON_INTERNAL_ERROR);
+		set_json_exception (ctx, JSON_INTERNAL_ERROR);
 		goto end;
 	}
 
@@ -2146,7 +2159,7 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 	}
 	/* Raise exception if output field is too small */
 	if (print_len - num_newlines > copy_len) {
-		set_json_exception (JSON_OUT_FIELD_TOO_SMALL);
+		set_json_exception (ctx, JSON_OUT_FIELD_TOO_SMALL);
 		goto end;
 	}
 
@@ -2168,15 +2181,22 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 
 		/* TODO: for NATIONAL data (UTF-16): bytes / 2;
 		         otherwise - including UTF-8 amount of bytes */
-		cob_set_int (count, print_len);
+		cob_set_int_ctx (ctx, count, print_len);
 	}
+}
+
+/* compatibility: cob_json_generate without context */
+void
+cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count, const char decimal_point)
+{
+	cob_json_generate_ctx (COB_CTX_COMPAT, out, tree, count, decimal_point);
 }
 
 #else /* no JSON */
 
 /* entry function for JSON GENERATE (not handled) */
 void
-cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
+cob_json_generate_ctx (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *count,
 		   const char decimal_point)
 {
 	static int first_json = 1;
@@ -2188,11 +2208,18 @@ cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count,
 
 	if (first_json) {
 		first_json = 0;
-		cob_runtime_warning (_("runtime is not configured to support %s"),
+		cob_runtime_warning_ctx (ctx, _("runtime is not configured to support %s"),
 			"JSON");
 	}
-	set_json_exception (JSON_INTERNAL_ERROR);
-	cob_add_exception (COB_EC_IMP_FEATURE_DISABLED);
+	set_json_exception (ctx, JSON_INTERNAL_ERROR);
+	cob_add_exception (ctx, COB_EC_IMP_FEATURE_DISABLED);
+}
+
+/* compatibility: cob_json_generate without context */
+void
+cob_json_generate (cob_field *out, cob_ml_tree *tree, cob_field *count, const char decimal_point)
+{
+	cob_json_generate_ctx (COB_CTX_COMPAT, out, tree, count, decimal_point);
 }
 
 #endif
@@ -2206,7 +2233,6 @@ cob_init_mlio (cob_global * const g)
 #ifndef	HAVE_DESIGNATED_INITS
 	init_xml_event_list ();
 #endif
-	cobglobptr = g;
 }
 
 

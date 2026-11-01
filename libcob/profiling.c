@@ -51,19 +51,42 @@ struct cob_prof_module_list {
 	struct cob_prof_module_list *next;
 };
 
-static struct cob_prof_module_list *prof_info_list ;
+/* State of the profiling, one per context; accessed with the macros
+   below, using the context 'ctx' */
+struct cob_prof_state {
+	struct cob_prof_module_list *prof_info_list ;
 
-/* We maintain a stack of the procedures entered as 3 different
- * arrays, with "current_idx" being the stack pointer. */
-static cob_ns_time				*start_times;
-static int        				*called_procedures;
-static struct cob_prof_module	**called_runtimes;
-/* Current size of previous arrays */
-static int max_prof_depth;
-static int current_idx = -1;
+	/* We maintain a stack of the procedures entered as 3 different
+	 * arrays, with "current_idx" being the stack pointer. */
+	cob_ns_time			*start_times;
+	int				*called_procedures;
+	struct cob_prof_module		**called_runtimes;
+	/* Current size of previous arrays */
+	int				max_prof_depth;
+	int				current_idx;
 
-/* Whether profiling is active or not. */
-static int is_active = -1;
+	/* Whether profiling is active or not. */
+	int				is_active;
+};
+
+static struct cob_prof_state *
+prof_state (cob_context *ctx)
+{
+	if (ctx->prof == NULL) {
+		ctx->prof = cob_malloc (sizeof (struct cob_prof_state));
+		ctx->prof->current_idx = -1;
+		ctx->prof->is_active = -1;
+	}
+	return ctx->prof;
+}
+
+#define prof_info_list		(prof_state (ctx)->prof_info_list)
+#define start_times		(prof_state (ctx)->start_times)
+#define called_procedures	(prof_state (ctx)->called_procedures)
+#define called_runtimes		(prof_state (ctx)->called_runtimes)
+#define max_prof_depth		(prof_state (ctx)->max_prof_depth)
+#define current_idx		(prof_state (ctx)->current_idx)
+#define is_active		(prof_state (ctx)->is_active)
 
 /* Which clock to use for clock_gettime (if available) */
 #ifdef HAVE_CLOCK_GETTIME
@@ -76,8 +99,6 @@ static LONGLONG 	qpc_freq = 0;
 #endif
 
 /* Remember static and dynamic configuration */
-static cob_global			*cobglobptr = NULL;
-static cob_settings			*cobsetptr = NULL;
 
 
 
@@ -150,29 +171,27 @@ prof_setup_clock ()
 }
 
 static void
-prof_init_static ()
+prof_init_static (cob_context *ctx)
 {
-	if (is_active == -1 && cobsetptr) {
+	if (is_active == -1 && ctx) {
 		prof_setup_clock ();
-		is_active = cobsetptr->cob_prof_enable;
+		is_active = ctx->settings->cob_prof_enable;
 	}
 }
 
 void
 cob_init_prof (cob_global *lptr, cob_settings *sptr)
 {
-	cobglobptr = lptr;
-	cobsetptr  = sptr;
 }
 
 struct cob_prof_module *
-cob_prof_init_module (cob_module *module,
+cob_prof_init_module_ctx (cob_context *ctx, cob_module *module,
 		      struct cob_prof_procedure *procedures,
 		      size_t procedure_count)
 {
 	COB_UNUSED (module);
 
-	prof_init_static ();
+	prof_init_static (ctx);
 	if (is_active){
 		struct cob_prof_module *info;
 		struct cob_prof_module_list *item;
@@ -193,24 +212,31 @@ cob_prof_init_module (cob_module *module,
 	return NULL;
 }
 
+/* compatibility: cob_prof_init_module without context */
+struct cob_prof_module *
+cob_prof_init_module (cob_module *module, struct cob_prof_procedure *procedures, size_t procedure_count)
+{
+	return cob_prof_init_module_ctx (COB_CTX_COMPAT, module, procedures, procedure_count);
+}
+
 static void
-cob_prof_realloc_arrays (void)
+cob_prof_realloc_arrays (cob_context *ctx)
 {
 	int new_size = max_prof_depth * 2 + 16;
 
-	if (new_size > cobsetptr->cob_prof_max_depth)
-		new_size = cobsetptr->cob_prof_max_depth;
+	if (new_size > ctx->settings->cob_prof_max_depth)
+		new_size = ctx->settings->cob_prof_max_depth;
 
 	if (max_prof_depth >= new_size){
 		int i;
-		cob_runtime_warning (_("[cob_prof] Profiling overflow at %d calls, aborting profiling."),
+		cob_runtime_warning_ctx (ctx, _("[cob_prof] Profiling overflow at %d calls, aborting profiling."),
 			current_idx);
-		cob_runtime_warning (_("  Last 10 calls on stack:"));
+		cob_runtime_warning_ctx (ctx, _("  Last 10 calls on stack:"));
 		for (i = 0; i < cob_min_int(10, current_idx); i++){
 			struct cob_prof_module *info = called_runtimes[current_idx-1-i];
 			int proc_idx = called_procedures[current_idx-1-i];
 			struct cob_prof_procedure *proc = info->procedures + proc_idx;
-			cob_runtime_warning (_("  * %s at %s:%d"), proc->text,
+			cob_runtime_warning_ctx (ctx, _("  * %s at %s:%d"), proc->text,
 					     proc->file, proc->line);
 		}
 		is_active = 0;
@@ -243,7 +269,7 @@ cob_prof_realloc_arrays (void)
 }
 
 void
-cob_prof_enter_procedure (struct cob_prof_module *info, int proc_idx)
+cob_prof_enter_procedure_ctx (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	cob_ns_time t;
 
@@ -253,7 +279,7 @@ cob_prof_enter_procedure (struct cob_prof_module *info, int proc_idx)
 
 	current_idx++;
 	if (current_idx >= max_prof_depth) {
-		cob_prof_realloc_arrays();
+		cob_prof_realloc_arrays(ctx);
 		if (!is_active) return;
 	}
 
@@ -265,8 +291,15 @@ cob_prof_enter_procedure (struct cob_prof_module *info, int proc_idx)
 	info->called_count[proc_idx] ++;
 }
 
+/* compatibility: cob_prof_enter_procedure without context */
 void
-cob_prof_exit_procedure (struct cob_prof_module *info, int proc_idx)
+cob_prof_enter_procedure (struct cob_prof_module *info, int proc_idx)
+{
+	cob_prof_enter_procedure_ctx (COB_CTX_COMPAT, info, proc_idx);
+}
+
+void
+cob_prof_exit_procedure_ctx (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	/* Exit all the sections/paragraphs */
 	cob_ns_time t;
@@ -290,8 +323,15 @@ cob_prof_exit_procedure (struct cob_prof_module *info, int proc_idx)
 	}
 }
 
+/* compatibility: cob_prof_exit_procedure without context */
 void
-cob_prof_enter_section (struct cob_prof_module *info, int proc_idx)
+cob_prof_exit_procedure (struct cob_prof_module *info, int proc_idx)
+{
+	cob_prof_exit_procedure_ctx (COB_CTX_COMPAT, info, proc_idx);
+}
+
+void
+cob_prof_enter_section_ctx (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	if (!is_active) return;
 	/* We do not measure time on section enter/exit, we use the cumulative time
@@ -299,24 +339,45 @@ cob_prof_enter_section (struct cob_prof_module *info, int proc_idx)
 	info->called_count[proc_idx] ++;
 }
 
+/* compatibility: cob_prof_enter_section without context */
 void
-cob_prof_use_paragraph_entry (struct cob_prof_module *info,
-			      int paragraph_idx, int entry_idx){
-	if (!is_active) return;
-	info->called_count[entry_idx] ++;
-	cob_prof_enter_procedure (info, paragraph_idx);
+cob_prof_enter_section (struct cob_prof_module *info, int proc_idx)
+{
+	cob_prof_enter_section_ctx (COB_CTX_COMPAT, info, proc_idx);
 }
 
 void
-cob_prof_exit_section (struct cob_prof_module *info, int proc_idx)
+cob_prof_use_paragraph_entry_ctx (cob_context *ctx, struct cob_prof_module *info,
+			      int paragraph_idx, int entry_idx){
+	if (!is_active) return;
+	info->called_count[entry_idx] ++;
+	cob_prof_enter_procedure_ctx (ctx, info, paragraph_idx);
+}
+
+/* compatibility: cob_prof_use_paragraph_entry without context */
+void
+cob_prof_use_paragraph_entry (struct cob_prof_module *info, int paragraph_idx, int entry_idx)
+{
+	cob_prof_use_paragraph_entry_ctx (COB_CTX_COMPAT, info, paragraph_idx, entry_idx);
+}
+
+void
+cob_prof_exit_section_ctx (cob_context *ctx, struct cob_prof_module *info, int proc_idx)
 {
 	/* For now, nothing to do */
 	COB_UNUSED (info);
 	COB_UNUSED (proc_idx);
 }
 
+/* compatibility: cob_prof_exit_section without context */
 void
-cob_prof_goto (struct cob_prof_module *info)
+cob_prof_exit_section (struct cob_prof_module *info, int proc_idx)
+{
+	cob_prof_exit_section_ctx (COB_CTX_COMPAT, info, proc_idx);
+}
+
+void
+cob_prof_goto_ctx (cob_context *ctx, struct cob_prof_module *info)
 {
 	int curr_proc;
 	struct cob_prof_module *curr_info;
@@ -329,8 +390,15 @@ cob_prof_goto (struct cob_prof_module *info)
 	curr_info = called_runtimes[current_idx];
 
 	if (curr_info->procedures[curr_proc].kind == COB_PROF_PROCEDURE_PARAGRAPH){
-		cob_prof_exit_procedure (curr_info, curr_proc);
+		cob_prof_exit_procedure_ctx (ctx, curr_info, curr_proc);
 	}
+}
+
+/* compatibility: cob_prof_goto without context */
+void
+cob_prof_goto (struct cob_prof_module *info)
+{
+	cob_prof_goto_ctx (COB_CTX_COMPAT, info);
 }
 
 static void
@@ -350,7 +418,7 @@ print_monotonic_time (FILE *file, cob_ns_time t) {
 
 /* Default format is: "%m,%s,%p,%e,%w,%k,%t,%h,%n" (in common.c) */
 static void
-cob_prof_print_line (
+cob_prof_print_line (cob_context *ctx,
 	FILE *file,
 	struct cob_prof_module *info,
 	int proc_idx)
@@ -427,10 +495,10 @@ cob_prof_print_line (
 		ncalls = line = 0;
 	}
 
-	for (i = 0; cobsetptr->cob_prof_format[i] != 0; i++) {
-		if (cobsetptr->cob_prof_format[i] == '%') {
+	for (i = 0; ctx->settings->cob_prof_format[i] != 0; i++) {
+		if (ctx->settings->cob_prof_format[i] == '%') {
 			i++;
-			switch (cobsetptr->cob_prof_format[i]) {
+			switch (ctx->settings->cob_prof_format[i]) {
 			case 'M':
 			case 'm':
 				fputs (module, file);
@@ -509,10 +577,10 @@ cob_prof_print_line (
 				break;
 			default:
 				fputc ('%', file);
-				fputc (cobsetptr->cob_prof_format[i], file);
+				fputc (ctx->settings->cob_prof_format[i], file);
 			}
 		} else {
-			fputc (cobsetptr->cob_prof_format[i], file);
+			fputc (ctx->settings->cob_prof_format[i], file);
 		}
 	}
 	fputc ('\n', file);
@@ -521,21 +589,21 @@ cob_prof_print_line (
 
 
 void
-cob_prof_end ()
+cob_prof_end (cob_context *ctx)
 {
 	FILE *file;
 	struct cob_prof_module_list *l;
 
-	prof_init_static ();
+	prof_init_static (ctx);
 
-	if (!cobsetptr || !is_active || !prof_info_list) return;
+	if (!ctx || !is_active || !prof_info_list) return;
 
 	while (current_idx >= 0) {
-		cob_prof_exit_procedure (called_runtimes[current_idx],
+		cob_prof_exit_procedure_ctx (ctx, called_runtimes[current_idx],
 					 called_procedures[current_idx]);
 	}
 
-	file = cob_open_logfile (cobsetptr->cob_prof_filename);
+	file = cob_open_logfile (ctx->settings->cob_prof_filename);
 
 	if (!!file) {
 
@@ -553,21 +621,21 @@ cob_prof_end ()
 			}
 		}
 
-		cob_prof_print_line (file, NULL, 0);
+		cob_prof_print_line (ctx, file, NULL, 0);
 		for (l = prof_info_list ; l != NULL; l=l->next){
 
 			struct cob_prof_module *info = l->info;
 			int i;
 
 			for (i = 0; i < info->procedure_count; i++) {
-				cob_prof_print_line (file, info, i);
+				cob_prof_print_line (ctx, file, info, i);
 			}
 		}
 		fclose (file);
-		fprintf(stderr, "File %s generated\n", cobsetptr->cob_prof_filename);
+		fprintf(stderr, "File %s generated\n", ctx->settings->cob_prof_filename);
 	} else {
-		cob_runtime_warning (_("error '%s' opening COB_PROF_FILE '%s'"),
-				     cob_get_strerror (), cobsetptr->cob_prof_filename);
+		cob_runtime_warning_ctx (ctx, _("error '%s' opening COB_PROF_FILE '%s'"),
+				     cob_get_strerror (), ctx->settings->cob_prof_filename);
 	}
 	current_idx = -1;
 	is_active = 0;

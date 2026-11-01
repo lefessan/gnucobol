@@ -172,18 +172,18 @@
 	COB_ATTR_INIT_A(attr,u,v,x,y,z)
 
 #define COB_GET_SIGN(f)		\
-	(COB_FIELD_HAVE_SIGN (f) ? cob_real_get_sign (f, 0) : 0)
+	(COB_FIELD_HAVE_SIGN (f) ? cob_real_get_sign (ctx, f, 0) : 0)
 #define COB_GET_SIGN_ADJUST(f)		\
-	(COB_FIELD_HAVE_SIGN (f) ? cob_real_get_sign (f, 1) : 0)
+	(COB_FIELD_HAVE_SIGN (f) ? cob_real_get_sign (ctx, f, 1) : 0)
 #define COB_PUT_SIGN(f,s)	\
-	do { if (COB_FIELD_HAVE_SIGN (f)) cob_real_put_sign (f, s); } ONCE_COB
+	do { if (COB_FIELD_HAVE_SIGN (f)) cob_real_put_sign (ctx, f, s); } ONCE_COB
 #define COB_PUT_SIGN_ADJUSTED(f,s)	\
-	do { if (s == -2 || s == 2) { if (s == 2) cob_real_put_sign (f, 1); \
-	     else cob_real_put_sign (f, -1); }} ONCE_COB
+	do { if (s == -2 || s == 2) { if (s == 2) cob_real_put_sign (ctx, f, 1); \
+	     else cob_real_put_sign (ctx, f, -1); }} ONCE_COB
 
 #ifdef	COB_PARAM_CHECK
 #define	COB_CHK_PARMS(x,z)	\
-	cob_parameter_check (#x, z)
+	cob_parameter_check (cob_get_current_context (), #x, z)
 #else
 #define	COB_CHK_PARMS(x,z)
 #endif
@@ -198,21 +198,21 @@
 #define COB_D2I(x)		((x) & 0x0F)
 #define COB_I2D(x)		(char) ('0' + (x))
 
-#define	COB_MODULE_PTR		cobglobptr->cob_current_module
-#define	COB_TERM_BUFF		cobglobptr->cob_term_buff
-#define	COB_ACCEPT_STATUS	cobglobptr->cob_accept_status
-#define	COB_MAX_Y_COORD		cobglobptr->cob_max_y
-#define	COB_MAX_X_COORD		cobglobptr->cob_max_x
+#define	COB_MODULE_PTR		ctx->glob.cob_current_module
+#define	COB_TERM_BUFF		ctx->glob.cob_term_buff
+#define	COB_ACCEPT_STATUS	ctx->glob.cob_accept_status
+#define	COB_MAX_Y_COORD		ctx->glob.cob_max_y
+#define	COB_MAX_X_COORD		ctx->glob.cob_max_x
 
-#define	COB_DISP_TO_STDERR	cobsetptr->cob_disp_to_stderr
-#define	COB_BEEP_VALUE		cobsetptr->cob_beep_value
-#define	COB_TIMEOUT_SCALE	cobsetptr->cob_timeout_scale
-#define	COB_INSERT_MODE		cobsetptr->cob_insert_mode
-#define	COB_HIDE_CURSOR		cobsetptr->cob_hide_cursor
-#define	COB_EXTENDED_STATUS	cobsetptr->cob_extended_status
-#define	COB_MOUSE_FLAGS	cobsetptr->cob_mouse_flags
-#define	COB_MOUSE_INTERVAL	cobsetptr->cob_mouse_interval
-#define	COB_USE_ESC		cobsetptr->cob_use_esc
+#define	COB_DISP_TO_STDERR	ctx->settings->cob_disp_to_stderr
+#define	COB_BEEP_VALUE		ctx->settings->cob_beep_value
+#define	COB_TIMEOUT_SCALE	ctx->settings->cob_timeout_scale
+#define	COB_INSERT_MODE		ctx->settings->cob_insert_mode
+#define	COB_HIDE_CURSOR		ctx->settings->cob_hide_cursor
+#define	COB_EXTENDED_STATUS	ctx->settings->cob_extended_status
+#define	COB_MOUSE_FLAGS	ctx->settings->cob_mouse_flags
+#define	COB_MOUSE_INTERVAL	ctx->settings->cob_mouse_interval
+#define	COB_USE_ESC		ctx->settings->cob_use_esc
 
 #if defined(COB_TLS)
     /* already defined, for example as static to explicit disable TLS */
@@ -226,6 +226,26 @@
 #else
     #define COB_TLS	static	/* fallback definition */
 #endif
+
+/* TODO (T1.2/T1.3): context for callers that do not receive it yet;
+   every use must disappear when 'ctx' is propagated */
+#define COB_CTX_TODO	(cob_get_current_context ())
+
+/* context used by the compatibility functions (old names without context);
+   TODO (T1.5): raise an error when several contexts are used */
+#define COB_CTX_COMPAT	(cob_get_current_context ())
+
+/* used by the variadic functions taking a va_list */
+#ifndef va_copy
+#define va_copy(dst, src)	((dst) = (src))
+#endif
+
+/* Runtime structure (one per process), opaque outside of libcob;
+   filled in T1.3 when the global state is moved */
+struct cob_runtime {
+	unsigned int	last_unit_slot;	/* slots of the compilation units,
+					   TODO (T1.4): atomic */
+};
 
 /* Global settings structure */
 
@@ -359,7 +379,7 @@ struct config_tbl {
 	const char	*env_name;		/* Env Var name */
 	const char	*conf_name;		/* Name used in run-time config file */
 	const char	*default_val;		/* Default value */
-	struct config_enum *enums;		/* Table of Alternate values */
+	const struct config_enum *enums;	/* Table of Alternate values */
 	int		env_group;		/* Grouping for display of run-time options */
 	int		data_type;		/* Data type */
 	int		data_loc;		/* Location within structure */
@@ -398,7 +418,7 @@ struct config_tbl {
 #define GRP_SYSENV	5
 #define GRP_MAX 	6
 
-#define SETPOS(member)	offsetof(cob_settings,member),sizeof(cobsetptr->member),0,0
+#define SETPOS(member)	offsetof(cob_settings,member),sizeof(((cob_settings *)0)->member),0,0
 
 /* max sizes */
 
@@ -428,78 +448,82 @@ struct config_tbl {
 /* Local function prototypes */
 COB_EXPIMP const char * cob_io_version	(const int, const int);
 COB_EXPIMP const char * cob_io_name		(const int);
-COB_HIDDEN void		cob_init_numeric	(cob_global *);
+COB_HIDDEN void		cob_init_numeric	(cob_context *, cob_global *);
+COB_HIDDEN void		cob_init_numeric_context	(cob_context *);
 COB_HIDDEN void		cob_init_cconv		(cob_global *);
 COB_HIDDEN void		cob_init_termio		(cob_global *, cob_settings *);
-COB_HIDDEN void		cob_init_fileio		(cob_global *, cob_settings *);
-COB_HIDDEN char		*cob_setup_filename	(const cob_field *);
+COB_HIDDEN void		cob_init_fileio		(cob_context *, cob_global *, cob_settings *);
+COB_HIDDEN char		*cob_setup_filename	(cob_context *, const cob_field *);
 COB_HIDDEN void		cob_init_reportio	(cob_global *, cob_settings *);
-COB_HIDDEN void		cob_init_call		(cob_global *, cob_settings *, const int);
+COB_HIDDEN void		cob_init_call		(cob_context *, cob_global *, cob_settings *, const int);
 COB_HIDDEN void		cob_init_cobcapi	(cob_global *, cob_settings *);
-COB_HIDDEN void		cob_init_intrinsic	(cob_global *);
+COB_HIDDEN void		cob_init_intrinsic	(cob_context *, cob_global *);
 COB_HIDDEN void		cob_init_strings	(cob_global *);
 COB_HIDDEN void		cob_init_move		(cob_global *, cob_settings *);
 COB_HIDDEN void		cob_init_prof		(cob_global *, cob_settings *);
-COB_HIDDEN void		cob_init_screenio	(cob_global *, cob_settings *);
+COB_HIDDEN void		cob_init_screenio	(cob_context *, cob_global *, cob_settings *);
 COB_HIDDEN void		cob_init_mlio		(cob_global * const);
 
 COB_HIDDEN const char *cob_statement_name[STMT_MAX_ENTRY];
 
-COB_HIDDEN void		cob_print_field		(FILE *, cob_field *, int, int);
+COB_HIDDEN void		cob_print_field		(cob_context *, FILE *, cob_field *, int, int);
 COB_HIDDEN void		cob_module_clean	(cob_module *);
 
 COB_HIDDEN void		cob_check_trace_file (void);
 
-COB_HIDDEN char		*cob_get_filename_print	(cob_file *, const int);
-COB_HIDDEN void		cob_fork_fileio		(cob_global *, cob_settings *);
+COB_HIDDEN char		*cob_get_filename_print	(cob_context *, cob_file *, const int);
+COB_HIDDEN void		cob_fork_fileio		(cob_context *, cob_global *, cob_settings *);
 
-COB_HIDDEN void		cob_file_fcd_sync	(cob_file*);
-COB_HIDDEN void		cob_fcd_file_sync	(cob_file*, char*);
-COB_HIDDEN void		free_extfh_fcd		(void);
+COB_HIDDEN void		cob_file_fcd_sync	(cob_context *, cob_file*);
+COB_HIDDEN void		cob_fcd_file_sync	(cob_context *, cob_file*, char*);
+COB_HIDDEN void		free_extfh_fcd		(cob_context *);
 
-COB_HIDDEN void		cob_exit_screen		(void);
-COB_HIDDEN void		cob_exit_screen_from_signal	(int);
-COB_HIDDEN void		cob_exit_numeric	(void);
-COB_HIDDEN void		cob_exit_fileio_msg_only	(void);
-COB_HIDDEN void		cob_exit_fileio		(void);
-COB_HIDDEN void		cob_exit_reportio	(void);
-COB_HIDDEN void		cob_exit_call		(void);
-COB_HIDDEN void		cob_exit_cobcapi	(void);
-COB_HIDDEN void		cob_exit_intrinsic	(void);
-COB_HIDDEN void		cob_exit_strings	(void);
+COB_HIDDEN void		cob_exit_screen		(cob_context *);
+COB_HIDDEN void		cob_exit_screen_from_signal	(cob_context *, int);
+COB_HIDDEN void		cob_exit_numeric	(cob_context *);
+COB_HIDDEN void		cob_exit_numeric_context	(cob_context *);
+COB_HIDDEN void		cob_exit_fileio_msg_only	(cob_context *);
+COB_HIDDEN void		cob_exit_fileio		(cob_context *);
+COB_HIDDEN void		cob_exit_fileio_context	(cob_context *);
+COB_HIDDEN void		cob_exit_reportio	(cob_context *);
+COB_HIDDEN void		cob_exit_call		(cob_context *);
+COB_HIDDEN void		cob_exit_cobcapi	(cob_context *);
+COB_HIDDEN void		cob_exit_intrinsic	(cob_context *);
+COB_HIDDEN void		cob_exit_intrinsic_context	(cob_context *);
+COB_HIDDEN void		cob_exit_strings	(cob_context *);
 COB_HIDDEN void		cob_exit_mlio		(void);
 
 COB_HIDDEN FILE		*cob_create_tmpfile	(const char *);
-COB_HIDDEN int		cob_check_numval_f	(const cob_field *);
+COB_HIDDEN int		cob_check_numval_f	(cob_context *, const cob_field *);
 
-COB_HIDDEN int		cob_real_get_sign	(cob_field *, const int);
-COB_HIDDEN void		cob_real_put_sign	(cob_field *, const int);
+COB_HIDDEN int		cob_real_get_sign	(cob_context *, cob_field *, const int);
+COB_HIDDEN void		cob_real_put_sign	(cob_context *, cob_field *, const int);
 
 #ifndef COB_WITHOUT_DECIMAL
 COB_HIDDEN void		cob_decimal_init2	(cob_decimal *, const cob_uli_t);
-COB_HIDDEN void		cob_decimal_set_mpf (cob_decimal *, const mpf_t);
-COB_HIDDEN void		cob_decimal_get_mpf (mpf_t, const cob_decimal *);
+COB_HIDDEN void		cob_decimal_set_mpf (cob_context *, cob_decimal *, const mpf_t);
+COB_HIDDEN void		cob_decimal_get_mpf (cob_context *, mpf_t, const cob_decimal *);
 #endif
-COB_HIDDEN void		cob_decimal_setget_fld	(cob_field *, cob_field *,
+COB_HIDDEN void		cob_decimal_setget_fld	(cob_context *, cob_field *, cob_field *,
 						 const int);
-COB_HIDDEN void		cob_decimal_move_temp	(cob_field *, cob_field *);
-COB_HIDDEN void		cob_move_display_to_packed (cob_field *, cob_field *);
-COB_HIDDEN void		cob_move_packed_to_display (cob_field *, cob_field *);
+COB_HIDDEN void		cob_decimal_move_temp	(cob_context *, cob_field *, cob_field *);
+COB_HIDDEN void		cob_move_display_to_packed (cob_context *, cob_field *, cob_field *);
+COB_HIDDEN void		cob_move_packed_to_display (cob_context *, cob_field *, cob_field *);
 
-COB_HIDDEN void		cob_display_common	(const cob_field *, FILE *);
-COB_HIDDEN void		cob_print_ieeedec	(const cob_field *, FILE *);
-COB_HIDDEN void		cob_print_realbin	(const cob_field *, FILE *,
+COB_HIDDEN void		cob_display_common	(cob_context *, const cob_field *, FILE *);
+COB_HIDDEN void		cob_print_ieeedec	(cob_context *, const cob_field *, FILE *);
+COB_HIDDEN void		cob_print_realbin	(cob_context *, const cob_field *, FILE *,
 						 const int);
 
-COB_HIDDEN void		cob_screen_set_mode	(const cob_u32_t);
-COB_HIDDEN void		cob_settings_screenio	(void);
+COB_HIDDEN void		cob_screen_set_mode	(cob_context *, const cob_u32_t);
+COB_HIDDEN void		cob_settings_screenio	(cob_context *);
 
-COB_HIDDEN int		cob_get_last_exception_code	(void);
-COB_HIDDEN void		cob_add_exception (const int);
+COB_HIDDEN int		cob_get_last_exception_code	(cob_context *);
+COB_HIDDEN void		cob_add_exception (cob_context *, const int);
 COB_HIDDEN int		cob_check_env_true	(char*);
 COB_HIDDEN int		cob_check_env_false	(char*);
-COB_HIDDEN const char	*cob_get_last_exception_name	(void);
-COB_HIDDEN void		cob_parameter_check	(const char *, const int);
+COB_HIDDEN const char	*cob_get_last_exception_name	(cob_context *);
+COB_HIDDEN void		cob_parameter_check	(cob_context *, const char *, const int);
 COB_EXPIMP char*        cob_get_strerror (void);
 
 COB_HIDDEN int		cob_cmp_strings (unsigned char*, unsigned char*,
@@ -522,7 +546,7 @@ COB_HIDDEN char	*cob_strndup		(const char *, const size_t);
 
 /* Function called by the runtime at the end of execution to save the
  * profiling information in a file. */
-COB_HIDDEN void cob_prof_end (void);
+COB_HIDDEN void cob_prof_end (cob_context *);
 
 enum cob_datetime_res {
 	DTR_DATE,
@@ -539,7 +563,7 @@ COB_HIDDEN FILE			*cob_get_dump_file	(void);
 COB_HIDDEN char		*cob_strcat		(char*, char*, int);
 COB_HIDDEN char		*cob_strjoin		(char**, int, char*);
 
-COB_HIDDEN int		cob_runtime_warning_ss (const char *, const char *);
+COB_HIDDEN int		cob_runtime_warning_ss (cob_context *, const char *, const char *);
 
 COB_EXPIMP int cob_ncase_cmp (char *, const char *, unsigned );
 COB_EXPIMP char * cob_str_case_str (char *, const char *);

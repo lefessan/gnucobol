@@ -45,8 +45,6 @@
 
 /* Local variables */
 
-static cob_global		*cobglobptr = NULL;
-static cob_settings		*cobsetptr = NULL;
 
 static char no_syspunch_error_raised = 0;
 #define MAX_PREV 256
@@ -60,7 +58,7 @@ static const cob_field_attr	const_alpha_attr =
 /* DISPLAY */
 
 static void
-display_numeric (cob_field *f, FILE *fp)
+display_numeric (cob_context *ctx, cob_field *f, FILE *fp)
 {
 	const unsigned short	digits = COB_FIELD_DIGITS (f);
 	const signed short	scale = COB_FIELD_SCALE (f);
@@ -90,7 +88,7 @@ display_numeric (cob_field *f, FILE *fp)
 		}
 		COB_FIELD_INIT (size, COB_TERM_BUFF, &attr);
 
-		cob_move (f, &field);
+		cob_move_ctx (ctx, f, &field);
 	}
 
 	/* output of data to viewport */
@@ -106,7 +104,7 @@ display_numeric (cob_field *f, FILE *fp)
 }
 
 static void
-pretty_display_numeric (cob_field *f, FILE *fp)
+pretty_display_numeric (cob_context *ctx, cob_field *f, FILE *fp)
 {
 	unsigned short		digits;
 	signed short		scale = COB_FIELD_SCALE (f);
@@ -185,7 +183,7 @@ pretty_display_numeric (cob_field *f, FILE *fp)
 				has_sign ? (COB_FLAG_HAVE_SIGN | COB_FLAG_SIGN_SEPARATE): 0,
 				(const cob_pic_symbol*)pic);
 
-			cob_move (f, &field);
+			cob_move_ctx (ctx, f, &field);
 		}
 
 		/* output of data to viewport */
@@ -248,7 +246,7 @@ clean_double (char *wrk)
 }
 
 void
-cob_display_common (const cob_field *f, FILE *fp)
+cob_display_common (cob_context *ctx, const cob_field *f, FILE *fp)
 {
 	if (f->size == 0) {
 		return;
@@ -284,7 +282,7 @@ cob_display_common (const cob_field *f, FILE *fp)
 	}
 	case COB_TYPE_NUMERIC_FP_DEC64:
 	case COB_TYPE_NUMERIC_FP_DEC128:
-		cob_print_ieeedec (f, fp);
+		cob_print_ieeedec (ctx, f, fp);
 		return;
 	default:
 		break;
@@ -307,27 +305,27 @@ cob_display_common (const cob_field *f, FILE *fp)
 	if (COB_FIELD_IS_NUMERIC (f)) {
 		/* CHECKME: consider to check for pretty-printing first */
 		if (COB_FIELD_TYPE (f) == COB_TYPE_NUMERIC_COMP5) {
-			cob_print_realbin (f, fp, f->attr->digits);
+			cob_print_realbin (ctx, f, fp, f->attr->digits);
 			return;
 		}
 		if ( COB_FIELD_REAL_BINARY (f)
 		 || (COB_FIELD_TYPE(f) == COB_TYPE_NUMERIC_BINARY
 		   && !COB_MODULE_PTR->flag_pretty_display)) {
-			cob_print_realbin (f, fp, bin_digits[f->size]);
+			cob_print_realbin (ctx, f, fp, bin_digits[f->size]);
 			return;
 		}
 		if (COB_MODULE_PTR->flag_pretty_display) {
-			pretty_display_numeric ((cob_field *)f, fp);
+			pretty_display_numeric (ctx, (cob_field *)f, fp);
 			return;
 		}
-		display_numeric ((cob_field *)f, fp);
+		display_numeric (ctx, (cob_field *)f, fp);
 		return;
 	}
 	display_alnum (f, fp);
 }
 
-void
-cob_display (const int to_device, const int newline, const int varcnt, ...)
+static void
+cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, const int varcnt, va_list cob_va_args)
 {
 	FILE		*fp;
 	int		close_fp = 0;
@@ -338,7 +336,7 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 	switch (to_device) {
 	case 0:	/* general (SYSOUT) */
 		fp = stdout;
-		if (cobglobptr->cob_screen_initialized) {
+		if (ctx->glob.cob_screen_initialized) {
 			if (!COB_DISP_TO_STDERR) {
 				disp_redirect = 1;
 			} else {
@@ -351,17 +349,17 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 		break;
 	case 2:	/* PRINTER */
 		/* display to external specified print file handle */
-		if (cobsetptr->cob_display_print_file) {
-			fp = cobsetptr->cob_display_print_file;
+		if (ctx->settings->cob_display_print_file) {
+			fp = ctx->settings->cob_display_print_file;
 		/* display to configured print file */
-		} else if (cobsetptr->cob_display_print_filename != NULL) {
+		} else if (ctx->settings->cob_display_print_filename != NULL) {
 			const char *mode;
-			if (!cobsetptr->cob_unix_lf) {
+			if (!ctx->settings->cob_unix_lf) {
 				mode = "a";
 			} else {
 				mode = "ab";
 			}
-			fp = fopen (cobsetptr->cob_display_print_filename, mode);
+			fp = fopen (ctx->settings->cob_display_print_filename, mode);
 			if (fp == NULL) {
 				fp = stderr;
 			} else {
@@ -369,15 +367,15 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 			}
 #ifdef HAVE_POPEN
 		/* display to configured print command (piped) */
-		} else if (cobsetptr->cob_display_print_pipe != NULL) {
+		} else if (ctx->settings->cob_display_print_pipe != NULL) {
 			const char* mode;
-			if (!cobsetptr->cob_unix_lf) {
+			if (!ctx->settings->cob_unix_lf) {
 				mode = "w";
 			} else {
 				/* Note: this doesn't seem to help with pipes :-( */
 				mode = "wb";
 			}
-			fp = popen (cobsetptr->cob_display_print_pipe, mode);
+			fp = popen (ctx->settings->cob_display_print_pipe, mode);
 			if (fp == NULL) {
 				fp = stderr;
 			} else {
@@ -387,7 +385,7 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 		/* fallback: display to the defined SYSOUT */
 		} else {
 			fp = stdout;
-			if (cobglobptr->cob_screen_initialized) {
+			if (ctx->glob.cob_screen_initialized) {
 				if (!COB_DISP_TO_STDERR) {
 					disp_redirect = 1;
 				} else {
@@ -398,33 +396,33 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 		break;
 	case 3:	/* SYSPCH */
 		/* open if not available but specified */
-		if (!cobsetptr->cob_display_punch_file
-		 && cobsetptr->cob_display_punch_filename != NULL) {
+		if (!ctx->settings->cob_display_punch_file
+		 && ctx->settings->cob_display_punch_filename != NULL) {
 			const char* mode;
-			if (!cobsetptr->cob_unix_lf) {
+			if (!ctx->settings->cob_unix_lf) {
 				mode = "w";
 			} else {
 				/* Note: this doesn't seem to help with pipes :-( */
 				mode = "wb";
 			}
-			fp = fopen (cobsetptr->cob_display_punch_filename, mode);
+			fp = fopen (ctx->settings->cob_display_punch_filename, mode);
 			if (fp == NULL) {
-				cob_runtime_warning (_("cannot open %s (=%s)"),
-					"COB_DISPLAY_PUNCH_FILE", cobsetptr->cob_display_punch_filename);
-				cob_free (cobsetptr->cob_display_punch_filename);
-				cobsetptr->cob_display_punch_filename = NULL;
+				cob_runtime_warning_ctx (ctx, _("cannot open %s (=%s)"),
+					"COB_DISPLAY_PUNCH_FILE", ctx->settings->cob_display_punch_filename);
+				cob_free (ctx->settings->cob_display_punch_filename);
+				ctx->settings->cob_display_punch_filename = NULL;
 			} else {
-				cobsetptr->cob_display_punch_file = fp;
+				ctx->settings->cob_display_punch_file = fp;
 			}
 		}
 		/* display to already opened punch file */
-		if (cobsetptr->cob_display_punch_file) {
-			fp = cobsetptr->cob_display_punch_file;
+		if (ctx->settings->cob_display_punch_file) {
+			fp = ctx->settings->cob_display_punch_file;
 		} else {
-			cob_set_exception (COB_EC_IMP_DISPLAY);	/* come back to this later... */
+			cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);	/* come back to this later... */
 			if (!no_syspunch_error_raised) {
 				no_syspunch_error_raised = 1;
-				cob_runtime_warning (_("COB_DISPLAY_PUNCH_FILE is invalid, output to SYSPUNCH skipped"));
+				cob_runtime_warning_ctx (ctx, _("COB_DISPLAY_PUNCH_FILE is invalid, output to SYSPUNCH skipped"));
 			}
 			return;
 		}
@@ -435,20 +433,20 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 	}
 	/* LCOV_EXCL_STOP */
 
-	va_start (args, varcnt);
+	va_copy (args, cob_va_args);
 	if (disp_redirect) {
 		const int nlattr = newline ? COB_SCREEN_EMULATE_NL : 0;
 		int		i;
 		for (i = 0; i < varcnt; ++i) {
 			cob_field	*f = va_arg (args, cob_field *);
-			cob_field_display (f, NULL, NULL, NULL, NULL,
+			cob_field_display_ctx (ctx, f, NULL, NULL, NULL, NULL,
 					   NULL, NULL, nlattr);
 		}
 	} else {
 		int		i;
 		for (i = 0; i < varcnt; ++i) {
 			cob_field	*f = va_arg (args, cob_field *);
-			cob_display_common (f, fp);
+			cob_display_common (ctx, f, fp);
 		}
 		if (newline) {
 			putc ('\n', fp);
@@ -468,6 +466,27 @@ cob_display (const int to_device, const int newline, const int varcnt, ...)
 		fclose (fp);
 #endif
 	}
+}
+
+void
+cob_display_ctx (cob_context *ctx, const int to_device, const int newline, const int varcnt, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, varcnt);
+	cob_display_va_ctx (ctx, to_device, newline, varcnt, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_display without context */
+void
+cob_display (const int to_device, const int newline, const int varcnt, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, varcnt);
+	cob_display_va_ctx (COB_CTX_COMPAT, to_device, newline, varcnt, cob_va_args);
+	va_end (cob_va_args);
 }
 
 static int
@@ -686,11 +705,46 @@ display_alnum_dump (cob_field *f, FILE *fp, unsigned int indent, unsigned int ma
 
 
 /* Output for DUMP purposes */
-static int	dump_null_adrs = 0;
-static void dump_pending_output (FILE*);
+
+#define IDX_HINT_MAX	3 + COB_MAX_SUBSCRIPTS * (7 + 1)
+#define VNAME_MAX	COB_MAX_WORDLEN + IDX_HINT_MAX + 1
+#define LVL_SIZE	16
+
+/* State of the DUMP output, one per context; accessed with the macros
+   below, using the context 'ctx' */
+struct cob_termio_state {
+	int			dump_null_adrs;
+	const unsigned char	*dump_prev_data[COB_MAX_SUBSCRIPTS + 1];
+	unsigned int		dump_index;
+	unsigned int		dump_idx[COB_MAX_SUBSCRIPTS + 1];
+	unsigned int		dump_idx_first[COB_MAX_SUBSCRIPTS + 1];
+	unsigned int		dump_idx_last[COB_MAX_SUBSCRIPTS + 1];
+	unsigned int		dump_skip[COB_MAX_SUBSCRIPTS + 1];
+	char			pending_dump_name[VNAME_MAX + LVL_SIZE + 1];
+};
+
+static struct cob_termio_state *
+termio_state (cob_context *ctx)
+{
+	if (ctx->termio == NULL) {
+		ctx->termio = cob_malloc (sizeof (struct cob_termio_state));
+	}
+	return ctx->termio;
+}
+
+#define dump_null_adrs		(termio_state (ctx)->dump_null_adrs)
+#define dump_prev_data		(termio_state (ctx)->dump_prev_data)
+#define dump_index		(termio_state (ctx)->dump_index)
+#define dump_idx		(termio_state (ctx)->dump_idx)
+#define dump_idx_first		(termio_state (ctx)->dump_idx_first)
+#define dump_idx_last		(termio_state (ctx)->dump_idx_last)
+#define dump_skip		(termio_state (ctx)->dump_skip)
+#define pending_dump_name	(termio_state (ctx)->pending_dump_name)
+
+static void dump_pending_output (cob_context *, FILE*);
 
 void
-cob_dump_output (const char *str)
+cob_dump_output_ctx (cob_context *ctx, const char *str)
 {
 	FILE	*fp = cob_get_dump_file ();
 
@@ -699,14 +753,21 @@ cob_dump_output (const char *str)
 		return;
 	}
 
-	dump_pending_output (fp);
+	dump_pending_output (ctx, fp);
 
 	fprintf (fp, "\n%s\n**********************\n", str);
 }
 
+/* compatibility: cob_dump_output without context */
+void
+cob_dump_output (const char *str)
+{
+	cob_dump_output_ctx (COB_CTX_COMPAT, str);
+}
+
 /* Output file header for DUMP purposes */
 void
-cob_dump_file (const char *name, cob_file *fl)
+cob_dump_file_ctx (cob_context *ctx, const char *name, cob_file *fl)
 {
 	FILE	*fp = cob_get_dump_file ();
 	const char *mode;
@@ -716,7 +777,7 @@ cob_dump_file (const char *name, cob_file *fl)
 		return;
 	}
 
-	dump_pending_output (fp);
+	dump_pending_output (ctx, fp);
 
 	switch (fl->open_mode) {
 	case COB_OPEN_CLOSED:
@@ -734,9 +795,12 @@ cob_dump_file (const char *name, cob_file *fl)
 	fprintf (fp, "   FILE STATUS  '%.2s'\n", fl->file_status);
 }
 
-#define IDX_HINT_MAX	3 + COB_MAX_SUBSCRIPTS * (7 + 1)
-#define VNAME_MAX	COB_MAX_WORDLEN + IDX_HINT_MAX + 1
-#define LVL_SIZE	16
+/* compatibility: cob_dump_file without context */
+void
+cob_dump_file (const char *name, cob_file *fl)
+{
+	cob_dump_file_ctx (COB_CTX_COMPAT, name, fl);
+}
 
 
 /* storing dump name into provided buffer (minimal size: VNAME_MAX),
@@ -766,7 +830,7 @@ setup_varname_with_indices (char *buffer, cob_u32_t	*subscript,
 }
 
 static void
-setup_lvlwrk_and_dump_null_adrs (char *lvlwrk, const int level,
+setup_lvlwrk_and_dump_null_adrs (cob_context *ctx, char *lvlwrk, const int level,
 		const void *data_ptr)
 {
 	if (level == 77
@@ -792,18 +856,9 @@ setup_lvlwrk_and_dump_null_adrs (char *lvlwrk, const int level,
 	}
 }
 
-static const unsigned char *dump_prev_data[COB_MAX_SUBSCRIPTS + 1];
-static unsigned int	dump_index = 0;
-
-static unsigned int	dump_idx[COB_MAX_SUBSCRIPTS + 1];
-static unsigned int	dump_idx_first[COB_MAX_SUBSCRIPTS + 1];
-static unsigned int	dump_idx_last[COB_MAX_SUBSCRIPTS + 1];
-static unsigned int	dump_skip[COB_MAX_SUBSCRIPTS + 1];
-
-static char	pending_dump_name[VNAME_MAX + LVL_SIZE + 1] = "";
 
 static void
-dump_pending_output (FILE* fp)
+dump_pending_output (cob_context *ctx, FILE* fp)
 {
 	if (pending_dump_name[0] == 0) {
 		return;
@@ -817,9 +872,8 @@ dump_pending_output (FILE* fp)
 }
 
 /* Output field for DUMP purposes */
-void
-cob_dump_field (const int level, const char *name, 
-		cob_field *f_addr, const cob_uli_t field_offset, const cob_u32_t indexes, ...)
+static void
+cob_dump_field_va_ctx (cob_context *ctx, const int level, const char *name, cob_field *f_addr, const cob_uli_t field_offset, const cob_u32_t indexes, va_list cob_va_args)
 {
 	size_t 	adjust = field_offset;
 	size_t	name_length;
@@ -846,7 +900,7 @@ cob_dump_field (const int level, const char *name,
 	/* copy over indexes to local array and calculate size offset */
 	if (indexes != 0) {
 		size_t size;
-		va_start (ap, indexes);
+		va_copy (ap, cob_va_args);
 		for (cob_idx = 1; cob_idx <= indexes; cob_idx++) {
 			int c_subscript = va_arg (ap, int);
 			int cob_subscript = c_subscript + 1;
@@ -876,7 +930,7 @@ cob_dump_field (const int level, const char *name,
 	   is less than in the last run */
 	if (calc_dump_index < dump_index
 	 || dump_idx[calc_dump_index] > subscript[calc_dump_index]) {
-		dump_pending_output (fp);
+		dump_pending_output (ctx, fp);
 		for (;;) {
 			dump_idx[dump_index] = 0;
 			dump_prev_data[dump_index] = NULL;
@@ -911,7 +965,7 @@ cob_dump_field (const int level, const char *name,
 					return;
 				}
 
-				setup_lvlwrk_and_dump_null_adrs (lvlwrk, level, data);
+				setup_lvlwrk_and_dump_null_adrs (ctx, lvlwrk, level, data);
 				pos = sprintf (pending_dump_name, "%-10s", lvlwrk);
 				setup_varname_with_indices (pending_dump_name + pos,
 					subscript, indexes, name, 0);
@@ -923,7 +977,7 @@ cob_dump_field (const int level, const char *name,
 			/* ... or handle possibly last output (special case with off by one)...*/
 			if (pending_dump_name[0]) {
 				dump_idx_last[dump_index]--;
-				dump_pending_output (fp);
+				dump_pending_output (ctx, fp);
 				dump_idx_last[dump_index]++;
 			}
 			/* ... and reset data for next comparision */
@@ -933,7 +987,7 @@ cob_dump_field (const int level, const char *name,
 		}
 	}
 
-	setup_lvlwrk_and_dump_null_adrs (lvlwrk, level, f->data);
+	setup_lvlwrk_and_dump_null_adrs (ctx, lvlwrk, level, f->data);
 	name_length = setup_varname_with_indices (vname, subscript, indexes, name, 1);
 
 	if (dump_null_adrs) {
@@ -965,15 +1019,15 @@ cob_dump_field (const int level, const char *name,
 		if (  (COB_FIELD_TYPE (f) == COB_TYPE_NUMERIC_EDITED
 			|| COB_FIELD_TYPE (f) == COB_TYPE_NUMERIC_DISPLAY)
 		 && !is_field_display (f)) {
-			display_alnum_dump (f, fp, 41, cobsetptr->cob_dump_width);
+			display_alnum_dump (f, fp, 41, ctx->settings->cob_dump_width);
 		} else
 		if (COB_FIELD_TYPE (f) == COB_TYPE_ALPHANUMERIC
 		 || COB_FIELD_TYPE (f) == COB_TYPE_ALPHANUMERIC_EDITED
 		 || f->size > 39) {
-			display_alnum_dump (f, fp, 41, cobsetptr->cob_dump_width);
+			display_alnum_dump (f, fp, 41, ctx->settings->cob_dump_width);
 		} else {
 			fprintf (fp, " ");
-			cob_display_common (f, fp);
+			cob_display_common (ctx, f, fp);
 		}
 		fprintf (fp, "\n");
 		f->data = sav_data;
@@ -981,7 +1035,28 @@ cob_dump_field (const int level, const char *name,
 }
 
 void
-cob_print_field (FILE *fp, cob_field *f, int indent, int width)
+cob_dump_field_ctx (cob_context *ctx, const int level, const char *name, cob_field *f_addr, const cob_uli_t field_offset, const cob_u32_t indexes, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, indexes);
+	cob_dump_field_va_ctx (ctx, level, name, f_addr, field_offset, indexes, cob_va_args);
+	va_end (cob_va_args);
+}
+
+/* compatibility: cob_dump_field without context */
+void
+cob_dump_field (const int level, const char *name, cob_field *f_addr, const cob_uli_t field_offset, const cob_u32_t indexes, ...)
+{
+	va_list		cob_va_args;
+
+	va_start (cob_va_args, indexes);
+	cob_dump_field_va_ctx (COB_CTX_COMPAT, level, name, f_addr, field_offset, indexes, cob_va_args);
+	va_end (cob_va_args);
+}
+
+void
+cob_print_field (cob_context *ctx, FILE *fp, cob_field *f, int indent, int width)
 {
 	if (f->data == NULL) {
 		fprintf(fp," <NULL> address");
@@ -996,7 +1071,7 @@ cob_print_field (FILE *fp, cob_field *f, int indent, int width)
 		display_alnum_dump (f, fp, indent, width);
 	} else {
 		fprintf (fp," ");
-		cob_display_common (f, fp);
+		cob_display_common (ctx, f, fp);
 	}
 	fprintf(fp,"\n");
 }
@@ -1004,22 +1079,22 @@ cob_print_field (FILE *fp, cob_field *f, int indent, int width)
 /* ACCEPT */
 
 void
-cob_accept (cob_field *f)
+cob_accept_ctx (cob_context *ctx, cob_field *f)
 {
 	unsigned char	*p;
 	size_t		size;
 	int		ipchr;
 	cob_field	temp;
 
-	if (cobglobptr->cob_screen_initialized) {
-		cob_field_accept (f, NULL, NULL, NULL, NULL,
+	if (ctx->glob.cob_screen_initialized) {
+		cob_field_accept_ctx (ctx, f, NULL, NULL, NULL, NULL,
 				  NULL, NULL, NULL, NULL,
 				  COB_SCREEN_PROMPT);
 		return;
 	}
 	if (COB_MODULE_PTR->crt_status) {
 		if (COB_FIELD_IS_NUMERIC (COB_MODULE_PTR->crt_status)) {
-			cob_set_int (COB_MODULE_PTR->crt_status, 0);
+			cob_set_int_ctx (ctx, COB_MODULE_PTR->crt_status, 0);
 		} else if (COB_MODULE_PTR->crt_status->size == 3) {
 			memcpy (COB_MODULE_PTR->crt_status->data, "0\0\0", (size_t)3);
 		} else {
@@ -1050,7 +1125,7 @@ cob_accept (cob_field *f)
 	for (; size < COB_MEDIUM_MAX; ) {
 		ipchr = getchar ();
 		if (ipchr == EOF) {
-			cob_set_exception (COB_EC_IMP_ACCEPT);
+			cob_set_exception_ctx (ctx, COB_EC_IMP_ACCEPT);
 			if (!size) {
 				size = 1;
 				p[0] = ' ';
@@ -1070,12 +1145,17 @@ cob_accept (cob_field *f)
 			temp.size = f->size;
 		}
 	}
-	cob_move (&temp, f);
+	cob_move_ctx (ctx, &temp, f);
+}
+
+/* compatibility: cob_accept without context */
+void
+cob_accept (cob_field *f)
+{
+	cob_accept_ctx (COB_CTX_COMPAT, f);
 }
 
 void
 cob_init_termio (cob_global *lptr, cob_settings *sptr)
 {
-	cobglobptr = lptr;
-	cobsetptr  = sptr;
 }

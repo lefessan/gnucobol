@@ -72,42 +72,9 @@ static int		get_seconds_past_midnight (void);
 
 /* Local variables */
 
-static cob_global	*cobglobptr;
 
 static const cob_field_attr	const_alpha_attr =
 				{COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
-
-/* Working fields */
-static cob_field	*move_field;
-
-static cob_decimal	d1;
-static cob_decimal	d2;
-static cob_decimal	d3;
-static cob_decimal	d4;
-static cob_decimal	d5;
-
-#ifndef DISABLE_GMP_RANDOM
-static mpf_t			rand_float;	/* Hold our random float numbers */
-static gmp_randstate_t	rand_state;			/* Random generator state object */
-#endif
-static int		rand_needs_seeding = 1;
-
-static mpz_t		cob_mexp;
-static mpz_t		cob_mpzt;
-
-static mpf_t		cob_mpft;
-static mpf_t		cob_mpft2;
-static mpf_t		cob_mpft_get;
-
-static mpf_t		cob_pi;
-static mpf_t		cob_sqrt_two;
-static mpf_t		cob_log_half;
-static mpf_t		cob_log_ten;
-static int		set_cob_pi;
-static int		set_cob_sqrt_two;
-static int		set_cob_log_half;
-static int		set_cob_log_ten;
-
 
 /* Stack definitions for created fields */
 
@@ -117,9 +84,67 @@ struct calc_struct {
 	size_t		calc_size;
 };
 
-static struct calc_struct	*calc_base;
-static cob_field		*curr_field;
-static cob_u32_t		curr_entry;
+/* State of intrinsic.c, one per context: working fields, temporaries,
+   random generator, ring of result fields; accessed with the macros
+   below, using the context 'ctx' */
+struct cob_intrinsic_state {
+	cob_field	*move_field;
+
+	cob_decimal	d1;
+	cob_decimal	d2;
+	cob_decimal	d3;
+	cob_decimal	d4;
+	cob_decimal	d5;
+
+#ifndef DISABLE_GMP_RANDOM
+	mpf_t		rand_float;	/* Hold our random float numbers */
+	gmp_randstate_t	rand_state;	/* Random generator state object */
+#endif
+	int		rand_needs_seeding;
+
+	mpz_t		cob_mexp;
+	mpz_t		cob_mpzt;
+
+	mpf_t		cob_mpft;
+	mpf_t		cob_mpft2;
+	mpf_t		cob_mpft_get;
+
+	struct calc_struct	*calc_base;
+	cob_field		*curr_field;
+	cob_u32_t		curr_entry;
+};
+
+#define move_field		(ctx->intrinsic->move_field)
+#define d1			(ctx->intrinsic->d1)
+#define d2			(ctx->intrinsic->d2)
+#define d3			(ctx->intrinsic->d3)
+#define d4			(ctx->intrinsic->d4)
+#define d5			(ctx->intrinsic->d5)
+#ifndef DISABLE_GMP_RANDOM
+#define rand_float		(ctx->intrinsic->rand_float)
+#define rand_state		(ctx->intrinsic->rand_state)
+#endif
+#define rand_needs_seeding	(ctx->intrinsic->rand_needs_seeding)
+#define cob_mexp		(ctx->intrinsic->cob_mexp)
+#define cob_mpzt		(ctx->intrinsic->cob_mpzt)
+#define cob_mpft		(ctx->intrinsic->cob_mpft)
+#define cob_mpft2		(ctx->intrinsic->cob_mpft2)
+#define cob_mpft_get		(ctx->intrinsic->cob_mpft_get)
+#define calc_base		(ctx->intrinsic->calc_base)
+#define curr_field		(ctx->intrinsic->curr_field)
+#define curr_entry		(ctx->intrinsic->curr_entry)
+
+/* constants computed on first use, per process;
+   TODO (T1.4): compute them at init (cob_runtime), the lazy
+   computation is not thread-safe */
+static mpf_t		cob_pi;
+static mpf_t		cob_sqrt_two;
+static mpf_t		cob_log_half;
+static mpf_t		cob_log_ten;
+static int		set_cob_pi;
+static int		set_cob_sqrt_two;
+static int		set_cob_log_half;
+static int		set_cob_log_ten;
 
 /* Constants for date/day calculations */
 static const int normal_days[] =
@@ -485,7 +510,7 @@ setup_cob_log_ten (void)
 /* Local functions */
 
 static void
-make_field_entry (cob_field *f)
+make_field_entry (cob_context *ctx, cob_field *f)
 {
 	struct calc_struct	*calc_temp;
 	unsigned char		*s;
@@ -525,12 +550,13 @@ leap_year (const int year)
 static int
 comp_field (const void *m1, const void *m2)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	cob_field	*f1;
 	cob_field	*f2;
 
 	f1 = *(cob_field **) m1;
 	f2 = *(cob_field **) m2;
-	return cob_cmp (f1, f2);
+	return cob_cmp_ctx (ctx, f1, f2);
 }
 
 /* Reference modification */
@@ -571,7 +597,7 @@ cob_trim_decimal (cob_decimal *d)
 }
 
 static void
-cob_alloc_set_field_int (const int val)
+cob_alloc_set_field_int (cob_context *ctx, const int val)
 {
 	cob_u16_t	attrsign;
 	cob_field_attr	attr;
@@ -585,24 +611,24 @@ cob_alloc_set_field_int (const int val)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, 9,
 		       0, attrsign, NULL);
 	COB_FIELD_INIT (4, NULL, &attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	memcpy (curr_field->data, &val, sizeof(int));
 }
 
 static void
-cob_alloc_set_field_uint (const cob_u32_t val)
+cob_alloc_set_field_uint (cob_context *ctx, const cob_u32_t val)
 {
 	cob_field_attr	attr;
 	cob_field	field;
 
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, 10, 0, 0, NULL);
 	COB_FIELD_INIT (4, NULL, &attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	memcpy (curr_field->data, &val, sizeof(cob_u32_t));
 }
 
 static void
-cob_alloc_set_field_pretty (const cob_u32_t val)
+cob_alloc_set_field_pretty (cob_context *ctx, const cob_u32_t val)
 {
 	cob_field_attr	attr;
 	cob_field	field;
@@ -612,12 +638,12 @@ cob_alloc_set_field_pretty (const cob_u32_t val)
 	sz = sprintf(buff,"%d",val);
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, sz, 0, 0, NULL);
 	COB_FIELD_INIT (sz, NULL, &attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	memcpy (curr_field->data, buff, sz);
 }
 
 static void
-cob_alloc_field (cob_decimal *d)
+cob_alloc_field (cob_context *ctx, cob_decimal *d)
 {
 	size_t		bitnum;
 	int 		negative_sign_pos;
@@ -628,10 +654,10 @@ cob_alloc_field (cob_decimal *d)
 
 	if (d->scale == COB_DECIMAL_NAN) {
 		/* Check this */
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, 9, 0, 0, NULL);
 		COB_FIELD_INIT (4, NULL, &attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		return;
 	}
 
@@ -651,13 +677,13 @@ cob_alloc_field (cob_decimal *d)
 		COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, 9,
 			       (short)d->scale, attrsign, NULL);
 		COB_FIELD_INIT (4, NULL, &attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 	} else if (bitnum < (65 - negative_sign_pos) && d->scale < 19) {
 		/* 8 bytes binary */
 		COB_ATTR_INIT (COB_TYPE_NUMERIC_BINARY, 20,
 			       (short)d->scale, attrsign, NULL);
 		COB_FIELD_INIT (8, NULL, &attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 	} else {
 		/* Display decimal */
 		size = (short)mpz_sizeinbase (d->value, 10);
@@ -668,27 +694,27 @@ cob_alloc_field (cob_decimal *d)
 		COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, size,
 			       scale, attrsign, NULL);
 		COB_FIELD_INIT (size, NULL, &attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 	}
 }
 
 /* Common function for intrinsics MOD and REM */
 
 static cob_field *
-cob_mod_or_rem (cob_field *f1, cob_field *f2, const int func_is_rem)
+cob_mod_or_rem (cob_context *ctx, cob_field *f1, cob_field *f2, const int func_is_rem)
 {
-	cobglobptr->cob_exception_code = 0;
-	cob_decimal_set_field (&d2, f1);
-	cob_decimal_set_field (&d3, f2);
+	ctx->glob.cob_exception_code = 0;
+	cob_decimal_set_field_ctx (ctx, &d2, f1);
+	cob_decimal_set_field_ctx (ctx, &d3, f2);
 
 	if (mpz_sgn (d3.value) == 0) {
 		/* function argument violation */
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
-	cob_decimal_div (&d2, &d3);
+	cob_decimal_div_ctx (ctx, &d2, &d3);
 
 	/* Calculate integer / integer-part */
 	if (d2.scale < 0) {
@@ -711,13 +737,13 @@ cob_mod_or_rem (cob_field *f1, cob_field *f2, const int func_is_rem)
 	}
 	d2.scale = 0;
 
-	cob_decimal_set_field (&d1, f2);
-	cob_decimal_mul (&d2, &d1);
-	cob_decimal_set_field (&d1, f1);
-	cob_decimal_sub (&d1, &d2);
+	cob_decimal_set_field_ctx (ctx, &d1, f2);
+	cob_decimal_mul_ctx (ctx, &d2, &d1);
+	cob_decimal_set_field_ctx (ctx, &d1, f1);
+	cob_decimal_sub_ctx (ctx, &d1, &d2);
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
@@ -728,7 +754,7 @@ cob_mod_or_rem (cob_field *f1, cob_field *f2, const int func_is_rem)
 /* [sp][+|-][sp]{digits[.[digits]]|.digits}[sp][E[sp]{+|-}[sp]digits[sp]] */
 
 int
-cob_check_numval_f (const cob_field *srcfield)
+cob_check_numval_f (cob_context *ctx, const cob_field *srcfield)
 {
 	unsigned char	*p = srcfield->data;
 	const unsigned int	fsize = (unsigned int)srcfield->size;
@@ -1384,7 +1410,7 @@ substitute_matches (cob_field *original, cob_field **matches, cob_field **reps,
 }
 
 static cob_field *
-substitute (const int offset, const int length, const int params,
+substitute (cob_context *ctx, const int offset, const int length, const int params,
 	    int (*cmp_func)(const void *, const void *, size_t),
 	    va_list args)
 {
@@ -1418,7 +1444,7 @@ substitute (const int offset, const int length, const int params,
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
 	field.size = calcsize;
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	substitute_matches (original, matches, reps, numreps, cmp_func, curr_field->data);
 
@@ -1493,7 +1519,7 @@ enum numval_type {
 };
 
 static cob_field *
-numval (cob_field *srcfield, cob_field *currency, const enum numval_type type)
+numval (cob_context *ctx, cob_field *srcfield, cob_field *currency, const enum numval_type type)
 {
 	unsigned char	final_buff [COB_MAX_DIGITS + 1] = { 0 };
 	unsigned char	*p, *p_end;
@@ -1510,9 +1536,9 @@ numval (cob_field *srcfield, cob_field *currency, const enum numval_type type)
 			 (the testsuite checks both variants) */
 #ifdef INVALID_NUMVAL_IS_ZERO 
 	/* Validate source field */
-	if (cob_check_numval (srcfield, currency, type == NUMVAL_C, 0)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+	if (cob_check_numval_ctx (ctx, srcfield, currency, type == NUMVAL_C, 0)) {
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 #endif
@@ -1524,14 +1550,14 @@ numval (cob_field *srcfield, cob_field *currency, const enum numval_type type)
 
 	/* no data -> zero */
 	if (datasize == 0) {
-		cob_alloc_set_field_uint (0);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 	/* not wasting buffer space (COBOL2023: 35/34 max)... */
 	if (datasize > COB_MAX_DIGITS) {
 #ifdef INVALID_NUMVAL_IS_ZERO
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 #else
 		/* Should this truncate or raise an exception?
@@ -1670,12 +1696,12 @@ game_over:
 	}
 
 	if (exception) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	}
 
 	d1.scale = decimal_digits;
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
@@ -1683,7 +1709,7 @@ game_over:
 /* Numeric functions */
 
 static void
-get_min_and_max_of_args (const int num_args, va_list args, cob_field **min, cob_field **max)
+get_min_and_max_of_args (cob_context *ctx, const int num_args, va_list args, cob_field **min, cob_field **max)
 {
 	int		i;
 	cob_field	*f;
@@ -1693,10 +1719,10 @@ get_min_and_max_of_args (const int num_args, va_list args, cob_field **min, cob_
 
 	for (i = 1; i < num_args; ++i) {
 		f = va_arg (args, cob_field *);
-		if (cob_cmp (f, *min) < 0) {
+		if (cob_cmp_ctx (ctx, f, *min) < 0) {
 			*min = f;
 		}
-		if (cob_cmp (f, *max) > 0) {
+		if (cob_cmp_ctx (ctx, f, *max) > 0) {
 			*max = f;
 		}
 	}
@@ -1704,7 +1730,7 @@ get_min_and_max_of_args (const int num_args, va_list args, cob_field **min, cob_
 
 /* Uses d1 and d2. Return value in d1. */
 static void
-calc_mean_of_args (const int num_args, va_list args)
+calc_mean_of_args (cob_context *ctx, const int num_args, va_list args)
 {
 	int		i;
 	cob_field	*f;
@@ -1714,18 +1740,18 @@ calc_mean_of_args (const int num_args, va_list args)
 
 	for (i = 0; i < num_args; ++i) {
 		f = va_arg (args, cob_field *);
-		cob_decimal_set_field (&d2, f);
-		cob_decimal_add (&d1, &d2);
+		cob_decimal_set_field_ctx (ctx, &d2, f);
+		cob_decimal_add_ctx (ctx, &d1, &d2);
 	}
 
 	mpz_set_ui (d2.value, (cob_uli_t)num_args);
 	d2.scale = 0;
-	cob_decimal_div (&d1, &d2);
+	cob_decimal_div_ctx (ctx, &d1, &d2);
 }
 
 /* Return variance in d1. Uses d2, d3 and d4. */
 static void
-calc_variance_of_args (const int n, va_list numbers, cob_decimal *mean)
+calc_variance_of_args (cob_context *ctx, const int n, va_list numbers, cob_decimal *mean)
 {
 	cob_field	*f;
 	int		i;
@@ -1747,16 +1773,16 @@ calc_variance_of_args (const int n, va_list numbers, cob_decimal *mean)
 	for (i = 0; i < n; ++i) {
 		f = va_arg (numbers, cob_field *);
 
-		cob_decimal_set_field (difference, f);
-		cob_decimal_sub (difference, mean);
-		cob_decimal_mul (difference, difference);
-		cob_decimal_add (sum, difference);
+		cob_decimal_set_field_ctx (ctx, difference, f);
+		cob_decimal_sub_ctx (ctx, difference, mean);
+		cob_decimal_mul_ctx (ctx, difference, difference);
+		cob_decimal_add_ctx (ctx, sum, difference);
 	}
 
 	/* Divide sum by n */
 	mpz_set_ui (num_numbers->value, (cob_uli_t)n);
 	num_numbers->scale = 0;
-	cob_decimal_div (sum, num_numbers);
+	cob_decimal_div_ctx (ctx, sum, num_numbers);
 
 	mpz_set (d1.value, sum->value);
 	d1.scale = sum->scale;
@@ -1765,7 +1791,7 @@ calc_variance_of_args (const int n, va_list numbers, cob_decimal *mean)
 /* Date/time functions */
 
 static void
-get_interval_and_current_year_from_args (const int num_args, va_list args,
+get_interval_and_current_year_from_args (cob_context *ctx, const int num_args, va_list args,
 					 int * const interval, int * const current_year)
 {
 	cob_field	*f;
@@ -1774,14 +1800,14 @@ get_interval_and_current_year_from_args (const int num_args, va_list args,
 
 	if (num_args > 1) {
 		f = va_arg (args, cob_field *);
-		*interval = cob_get_int (f);
+		*interval = cob_get_int_ctx (ctx, f);
 	} else {
 		*interval = 50;
 	}
 
 	if (num_args > 2) {
 		f = va_arg (args, cob_field *);
-		*current_year = cob_get_int (f);
+		*current_year = cob_get_int_ctx (ctx, f);
 	} else {
 		t = time (NULL);
 		timeptr = localtime (&t);
@@ -1794,7 +1820,7 @@ get_interval_and_current_year_from_args (const int num_args, va_list args,
 #if defined(_WIN32) || defined(__CYGWIN__) || defined (HAVE_LANGINFO_CODESET)
 #ifdef HAVE_LANGINFO_CODESET
 static int
-locale_time (const int hours, const int minutes, const int seconds,
+locale_time (cob_context *ctx, const int hours, const int minutes, const int seconds,
 	     cob_field *locale_field, char *buff)
 {
 	int 	deflocale = 0;
@@ -1823,7 +1849,7 @@ locale_time (const int hours, const int minutes, const int seconds,
 
 	/* Set locale if not done yet */
 	if (deflocale) {
-		(void) setlocale (LC_ALL, cobglobptr->cob_locale);
+		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}
 
 	strftime (buff, LOCTIME_BUFSIZE, buff2, &tstruct);
@@ -1832,7 +1858,7 @@ locale_time (const int hours, const int minutes, const int seconds,
 }
 #else
 static int
-locale_time (const int hours, const int minutes, const int seconds,
+locale_time (cob_context *ctx, const int hours, const int minutes, const int seconds,
 	     cob_field *locale_field, char *buff)
 {
 	size_t		len;
@@ -1891,13 +1917,13 @@ locale_time (const int hours, const int minutes, const int seconds,
 
 /* offset and length are for reference modification */
 static void
-cob_alloc_set_field_str (const char *str, const int offset, const int length)
+cob_alloc_set_field_str (cob_context *ctx, const char *str, const int offset, const int length)
 {
 	const size_t	str_len = strlen (str);
 	cob_field	field;
 
 	COB_FIELD_INIT (str_len, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	memcpy (curr_field->data, str, str_len);
 
 	if (offset > 0) {
@@ -1906,12 +1932,12 @@ cob_alloc_set_field_str (const char *str, const int offset, const int length)
 }
 
 static void
-cob_alloc_set_field_spaces (const int n)
+cob_alloc_set_field_spaces (cob_context *ctx, const int n)
 {
 	cob_field	field;
 
 	COB_FIELD_INIT (n, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	memset (curr_field->data, ' ', (size_t)n);
 }
 
@@ -1985,13 +2011,13 @@ valid_time (const int seconds_from_midnight)
 
 /* Uses d5. */
 static int
-valid_decimal_time (cob_decimal *seconds_from_midnight)
+valid_decimal_time (cob_context *ctx, cob_decimal *seconds_from_midnight)
 {
 	cob_decimal	*seconds_in_day = &d5;
 	mpz_set_ui (seconds_in_day->value, (unsigned long) SECONDS_IN_DAY);
 	seconds_in_day->scale = 0;
 
-	return cob_decimal_cmp (seconds_from_midnight, seconds_in_day) <= 0;
+	return cob_decimal_cmp_ctx (ctx, seconds_from_midnight, seconds_in_day) <= 0;
 }
 
 #undef SECONDS_IN_DAY
@@ -2112,7 +2138,7 @@ struct time_format {
 
 /* Uses d2 */
 static void
-seconds_from_formatted_time (const struct time_format format, const char *str,
+seconds_from_formatted_time (cob_context *ctx, const struct time_format format, const char *str,
 			     cob_decimal *seconds_decimal)
 {
 	const char	*scanf_str = format.with_colons ? "%2d:%2d:%2d" : "%2d%2d%2d";
@@ -2127,7 +2153,7 @@ seconds_from_formatted_time (const struct time_format format, const char *str,
 
 	/* LCOV_EXCL_START */
 	if (!sscanf (str, scanf_str, &hours, &minutes, &seconds)) {
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -2144,7 +2170,7 @@ seconds_from_formatted_time (const struct time_format format, const char *str,
 		fractional_seconds->scale = format.decimal_places;
 
 		mpz_set_ui (seconds_decimal->value, total_seconds);
-		cob_decimal_add (seconds_decimal, fractional_seconds);
+		cob_decimal_add_ctx (ctx, seconds_decimal, fractional_seconds);
 	} else {
 		mpz_set_ui (seconds_decimal->value, total_seconds);
 		seconds_decimal->scale = 0;
@@ -2315,19 +2341,19 @@ format_date (const struct date_format format, const int days, char *buff)
 
 /* Uses d5. */
 static void
-get_fractional_seconds (cob_field *time, cob_decimal *fraction)
+get_fractional_seconds (cob_context *ctx, cob_field *time, cob_decimal *fraction)
 {
 	int		seconds;
 	cob_decimal	*whole_seconds;
 
 
-	seconds = cob_get_int (time);
+	seconds = cob_get_int_ctx (ctx, time);
 	whole_seconds = &d5;
 	mpz_set_ui (whole_seconds->value, (unsigned long) seconds);
 	whole_seconds->scale = 0;
 
-	cob_decimal_set_field (fraction, time);
-	cob_decimal_sub (fraction, whole_seconds);
+	cob_decimal_set_field_ctx (ctx, fraction, time);
+	cob_decimal_sub_ctx (ctx, fraction, whole_seconds);
 }
 
 static unsigned int
@@ -2361,7 +2387,7 @@ rest_is_offset_format (const char *str, const int with_colon)
 
 /* CHECKME: Why not using GMP string functions here? */
 static void
-add_decimal_digits (int decimal_places, cob_decimal *second_fraction,
+add_decimal_digits (cob_context *ctx, int decimal_places, cob_decimal *second_fraction,
 		    char *buff, ptrdiff_t *buff_pos)
 {
 	int	scale = second_fraction->scale;
@@ -2455,7 +2481,7 @@ parse_time_format_string (const char *str)
 }
 
 static int
-format_time (const struct time_format format, int time,
+format_time (cob_context *ctx, const struct time_format format, int time,
 	     cob_decimal *second_fraction, int *offset_time, char *buff)
 {
 	int		hours;
@@ -2481,7 +2507,7 @@ format_time (const struct time_format format, int time,
 
 	if (format.extra == EXTRA_Z) {
 		if (offset_time == NULL) {
-			cob_set_exception (COB_EC_IMP_UTC_UNKNOWN);
+			cob_set_exception_ctx (ctx, COB_EC_IMP_UTC_UNKNOWN);
 			return 0;
 		}
 
@@ -2509,7 +2535,7 @@ format_time (const struct time_format format, int time,
 	sprintf (buff, format_str, hours, minutes, seconds);
 
 	if (format.decimal_places != 0) {
-		add_decimal_digits (format.decimal_places, second_fraction,
+		add_decimal_digits (ctx, format.decimal_places, second_fraction,
 				    buff, &buff_pos);
 	}
 
@@ -2581,10 +2607,10 @@ split_around_t (const char *str, char *first, char *second)
 }
 
 static int
-try_get_valid_offset_time (cob_field *offset_time_field, int *offset_time)
+try_get_valid_offset_time (cob_context *ctx, cob_field *offset_time_field, int *offset_time)
 {
 	if (offset_time_field != NULL) {
-		*offset_time = cob_get_int (offset_time_field);
+		*offset_time = cob_get_int_ctx (ctx, offset_time_field);
 		if (valid_offset_time (*offset_time)) {
 			return 0;
 		}
@@ -3028,7 +3054,7 @@ test_formatted_time (const struct time_format format, const char *time,
 #undef RETURN_IF_NOT_ZERO
 
 static cob_u32_t
-integer_of_mmdd (const struct date_format format, const int year,
+integer_of_mmdd (cob_context *ctx, const struct date_format format, const int year,
 		 const char *final_part)
 {
 	const char	*scanf_str = format.with_hyphens ? "%2d-%2d" : "%2d%2d";
@@ -3037,7 +3063,7 @@ integer_of_mmdd (const struct date_format format, const int year,
 
 	/* LCOV_EXCL_START */
 	if (!sscanf (final_part, scanf_str, &month, &day)) {
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 	}
 	/* LCOV_EXCL_STOP */
 	return integer_of_date (year, month, day);
@@ -3045,20 +3071,20 @@ integer_of_mmdd (const struct date_format format, const int year,
 }
 
 static cob_u32_t
-integer_of_ddd (const int year, const char *final_part)
+integer_of_ddd (cob_context *ctx, const int year, const char *final_part)
 {
 	int	day;
 
 	/* LCOV_EXCL_START */
 	if (!sscanf (final_part, "%3d", &day)) {
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 	}
 	/* LCOV_EXCL_STOP */
 	return integer_of_day (year, day);
 }
 
 static cob_u32_t
-integer_of_wwwd (const struct date_format format, const int year,
+integer_of_wwwd (cob_context *ctx, const struct date_format format, const int year,
 		 const char *final_part)
 {
 	int		first_week_monday;
@@ -3070,7 +3096,7 @@ integer_of_wwwd (const struct date_format format, const int year,
 	first_week_monday = get_iso_week_one (days_up_to_year (year) + 1, 1);
 	/* LCOV_EXCL_START */
 	if (!sscanf (final_part, scanf_str, &week, &day_of_week)) {
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 	}
 	/* LCOV_EXCL_STOP */
 	total_days = first_week_monday + ((week - 1) * 7) + day_of_week - 1;
@@ -3079,7 +3105,7 @@ integer_of_wwwd (const struct date_format format, const int year,
 }
 
 static cob_u32_t
-integer_of_formatted_date (const struct date_format format,
+integer_of_formatted_date (cob_context *ctx, const struct date_format format,
 			   const char *formatted_date)
 {
 	int		year;
@@ -3087,22 +3113,22 @@ integer_of_formatted_date (const struct date_format format,
 
 	/* LCOV_EXCL_START */
 	if (!sscanf (formatted_date, "%4d", &year)) {
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 	}
 	/* LCOV_EXCL_STOP */
 
 	if (format.days == DAYS_MMDD) {
-		return integer_of_mmdd (format, year, formatted_date + final_part_start);
+		return integer_of_mmdd (ctx, format, year, formatted_date + final_part_start);
 	} else if (format.days == DAYS_DDD) {
-		return integer_of_ddd (year, formatted_date + final_part_start);
+		return integer_of_ddd (ctx, year, formatted_date + final_part_start);
 	} else { /* DAYS_WWWD */
-		return integer_of_wwwd (format, year, formatted_date + final_part_start);
+		return integer_of_wwwd (ctx, format, year, formatted_date + final_part_start);
 	}
 
 }
 
 static void
-format_datetime (const struct date_format date_fmt,
+format_datetime (cob_context *ctx, const struct date_format date_fmt,
 		 const struct time_format time_fmt,
 		 const int days,
 		 const int whole_seconds,
@@ -3114,7 +3140,7 @@ format_datetime (const struct date_format date_fmt,
 	char	formatted_time[COB_TIMESTR_LEN] = { '\0' };
 	char	formatted_date[COB_DATESTR_LEN] = { '\0' };
 
-	overflow = format_time (time_fmt, whole_seconds, fractional_seconds,
+	overflow = format_time (ctx, time_fmt, whole_seconds, fractional_seconds,
 				offset_time, formatted_time);
 	format_date (date_fmt, days + overflow, formatted_date);
 
@@ -3123,7 +3149,7 @@ format_datetime (const struct date_format date_fmt,
 
 /* Uses d1 */
 static void
-format_current_date (const struct date_format date_fmt,
+format_current_date (cob_context *ctx, const struct date_format date_fmt,
 		     const struct time_format time_fmt,
 		     char *formatted_datetime)
 {
@@ -3144,15 +3170,15 @@ format_current_date (const struct date_format date_fmt,
 		offset_time = NULL;
 	}
 
-	format_datetime (date_fmt, time_fmt, days, seconds_from_midnight,
+	format_datetime (ctx, date_fmt, time_fmt, days, seconds_from_midnight,
 			 fractional_second, offset_time, formatted_datetime);
 }
 
 static DECLNORET COB_A_NORETURN void
-error_not_implemented (void)
+error_not_implemented (cob_context *ctx)
 {
-	cob_set_exception (COB_EC_IMP_FEATURE_MISSING);
-	cob_fatal_error (COB_FERROR_FUNCTION);
+	cob_set_exception_ctx (ctx, COB_EC_IMP_FEATURE_MISSING);
+	cob_fatal_error_ctx (ctx, COB_FERROR_FUNCTION);
 }
 
 /* Global functions */
@@ -3160,17 +3186,24 @@ error_not_implemented (void)
 /* Return switch value as field */
 
 cob_field *
+cob_switch_value_ctx (cob_context *ctx, const int id)
+{
+	cob_alloc_set_field_int (ctx, cob_get_switch_ctx (ctx, id));
+	return curr_field;
+}
+
+/* compatibility: cob_switch_value without context */
+cob_field *
 cob_switch_value (const int id)
 {
-	cob_alloc_set_field_int (cob_get_switch (id));
-	return curr_field;
+	return cob_switch_value_ctx (COB_CTX_COMPAT, id);
 }
 
 /* Decimal exponentiation function */
 /* x ^ z = e ^ (z * log(x)) */
 
 void
-cob_decimal_pow (cob_decimal *pd1, cob_decimal *pd2)
+cob_decimal_pow_ctx (cob_context *ctx, cob_decimal *pd1, cob_decimal *pd2)
 {
 	cob_uli_t		n;
 	const int		sign = mpz_sgn (pd1->value);
@@ -3187,7 +3220,7 @@ cob_decimal_pow (cob_decimal *pd1, cob_decimal *pd2)
 		/* Exponent is zero */
 		if (sign == 0) {
 			/* 0 ^ 0 */
-			cob_set_exception (COB_EC_SIZE_EXPONENTIATION);
+			cob_set_exception_ctx (ctx, COB_EC_SIZE_EXPONENTIATION);
 		}
 		mpz_set_ui (pd1->value, 1UL);
 		pd1->scale = 0;
@@ -3204,7 +3237,7 @@ cob_decimal_pow (cob_decimal *pd1, cob_decimal *pd2)
 	if (sign == -1 && pd2->scale) {
 		/* Negative exponent and non-integer power */
 		pd1->scale = COB_DECIMAL_NAN;
-		cob_set_exception (COB_EC_SIZE_EXPONENTIATION);
+		cob_set_exception_ctx (ctx, COB_EC_SIZE_EXPONENTIATION);
 		return;
 	}
 
@@ -3230,7 +3263,7 @@ cob_decimal_pow (cob_decimal *pd1, cob_decimal *pd2)
 			pd2->scale = pd1->scale;
 			mpz_set_ui (pd1->value, 1UL),
 			pd1->scale = 0;
-			cob_decimal_div (pd1, pd2);
+			cob_decimal_div_ctx (ctx, pd1, pd2);
 			cob_trim_decimal (pd1);
 			return;
 		}
@@ -3249,48 +3282,69 @@ cob_decimal_pow (cob_decimal *pd1, cob_decimal *pd2)
 	if (sign == -1) {
 		mpz_abs (pd1->value, pd1->value);
 	}
-	cob_decimal_get_mpf (cob_mpft, pd1);
+	cob_decimal_get_mpf (ctx, cob_mpft, pd1);
 	if (pd2->scale == 1 && !mpz_cmp_ui (pd2->value, 5UL)) {
 		/* Square root short cut */
 		mpf_sqrt (cob_mpft2, cob_mpft);
 	} else {
-		cob_decimal_get_mpf (cob_mpft2, pd2);
+		cob_decimal_get_mpf (ctx, cob_mpft2, pd2);
 		cob_mpf_log (cob_mpft, cob_mpft);
 		mpf_mul (cob_mpft, cob_mpft, cob_mpft2);
 		cob_mpf_exp (cob_mpft2, cob_mpft);
 	}
-	cob_decimal_set_mpf (pd1, cob_mpft2);
+	cob_decimal_set_mpf (ctx, pd1, cob_mpft2);
 	if (sign == -1) {
 		mpz_neg (pd1->value, pd1->value);
 	}
 }
 
+/* compatibility: cob_decimal_pow without context */
+void
+cob_decimal_pow (cob_decimal *pd1, cob_decimal *pd2)
+{
+	cob_decimal_pow_ctx (COB_CTX_COMPAT, pd1, pd2);
+}
+
 /* Indirect field get/put functions */
 
 void
-cob_put_indirect_field (cob_field *f)
+cob_put_indirect_field_ctx (cob_context *ctx, cob_field *f)
 {
-	make_field_entry (f);
+	make_field_entry (ctx, f);
 	memcpy (curr_field->data, f->data, f->size);
 	move_field = curr_field;
 }
 
+/* compatibility: cob_put_indirect_field without context */
+void
+cob_put_indirect_field (cob_field *f)
+{
+	cob_put_indirect_field_ctx (COB_CTX_COMPAT, f);
+}
+
+void
+cob_get_indirect_field_ctx (cob_context *ctx, cob_field *f)
+{
+	cob_move_ctx (ctx, move_field, f);
+}
+
+/* compatibility: cob_get_indirect_field without context */
 void
 cob_get_indirect_field (cob_field *f)
 {
-	cob_move (move_field, f);
+	cob_get_indirect_field_ctx (COB_CTX_COMPAT, f);
 }
 
 /* Indirect move */
 
 void
-cob_decimal_move_temp (cob_field *src, cob_field *dst)
+cob_decimal_move_temp (cob_context *ctx, cob_field *src, cob_field *dst)
 {
 	short		size, scale;
 	cob_field_attr	attr;
 	cob_field	field;
 
-	cob_decimal_set_field (&d1, src);
+	cob_decimal_set_field_ctx (ctx, &d1, src);
 	cob_trim_decimal (&d1);
 
 	size = (short)mpz_sizeinbase (d1.value, 10);
@@ -3301,9 +3355,9 @@ cob_decimal_move_temp (cob_field *src, cob_field *dst)
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, size,
 		       scale, COB_FLAG_HAVE_SIGN, NULL);
 	COB_FIELD_INIT (size, NULL, &attr);
-	make_field_entry (&field);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
-	cob_move (curr_field, dst);
+	make_field_entry (ctx, &field);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
+	cob_move_ctx (ctx, curr_field, dst);
 }
 
 /* TEST-NUMVAL + TEST-NUMVAL-C implementation */
@@ -3312,7 +3366,7 @@ cob_decimal_move_temp (cob_field *src, cob_field *dst)
 /* [spaces][+|-][spaces]{digits[.[digits]]|.digits}[spaces] */
 /* [spaces]{digits[.[digits]]|.digits}[spaces][+|-|CR|DB][spaces] */
 int
-cob_check_numval (const cob_field *srcfield, const cob_field *currency,
+cob_check_numval_ctx (cob_context *ctx, const cob_field *srcfield, const cob_field *currency,
 		  const int chkcurr, const int anycase)
 {
 	unsigned char	*p;
@@ -3565,6 +3619,13 @@ cob_check_numval (const cob_field *srcfield, const cob_field *currency,
 	return 0;
 }
 
+/* compatibility: cob_check_numval without context */
+int
+cob_check_numval (const cob_field *srcfield, const cob_field *currency, const int chkcurr, const int anycase)
+{
+	return cob_check_numval_ctx (COB_CTX_COMPAT, srcfield, currency, chkcurr, anycase);
+}
+
 /* Date/time format validation */
 
 int
@@ -3645,102 +3706,123 @@ cob_valid_datetime_format (const char *format, const char decimal_point)
 /* Numeric expressions */
 
 cob_field *
-cob_intr_binop (cob_field *f1, const int op, cob_field *f2)
+cob_intr_binop_ctx (cob_context *ctx, cob_field *f1, const int op, cob_field *f2)
 {
 	switch (op) {
 	case 'a':
-		cob_alloc_set_field_uint (cob_get_int (f1) & cob_get_int (f2));
+		cob_alloc_set_field_uint (ctx, cob_get_int_ctx (ctx, f1) & cob_get_int_ctx (ctx, f2));
 		return curr_field;
 	case 'o':
-		cob_alloc_set_field_uint (cob_get_int (f1) | cob_get_int (f2));
+		cob_alloc_set_field_uint (ctx, cob_get_int_ctx (ctx, f1) | cob_get_int_ctx (ctx, f2));
 		return curr_field;
 	case 'e':
-		cob_alloc_set_field_uint (cob_get_int (f1) ^ cob_get_int (f2));
+		cob_alloc_set_field_uint (ctx, cob_get_int_ctx (ctx, f1) ^ cob_get_int_ctx (ctx, f2));
 		return curr_field;
 	case 'l':
-		cob_alloc_set_field_uint (cob_get_int (f1) << cob_get_int (f2));
+		cob_alloc_set_field_uint (ctx, cob_get_int_ctx (ctx, f1) << cob_get_int_ctx (ctx, f2));
 		return curr_field;
 	case 'r':
-		cob_alloc_set_field_uint (cob_get_int (f1) >> cob_get_int (f2));
+		cob_alloc_set_field_uint (ctx, cob_get_int_ctx (ctx, f1) >> cob_get_int_ctx (ctx, f2));
 		return curr_field;
 	case 'n':
-		cob_alloc_set_field_uint ( ~ cob_get_int (f2));
+		cob_alloc_set_field_uint (ctx,  ~ cob_get_int_ctx (ctx, f2));
 		return curr_field;
 	default:
 		break;
 	}
 
-	cob_decimal_set_field (&d1, f1);
-	cob_decimal_set_field (&d2, f2);
+	cob_decimal_set_field_ctx (ctx, &d1, f1);
+	cob_decimal_set_field_ctx (ctx, &d2, f2);
 	switch (op) {
 	case '+':
-		cob_decimal_add (&d1, &d2);
+		cob_decimal_add_ctx (ctx, &d1, &d2);
 		break;
 	case '-':
-		cob_decimal_sub (&d1, &d2);
+		cob_decimal_sub_ctx (ctx, &d1, &d2);
 		break;
 	case '*':
-		cob_decimal_mul (&d1, &d2);
+		cob_decimal_mul_ctx (ctx, &d1, &d2);
 		break;
 	case '/':
-		cobglobptr->cob_exception_code = 0;
+		ctx->glob.cob_exception_code = 0;
 		if (mpz_sgn (d2.value) == 0) {
 			/* Divide by zero */
-			cob_set_exception (COB_EC_SIZE_ZERO_DIVIDE);
+			cob_set_exception_ctx (ctx, COB_EC_SIZE_ZERO_DIVIDE);
 			mpz_set_ui (d1.value, 0UL);
 			d1.scale = 0;
 		} else {
-			cob_decimal_div (&d1, &d2);
+			cob_decimal_div_ctx (ctx, &d1, &d2);
 		}
 		break;
 	case '^':
-		cob_decimal_pow (&d1, &d2);
+		cob_decimal_pow_ctx (ctx, &d1, &d2);
 		break;
 	default:
 		break;
 	}
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
+}
+
+/* compatibility: cob_intr_binop without context */
+cob_field *
+cob_intr_binop (cob_field *f1, const int op, cob_field *f2)
+{
+	return cob_intr_binop_ctx (COB_CTX_COMPAT, f1, op, f2);
 }
 
 /* Intrinsics */
 
 /* FUNCTION LENGTH - amount of positions */
 cob_field *
-cob_intr_length (cob_field *srcfield)
+cob_intr_length_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	if (COB_MODULE_PTR->flag_pretty_display) {
 		if (COB_FIELD_IS_NATIONAL (srcfield)) {
-			cob_alloc_set_field_pretty ((cob_u32_t)srcfield->size / COB_NATIONAL_SIZE);
+			cob_alloc_set_field_pretty (ctx, (cob_u32_t)srcfield->size / COB_NATIONAL_SIZE);
 		} else {
-			cob_alloc_set_field_pretty ((cob_u32_t)srcfield->size);
+			cob_alloc_set_field_pretty (ctx, (cob_u32_t)srcfield->size);
 		}
 		return curr_field;
 	}
 
 	if (COB_FIELD_IS_NATIONAL (srcfield)) {
-		cob_alloc_set_field_uint ((cob_u32_t)srcfield->size / COB_NATIONAL_SIZE);
+		cob_alloc_set_field_uint (ctx, (cob_u32_t)srcfield->size / COB_NATIONAL_SIZE);
 	} else {
-		cob_alloc_set_field_uint ((cob_u32_t)srcfield->size);
+		cob_alloc_set_field_uint (ctx, (cob_u32_t)srcfield->size);
 	}
 	return curr_field;
+}
+
+/* compatibility: cob_intr_length without context */
+cob_field *
+cob_intr_length (cob_field *srcfield)
+{
+	return cob_intr_length_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 
 /* FUNCTION BYTE-LENGTH (or, as an extension: LENGTH-AN) - amount of bytes */
 cob_field *
-cob_intr_byte_length (cob_field *srcfield)
+cob_intr_byte_length_ctx (cob_context *ctx, cob_field *srcfield)
 {
-	cob_alloc_set_field_uint ((cob_u32_t)srcfield->size);
+	cob_alloc_set_field_uint (ctx, (cob_u32_t)srcfield->size);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_byte_length without context */
 cob_field *
-cob_intr_integer (cob_field *srcfield)
+cob_intr_byte_length (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_byte_length_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_integer_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 	/* Check scale */
 	if (d1.scale < 0) {
 		mpz_ui_pow_ui (cob_mexp, 10UL, (cob_uli_t)-d1.scale);
@@ -3756,15 +3838,22 @@ cob_intr_integer (cob_field *srcfield)
 	}
 	d1.scale = 0;
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_integer without context */
 cob_field *
-cob_intr_integer_part (cob_field *srcfield)
+cob_intr_integer (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_integer_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_integer_part_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 	/* Check scale */
 	if (d1.scale < 0) {
 		mpz_ui_pow_ui (cob_mexp, 10UL, (cob_uli_t)-d1.scale);
@@ -3775,15 +3864,22 @@ cob_intr_integer_part (cob_field *srcfield)
 	}
 	d1.scale = 0;
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_integer_part without context */
 cob_field *
-cob_intr_fraction_part (cob_field *srcfield)
+cob_intr_integer_part (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_integer_part_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_fraction_part_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 	/* Check scale */
 	if (d1.scale > 0) {
 		mpz_ui_pow_ui (cob_mexp, 10UL, (cob_uli_t)d1.scale);
@@ -3794,25 +3890,39 @@ cob_intr_fraction_part (cob_field *srcfield)
 		d1.scale = 0;
 	}
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_fraction_part without context */
+cob_field *
+cob_intr_fraction_part (cob_field *srcfield)
+{
+	return cob_intr_fraction_part_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_sign_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
+	cob_alloc_set_field_int (ctx, mpz_sgn (d1.value));
+	return curr_field;
+}
+
+/* compatibility: cob_intr_sign without context */
 cob_field *
 cob_intr_sign (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
-	cob_alloc_set_field_int (mpz_sgn (d1.value));
-	return curr_field;
+	return cob_intr_sign_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 cob_field *
-cob_intr_upper_case (const int offset, const int length, cob_field *srcfield)
+cob_intr_upper_case_ctx (cob_context *ctx, const int offset, const int length, cob_field *srcfield)
 {
 	size_t		i, size;
 
-	make_field_entry (srcfield);
+	make_field_entry (ctx, srcfield);
 
 	size = srcfield->size;
 	for (i = 0; i < size; ++i) {
@@ -3824,12 +3934,19 @@ cob_intr_upper_case (const int offset, const int length, cob_field *srcfield)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_upper_case without context */
 cob_field *
-cob_intr_lower_case (const int offset, const int length, cob_field *srcfield)
+cob_intr_upper_case (const int offset, const int length, cob_field *srcfield)
+{
+	return cob_intr_upper_case_ctx (COB_CTX_COMPAT, offset, length, srcfield);
+}
+
+cob_field *
+cob_intr_lower_case_ctx (cob_context *ctx, const int offset, const int length, cob_field *srcfield)
 {
 	size_t		i, size;
 
-	make_field_entry (srcfield);
+	make_field_entry (ctx, srcfield);
 
 	size = srcfield->size;
 	for (i = 0; i < size; ++i) {
@@ -3841,12 +3958,19 @@ cob_intr_lower_case (const int offset, const int length, cob_field *srcfield)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_lower_case without context */
 cob_field *
-cob_intr_reverse (const int offset, const int length, cob_field *srcfield)
+cob_intr_lower_case (const int offset, const int length, cob_field *srcfield)
+{
+	return cob_intr_lower_case_ctx (COB_CTX_COMPAT, offset, length, srcfield);
+}
+
+cob_field *
+cob_intr_reverse_ctx (cob_context *ctx, const int offset, const int length, cob_field *srcfield)
 {
 	size_t		i, size;
 
-	make_field_entry (srcfield);
+	make_field_entry (ctx, srcfield);
 
 	size = srcfield->size;
 	for (i = 0; i < size; ++i) {
@@ -3858,8 +3982,15 @@ cob_intr_reverse (const int offset, const int length, cob_field *srcfield)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_reverse without context */
 cob_field *
-cob_intr_bit_of (cob_field *srcfield)
+cob_intr_reverse (const int offset, const int length, cob_field *srcfield)
+{
+	return cob_intr_reverse_ctx (COB_CTX_COMPAT, offset, length, srcfield);
+}
+
+cob_field *
+cob_intr_bit_of_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_field	field;
 	/* FIXME later: srcfield may be of category national - or later bit... */
@@ -3868,7 +3999,7 @@ cob_intr_bit_of (cob_field *srcfield)
 	size_t		i, j;
 
 	COB_FIELD_INIT (size, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	for (i = j = 0; i < srcfield->size; ++i) {
 		curr_field->data[j++] = *byte & 0x80 ? '1' : '0';
@@ -3884,17 +4015,24 @@ cob_intr_bit_of (cob_field *srcfield)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_bit_of without context */
+cob_field *
+cob_intr_bit_of (cob_field *srcfield)
+{
+	return cob_intr_bit_of_ctx (COB_CTX_COMPAT, srcfield);
+}
+
 static int
-has_bit_checked (const unsigned char byte) {
+has_bit_checked (cob_context *ctx, const unsigned char byte) {
 	if (byte == '0') return 0;
 	if (byte != '1') {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	}
 	return 1;
 }
 
 cob_field *
-cob_intr_bit_to_char (cob_field *srcfield)
+cob_intr_bit_to_char_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_field	field;
 	const size_t		size = srcfield->size / 8;
@@ -3902,27 +4040,34 @@ cob_intr_bit_to_char (cob_field *srcfield)
 	size_t		i;
 
 	COB_FIELD_INIT (size, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	byte_val = srcfield->data;
 	char_val = curr_field->data;
 	for (i = 0; i < size; i++) {
 		*char_val = 0;
-		if (has_bit_checked(*byte_val++)) *char_val |= 0x80;
-		if (has_bit_checked(*byte_val++)) *char_val |= 0x40;
-		if (has_bit_checked(*byte_val++)) *char_val |= 0x20;
-		if (has_bit_checked(*byte_val++)) *char_val |= 0x10;
-		if (has_bit_checked(*byte_val++)) *char_val |= 0x08;
-		if (has_bit_checked(*byte_val++)) *char_val |= 0x04;
-		if (has_bit_checked(*byte_val++)) *char_val |= 0x02;
-		if (has_bit_checked(*byte_val++)) *char_val |= 0x01;
+		if (has_bit_checked(ctx, *byte_val++)) *char_val |= 0x80;
+		if (has_bit_checked(ctx, *byte_val++)) *char_val |= 0x40;
+		if (has_bit_checked(ctx, *byte_val++)) *char_val |= 0x20;
+		if (has_bit_checked(ctx, *byte_val++)) *char_val |= 0x10;
+		if (has_bit_checked(ctx, *byte_val++)) *char_val |= 0x08;
+		if (has_bit_checked(ctx, *byte_val++)) *char_val |= 0x04;
+		if (has_bit_checked(ctx, *byte_val++)) *char_val |= 0x02;
+		if (has_bit_checked(ctx, *byte_val++)) *char_val |= 0x01;
 		char_val++;
 	}
 	return curr_field;
 }
 
+/* compatibility: cob_intr_bit_to_char without context */
 cob_field *
-cob_intr_hex_of (cob_field *srcfield)
+cob_intr_bit_to_char (cob_field *srcfield)
+{
+	return cob_intr_bit_to_char_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_hex_of_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	const char hex_val[] = "0123456789ABCDEF";
 
@@ -3931,7 +4076,7 @@ cob_intr_hex_of (cob_field *srcfield)
 	cob_field	field;
 
 	COB_FIELD_INIT (size, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	{
 		register unsigned char *ret_pos = curr_field->data;
@@ -3946,8 +4091,15 @@ cob_intr_hex_of (cob_field *srcfield)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_hex_of without context */
 cob_field *
-cob_intr_hex_to_char (cob_field *srcfield)
+cob_intr_hex_of (cob_field *srcfield)
+{
+	return cob_intr_hex_of_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_hex_to_char_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_field	field;
 	const size_t		size = srcfield->size / 2;
@@ -3959,7 +4111,7 @@ cob_intr_hex_to_char (cob_field *srcfield)
 	}
 
 	COB_FIELD_INIT (size, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	hex_char = curr_field->data;
 
@@ -3974,7 +4126,7 @@ cob_intr_hex_to_char (cob_field *srcfield)
 			dst = *p - 'a' + 10;
 		} else {
 			dst = 0;
-			cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+			cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		}
 		p++;
 		dst *= 16;
@@ -3985,7 +4137,7 @@ cob_intr_hex_to_char (cob_field *srcfield)
 		} else if (*p >= 'a' && *p <= 'f') {
 			dst = dst + *p - 'a' + 10;
 		} else {
-			cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+			cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		}
 		p++;
 		*hex_char++ = dst;
@@ -3993,8 +4145,15 @@ cob_intr_hex_to_char (cob_field *srcfield)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_hex_to_char without context */
 cob_field *
-cob_intr_module_date (void)
+cob_intr_hex_to_char (cob_field *srcfield)
+{
+	return cob_intr_hex_to_char_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_module_date_ctx (cob_context *ctx)
 {
 	cob_field_attr	attr;
 	cob_field	field;
@@ -4002,14 +4161,21 @@ cob_intr_module_date (void)
 
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, 8, 0, 0, NULL);
 	COB_FIELD_INIT (8, NULL, &attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	snprintf (buff, sizeof(buff), "%8.8u", COB_MODULE_PTR->module_date);
 	memcpy (curr_field->data, buff, (size_t)8);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_module_date without context */
 cob_field *
-cob_intr_module_time (void)
+cob_intr_module_date (void)
+{
+	return cob_intr_module_date_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_module_time_ctx (cob_context *ctx)
 {
 	cob_field_attr	attr;
 	cob_field	field;
@@ -4017,67 +4183,108 @@ cob_intr_module_time (void)
 
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, 6, 0, 0, NULL);
 	COB_FIELD_INIT (6, NULL, &attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	snprintf (buff, sizeof(buff), "%6.6u", COB_MODULE_PTR->module_time);
 	memcpy (curr_field->data, buff, (size_t)6);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_module_time without context */
 cob_field *
-cob_intr_module_id (void)
+cob_intr_module_time (void)
 {
-	cob_alloc_set_field_str (COB_MODULE_PTR->module_name, 0, 0);
-	return curr_field;
+	return cob_intr_module_time_ctx (COB_CTX_COMPAT);
 }
 
 cob_field *
-cob_intr_module_caller_id (void)
+cob_intr_module_id_ctx (cob_context *ctx)
+{
+	cob_alloc_set_field_str (ctx, COB_MODULE_PTR->module_name, 0, 0);
+	return curr_field;
+}
+
+/* compatibility: cob_intr_module_id without context */
+cob_field *
+cob_intr_module_id (void)
+{
+	return cob_intr_module_id_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_module_caller_id_ctx (cob_context *ctx)
 {
 	if (!COB_MODULE_PTR->next) {
 		cob_field	field;
 		COB_FIELD_INIT (1, NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		curr_field->size = 0;
 		curr_field->data[0] = ' ';
 		return curr_field;
 	}
-	cob_alloc_set_field_str (COB_MODULE_PTR->next->module_name, 0, 0);
+	cob_alloc_set_field_str (ctx, COB_MODULE_PTR->next->module_name, 0, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_module_caller_id without context */
+cob_field *
+cob_intr_module_caller_id (void)
+{
+	return cob_intr_module_caller_id_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_module_formatted_date_ctx (cob_context *ctx)
+{
+	cob_alloc_set_field_str (ctx, COB_MODULE_PTR->module_formatted_date, 0, 0);
+	return curr_field;
+}
+
+/* compatibility: cob_intr_module_formatted_date without context */
 cob_field *
 cob_intr_module_formatted_date (void)
 {
-	cob_alloc_set_field_str (COB_MODULE_PTR->module_formatted_date, 0, 0);
+	return cob_intr_module_formatted_date_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_module_source_ctx (cob_context *ctx)
+{
+	cob_alloc_set_field_str (ctx, COB_MODULE_PTR->module_source, 0, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_module_source without context */
 cob_field *
 cob_intr_module_source (void)
 {
-	cob_alloc_set_field_str (COB_MODULE_PTR->module_source, 0, 0);
-	return curr_field;
+	return cob_intr_module_source_ctx (COB_CTX_COMPAT);
 }
 
 cob_field *
-cob_intr_module_path (void)
+cob_intr_module_path_ctx (cob_context *ctx)
 {
 	if (!COB_MODULE_PTR->module_path
 	 || !(*COB_MODULE_PTR->module_path)) {
 		cob_field	field;
 		COB_FIELD_INIT (1, NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		curr_field->size = 0;
 		curr_field->data[0] = ' ';
 		return curr_field;
 	}
-	cob_alloc_set_field_str (*COB_MODULE_PTR->module_path, 0, 0);
+	cob_alloc_set_field_str (ctx, *COB_MODULE_PTR->module_path, 0, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_module_path without context */
 cob_field *
-cob_intr_concatenate (const int offset, const int length,
-		      const int params, ...)
+cob_intr_module_path (void)
+{
+	return cob_intr_module_path_ctx (COB_CTX_COMPAT);
+}
+
+static cob_field *
+cob_intr_concatenate_va_ctx (cob_context *ctx, const int offset, const int length, const int params, va_list cob_va_args)
 {
 	cob_field	**f;
 	unsigned char	*p;
@@ -4088,7 +4295,7 @@ cob_intr_concatenate (const int offset, const int length,
 
 	f = cob_malloc ((size_t)params * sizeof (cob_field *));
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	/* Extract args / calculate size */
 	calcsize = 0;
@@ -4099,7 +4306,7 @@ cob_intr_concatenate (const int offset, const int length,
 	va_end (args);
 
 	COB_FIELD_INIT (calcsize, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	p = curr_field->data;
 	for (i = 0; i < params; ++i) {
@@ -4115,35 +4322,108 @@ cob_intr_concatenate (const int offset, const int length,
 }
 
 cob_field *
-cob_intr_substitute (const int offset, const int length,
-		     const int params, ...)
+cob_intr_concatenate_ctx (cob_context *ctx, const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_concatenate_va_ctx (ctx, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_concatenate without context */
+cob_field *
+cob_intr_concatenate (const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_concatenate_va_ctx (COB_CTX_COMPAT, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_substitute_va_ctx (cob_context *ctx, const int offset, const int length, const int params, va_list cob_va_args)
 {
 	cob_field	*ret;
 	va_list		args;
 
-	va_start (args, params);
-	ret = substitute (offset, length, params, &memcmp, args);
+	va_copy (args, cob_va_args);
+	ret = substitute (ctx, offset, length, params, &memcmp, args);
 	va_end (args);
 
 	return ret;
 }
 
 cob_field *
-cob_intr_substitute_case (const int offset, const int length,
-			  const int params, ...)
+cob_intr_substitute_ctx (cob_context *ctx, const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_substitute_va_ctx (ctx, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_substitute without context */
+cob_field *
+cob_intr_substitute (const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_substitute_va_ctx (COB_CTX_COMPAT, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_substitute_case_va_ctx (cob_context *ctx, const int offset, const int length, const int params, va_list cob_va_args)
 {
 	cob_field	*ret;
 	va_list		args;
 
-	va_start (args, params);
-	ret = substitute (offset, length, params, &int_strncasecmp, args);
+	va_copy (args, cob_va_args);
+	ret = substitute (ctx, offset, length, params, &int_strncasecmp, args);
 	va_end (args);
 
 	return ret;
 }
 
 cob_field *
-cob_intr_trim (const int offset, const int length,
+cob_intr_substitute_case_ctx (cob_context *ctx, const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_substitute_case_va_ctx (ctx, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_substitute_case without context */
+cob_field *
+cob_intr_substitute_case (const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_substitute_case_va_ctx (COB_CTX_COMPAT, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+cob_field *
+cob_intr_trim_ctx (cob_context *ctx, const int offset, const int length,
 		cob_field *srcfield, const int direction)
 {
 	unsigned char	*begin;
@@ -4151,7 +4431,7 @@ cob_intr_trim (const int offset, const int length,
 	size_t		i;
 	size_t		size;
 
-	make_field_entry (srcfield);
+	make_field_entry (ctx, srcfield);
 
 	for (i = 0; i < srcfield->size; ++i) {
 		if (srcfield->data[i] != ' ') {
@@ -4185,88 +4465,109 @@ cob_intr_trim (const int offset, const int length,
 	return curr_field;
 }
 
+/* compatibility: cob_intr_trim without context */
+cob_field *
+cob_intr_trim (const int offset, const int length, cob_field *srcfield, const int direction)
+{
+	return cob_intr_trim_ctx (COB_CTX_COMPAT, offset, length, srcfield, direction);
+}
+
 /* get variable length (at least 2) temporary field containing last file exception status + name */
 cob_field *
-cob_intr_exception_file (void)
+cob_intr_exception_file_ctx (cob_context *ctx)
 {
 	size_t		flen;
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
 	/* check if last-exception is active and a file-exception */
-	if (!cobglobptr->cob_error_file ||
-	    (!cob_last_exception_is (COB_EC_I_O))) {
+	if (!ctx->glob.cob_error_file ||
+	    (!cob_last_exception_is_ctx (ctx, COB_EC_I_O))) {
 		field.size = 2;
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		memcpy (curr_field->data, "00", (size_t)2);
 	} else {
-		flen = strlen (cobglobptr->cob_error_file->select_name);
+		flen = strlen (ctx->glob.cob_error_file->select_name);
 		field.size = flen + 2;
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		memcpy (curr_field->data,
-			cobglobptr->cob_error_file->file_status, (size_t)2);
+			ctx->glob.cob_error_file->file_status, (size_t)2);
 		memcpy (&(curr_field->data[2]),
-			cobglobptr->cob_error_file->select_name, flen);
+			ctx->glob.cob_error_file->select_name, flen);
 	}
 	return curr_field;
+}
+
+/* compatibility: cob_intr_exception_file without context */
+cob_field *
+cob_intr_exception_file (void)
+{
+	return cob_intr_exception_file_ctx (COB_CTX_COMPAT);
 }
 
 /* implementation of FUNCTION EXCEPTION-LOCATION
    get variable length (at least 1) temporary field containing last exception location */
 cob_field *
-cob_intr_exception_location (void)
+cob_intr_exception_location_ctx (cob_context *ctx)
 {
 	/* check if last-exception is active and if LOCATION is available */
-	if (!cobglobptr->last_exception_id) {
+	if (!ctx->glob.last_exception_id) {
 		cob_field	field;
 		COB_FIELD_INIT (0, NULL, &const_alpha_attr);
 		field.size = 1;
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		*(curr_field->data) = ' ';
 	} else {
 		char buff[COB_SMALL_BUFF];
-		if (cobglobptr->last_exception_section
-		 && cobglobptr->last_exception_paragraph) {
+		if (ctx->glob.last_exception_section
+		 && ctx->glob.last_exception_paragraph) {
 			snprintf (buff, (size_t)COB_SMALL_MAX, "%s; %s OF %s; %u",
-				  cobglobptr->last_exception_id,
-				  cobglobptr->last_exception_paragraph,
-				  cobglobptr->last_exception_section,
-				  cobglobptr->last_exception_line);
-		} else if (cobglobptr->last_exception_section) {
+				  ctx->glob.last_exception_id,
+				  ctx->glob.last_exception_paragraph,
+				  ctx->glob.last_exception_section,
+				  ctx->glob.last_exception_line);
+		} else if (ctx->glob.last_exception_section) {
 			snprintf (buff, (size_t)COB_SMALL_MAX, "%s; %s; %u",
-				  cobglobptr->last_exception_id,
-				  cobglobptr->last_exception_section,
-				  cobglobptr->last_exception_line);
-		} else if (cobglobptr->last_exception_paragraph) {
+				  ctx->glob.last_exception_id,
+				  ctx->glob.last_exception_section,
+				  ctx->glob.last_exception_line);
+		} else if (ctx->glob.last_exception_paragraph) {
 			snprintf (buff, (size_t)COB_SMALL_MAX, "%s; %s; %u",
-				  cobglobptr->last_exception_id,
-				  cobglobptr->last_exception_paragraph,
-				  cobglobptr->last_exception_line);
+				  ctx->glob.last_exception_id,
+				  ctx->glob.last_exception_paragraph,
+				  ctx->glob.last_exception_line);
 		} else {
 			snprintf (buff, (size_t)COB_SMALL_MAX, "%s; ; %u",
-				  cobglobptr->last_exception_id,
-				  cobglobptr->last_exception_line);
+				  ctx->glob.last_exception_id,
+				  ctx->glob.last_exception_line);
 		}
 		buff[COB_SMALL_MAX] = 0; /* silence warnings */
-		cob_alloc_set_field_str (buff, 0, 0);
+		cob_alloc_set_field_str (ctx, buff, 0, 0);
 	}
 	return curr_field;
+}
+
+/* compatibility: cob_intr_exception_location without context */
+cob_field *
+cob_intr_exception_location (void)
+{
+	return cob_intr_exception_location_ctx (COB_CTX_COMPAT);
 }
 
 /* implementation of FUNCTION EXCEPTION-STATUS
    get X(31) temporary field containing last exception name */
 cob_field *
-cob_intr_exception_status (void)
+cob_intr_exception_status_ctx (cob_context *ctx)
 {
 	const char	*except_name;
 	cob_field	field;
 
 	COB_FIELD_INIT (31, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	memset (curr_field->data, ' ', (size_t)31);
-	if (cob_get_last_exception_code() != 0) {
-		except_name = cob_get_last_exception_name ();
+	if (cob_get_last_exception_code(ctx) != 0) {
+		except_name = cob_get_last_exception_name (ctx);
 		if (except_name == NULL) {
 			except_name = "EXCEPTION-OBJECT";
 		}
@@ -4275,20 +4576,27 @@ cob_intr_exception_status (void)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_exception_status without context */
+cob_field *
+cob_intr_exception_status (void)
+{
+	return cob_intr_exception_status_ctx (COB_CTX_COMPAT);
+}
+
 /* implementation of FUNCTION EXCEPTION-STATEMENT
    get X(31) temporary field containing last exception statement */
 cob_field *
-cob_intr_exception_statement (void)
+cob_intr_exception_statement_ctx (cob_context *ctx)
 {
 	size_t		flen;
 	cob_field	field;
 
 	COB_FIELD_INIT (31, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	memset (curr_field->data, ' ', (size_t)31);
-	if (cobglobptr->last_exception_statement != STMT_UNKNOWN) {
-		const char *statement = cob_statement_name[cobglobptr->last_exception_statement];
+	if (ctx->glob.last_exception_statement != STMT_UNKNOWN) {
+		const char *statement = cob_statement_name[ctx->glob.last_exception_statement];
 		flen = strlen (statement);
 		if (flen > 31) {
 			flen = 31;
@@ -4298,11 +4606,18 @@ cob_intr_exception_statement (void)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_exception_statement without context */
+cob_field *
+cob_intr_exception_statement (void)
+{
+	return cob_intr_exception_statement_ctx (COB_CTX_COMPAT);
+}
+
 /* implementation of FUNCTION WHEN-COMPILED */
 cob_field *
-cob_intr_when_compiled (const int offset, const int length, cob_field *f)
+cob_intr_when_compiled_ctx (cob_context *ctx, const int offset, const int length, cob_field *f)
 {
-	make_field_entry (f);
+	make_field_entry (ctx, f);
 
 	memcpy (curr_field->data, f->data, f->size);
 	if (offset > 0) {
@@ -4311,17 +4626,24 @@ cob_intr_when_compiled (const int offset, const int length, cob_field *f)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_when_compiled without context */
+cob_field *
+cob_intr_when_compiled (const int offset, const int length, cob_field *f)
+{
+	return cob_intr_when_compiled_ctx (COB_CTX_COMPAT, offset, length, f);
+}
+
 /* implementation of FUNCTION CURRENT-DATE,
    using the actual current date adjusted/replaced with COB_CURRENT_DATE */
 cob_field *
-cob_intr_current_date (const int offset, const int length)
+cob_intr_current_date_ctx (cob_context *ctx, const int offset, const int length)
 {
 	cob_field	field;
 	struct cob_time time;
 	char		buff[22] = { '\0' };
 
 	COB_FIELD_INIT (21, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 	if (offset == 1 && length <= 14) {
 		time = cob_get_current_datetime (DTR_TIME_NO_NANO);
@@ -4342,31 +4664,38 @@ cob_intr_current_date (const int offset, const int length)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_current_date without context */
+cob_field *
+cob_intr_current_date (const int offset, const int length)
+{
+	return cob_intr_current_date_ctx (COB_CTX_COMPAT, offset, length);
+}
+
 /* implementation of FUNCTION CHAR - character from ordinal */
 cob_field *
-cob_intr_char (cob_field *srcfield)
+cob_intr_char_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	int		i;
 	cob_field	field;
 
 	COB_FIELD_INIT (1, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
-	i = cob_get_int (srcfield);
+	i = cob_get_int_ctx (ctx, srcfield);
 	if (i < 1 || i > 256) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		*curr_field->data = 0;
 	} else {
 		const unsigned char *col = COB_MODULE_PTR->collating_sequence;
 		unsigned char chr;
-		cobglobptr->cob_exception_code = 0;
+		ctx->glob.cob_exception_code = 0;
 		--i;
 		if (col == NULL) {
 			chr = (unsigned char)i;
 		} else {
 			for (chr = 0; chr < 255 && col[chr] != i; ++chr);
 			if (chr == 255 && col[chr] != i) {
-				cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+				cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 				chr = 0;
 			}
 		}
@@ -4375,26 +4704,40 @@ cob_intr_char (cob_field *srcfield)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_char without context */
 cob_field *
-cob_intr_ord (cob_field *srcfield)
+cob_intr_char (cob_field *srcfield)
+{
+	return cob_intr_char_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_ord_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	switch (COB_FIELD_TYPE (srcfield)) {
 	case COB_TYPE_NATIONAL:
-		error_not_implemented();
+		error_not_implemented(ctx);
 		break;
 	default: {
 		const unsigned char *col = COB_MODULE_PTR->collating_sequence;
 		unsigned char chr = *srcfield->data;
 		int ord = (col == NULL ? chr : col[chr]) + 1U;
-		cob_alloc_set_field_uint ((cob_u32_t)ord);
+		cob_alloc_set_field_uint (ctx, (cob_u32_t)ord);
 		break;
 	}
 	}
 	return curr_field;
 }
 
+/* compatibility: cob_intr_ord without context */
 cob_field *
-cob_intr_stored_char_length (cob_field *srcfield)
+cob_intr_ord (cob_field *srcfield)
+{
+	return cob_intr_ord_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_stored_char_length_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	unsigned char	*p;
 	cob_u32_t	count;
@@ -4407,22 +4750,29 @@ cob_intr_stored_char_length (cob_field *srcfield)
 		}
 	}
 
-	cob_alloc_set_field_uint (count);
+	cob_alloc_set_field_uint (ctx, count);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_stored_char_length without context */
 cob_field *
-cob_intr_combined_datetime (cob_field *srcdays, cob_field *srctime)
+cob_intr_stored_char_length (cob_field *srcfield)
+{
+	return cob_intr_stored_char_length_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_combined_datetime_ctx (cob_context *ctx, cob_field *srcdays, cob_field *srctime)
 {
 	int		srdays;
 	cob_decimal	*combined_datetime;
 	cob_decimal	*srtime;
 	cob_decimal	*hundred_thousand;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Validate and extract the value of srcdays */
-	srdays = cob_get_int (srcdays);
+	srdays = cob_get_int_ctx (ctx, srcdays);
 	if (!valid_integer_date (srdays)) {
 		goto invalid_args;
 	}
@@ -4432,8 +4782,8 @@ cob_intr_combined_datetime (cob_field *srcdays, cob_field *srctime)
 
 	/* Extract and validate the value of srctime */
 	srtime = &d2;
-	cob_decimal_set_field (srtime, srctime);
-	if (!valid_decimal_time (srtime)) {
+	cob_decimal_set_field_ctx (ctx, srtime, srctime);
+	if (!valid_decimal_time (ctx, srtime)) {
 		goto invalid_args;
 	}
 
@@ -4443,23 +4793,30 @@ cob_intr_combined_datetime (cob_field *srcdays, cob_field *srctime)
 	hundred_thousand->scale = 0;
 
 	/* Combined datetime = date + (time / 100 000) */
-	cob_decimal_div (srtime,  hundred_thousand);
-	cob_decimal_add (combined_datetime, srtime);
+	cob_decimal_div_ctx (ctx, srtime,  hundred_thousand);
+	cob_decimal_add_ctx (ctx, combined_datetime, srtime);
 
-	cob_alloc_field (combined_datetime);
-	(void) cob_decimal_get_field (combined_datetime, curr_field, 0);
+	cob_alloc_field (ctx, combined_datetime);
+	(void) cob_decimal_get_field_ctx (ctx, combined_datetime, curr_field, 0);
 	goto end_of_func;
 
  invalid_args:
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-	cob_alloc_set_field_uint (0);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+	cob_alloc_set_field_uint (ctx, 0);
 
  end_of_func:
 	return curr_field;
 }
 
+/* compatibility: cob_intr_combined_datetime without context */
 cob_field *
-cob_intr_date_of_integer (cob_field *srcdays)
+cob_intr_combined_datetime (cob_field *srcdays, cob_field *srctime)
+{
+	return cob_intr_combined_datetime_ctx (COB_CTX_COMPAT, srcdays, srctime);
+}
+
+cob_field *
+cob_intr_date_of_integer_ctx (cob_context *ctx, cob_field *srcdays)
 {
 	int		days;
 	int		month;
@@ -4470,13 +4827,13 @@ cob_intr_date_of_integer (cob_field *srcdays)
 
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, 8, 0, 0, NULL);
 	COB_FIELD_INIT (8, NULL, &attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	/* Base 1601-01-01 */
-	days = cob_get_int (srcdays);
+	days = cob_get_int_ctx (ctx, srcdays);
 	if (!valid_integer_date (days)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		memset (curr_field->data, (int)'0', (size_t)8);
 		return curr_field;
 	}
@@ -4488,8 +4845,15 @@ cob_intr_date_of_integer (cob_field *srcdays)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_date_of_integer without context */
 cob_field *
-cob_intr_day_of_integer (cob_field *srcdays)
+cob_intr_date_of_integer (cob_field *srcdays)
+{
+	return cob_intr_date_of_integer_ctx (COB_CTX_COMPAT, srcdays);
+}
+
+cob_field *
+cob_intr_day_of_integer_ctx (cob_context *ctx, cob_field *srcdays)
 {
 	int		days;
 	int		baseyear;
@@ -4500,13 +4864,13 @@ cob_intr_day_of_integer (cob_field *srcdays)
 
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, 7, 0, 0, NULL);
 	COB_FIELD_INIT (7, NULL, &attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	/* Base 1601-01-01 */
-	days = cob_get_int (srcdays);
+	days = cob_get_int_ctx (ctx, srcdays);
 	if (!valid_integer_date (days)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		memset (curr_field->data, (int)'0', (size_t)7);
 		return curr_field;
 	}
@@ -4520,70 +4884,91 @@ cob_intr_day_of_integer (cob_field *srcdays)
 	return curr_field;
 }
 
+/* compatibility: cob_intr_day_of_integer without context */
+cob_field *
+cob_intr_day_of_integer (cob_field *srcdays)
+{
+	return cob_intr_day_of_integer_ctx (COB_CTX_COMPAT, srcdays);
+}
+
+cob_field *
+cob_intr_integer_of_date_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	int		indate;
+	int		days;
+	int		month;
+	int		year;
+
+	ctx->glob.cob_exception_code = 0;
+	/* Base 1601-01-01 */
+	indate = cob_get_int_ctx (ctx, srcfield);
+	year = indate / 10000;
+	if (!valid_year (year)) {
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
+		return curr_field;
+	}
+	indate %= 10000;
+	month = indate / 100;
+	if (!valid_month (month)) {
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
+		return curr_field;
+	}
+	days = indate % 100;
+	if (!valid_day_of_month (year, month, days)) {
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
+		return curr_field;
+	}
+
+	cob_alloc_set_field_uint (ctx, integer_of_date (year, month, days));
+	return curr_field;
+}
+
+/* compatibility: cob_intr_integer_of_date without context */
 cob_field *
 cob_intr_integer_of_date (cob_field *srcfield)
 {
+	return cob_intr_integer_of_date_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_integer_of_day_ctx (cob_context *ctx, cob_field *srcfield)
+{
 	int		indate;
 	int		days;
-	int		month;
 	int		year;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	/* Base 1601-01-01 */
-	indate = cob_get_int (srcfield);
-	year = indate / 10000;
+	indate = cob_get_int_ctx (ctx, srcfield);
+	year = indate / 1000;
 	if (!valid_year (year)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
-	indate %= 10000;
-	month = indate / 100;
-	if (!valid_month (month)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
-		return curr_field;
-	}
-	days = indate % 100;
-	if (!valid_day_of_month (year, month, days)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+	days = indate % 1000;
+	if (!valid_day_of_year (year, days)) {
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
-	cob_alloc_set_field_uint (integer_of_date (year, month, days));
+	cob_alloc_set_field_uint (ctx, integer_of_day (year, days));
 	return curr_field;
 }
 
+/* compatibility: cob_intr_integer_of_day without context */
 cob_field *
 cob_intr_integer_of_day (cob_field *srcfield)
 {
-	int		indate;
-	int		days;
-	int		year;
-
-	cobglobptr->cob_exception_code = 0;
-	/* Base 1601-01-01 */
-	indate = cob_get_int (srcfield);
-	year = indate / 1000;
-	if (!valid_year (year)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
-		return curr_field;
-	}
-	days = indate % 1000;
-	if (!valid_day_of_year (year, days)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
-		return curr_field;
-	}
-
-	cob_alloc_set_field_uint (integer_of_day (year, days));
-	return curr_field;
+	return cob_intr_integer_of_day_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 cob_field *
-cob_intr_test_date_yyyymmdd (cob_field *srcfield)
+cob_intr_test_date_yyyymmdd_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	int		indate;
 	int		days;
@@ -4591,131 +4976,173 @@ cob_intr_test_date_yyyymmdd (cob_field *srcfield)
 	int		year;
 
 	/* Base 1601-01-01 */
-	indate = cob_get_int (srcfield);
+	indate = cob_get_int_ctx (ctx, srcfield);
 	year = indate / 10000;
 	if (!valid_year (year)) {
-		cob_alloc_set_field_uint (1);
+		cob_alloc_set_field_uint (ctx, 1);
 		return curr_field;
 	}
 	indate %= 10000;
 	month = indate / 100;
 	if (!valid_month (month)) {
-		cob_alloc_set_field_uint (2);
+		cob_alloc_set_field_uint (ctx, 2);
 		return curr_field;
 	}
 	days = indate % 100;
 	if (!valid_day_of_month (year, month, days)) {
-		cob_alloc_set_field_uint (3);
+		cob_alloc_set_field_uint (ctx, 3);
 		return curr_field;
 	}
-	cob_alloc_set_field_uint (0);
+	cob_alloc_set_field_uint (ctx, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_test_date_yyyymmdd without context */
 cob_field *
-cob_intr_test_day_yyyyddd (cob_field *srcfield)
+cob_intr_test_date_yyyymmdd (cob_field *srcfield)
+{
+	return cob_intr_test_date_yyyymmdd_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_test_day_yyyyddd_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	int		indate;
 	int		days;
 	int		year;
 
 	/* Base 1601-01-01 */
-	indate = cob_get_int (srcfield);
+	indate = cob_get_int_ctx (ctx, srcfield);
 	year = indate / 1000;
 	if (!valid_year (year)) {
-		cob_alloc_set_field_uint (1);
+		cob_alloc_set_field_uint (ctx, 1);
 		return curr_field;
 	}
 	days = indate % 1000;
 	if (!valid_day_of_year (year, days)) {
-		cob_alloc_set_field_uint (2);
+		cob_alloc_set_field_uint (ctx, 2);
 		return curr_field;
 	}
-	cob_alloc_set_field_uint (0);
+	cob_alloc_set_field_uint (ctx, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_test_day_yyyyddd without context */
 cob_field *
-cob_intr_factorial (cob_field *srcfield)
+cob_intr_test_day_yyyyddd (cob_field *srcfield)
+{
+	return cob_intr_test_day_yyyyddd_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_factorial_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	int		srcval;
 
-	cobglobptr->cob_exception_code = 0;
-	srcval = cob_get_int (srcfield);
+	ctx->glob.cob_exception_code = 0;
+	srcval = cob_get_int_ctx (ctx, srcfield);
 	d1.scale = 0;
 	if (srcval < 0) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	} else {
 		mpz_fac_ui (d1.value, (cob_uli_t)srcval);
 	}
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_factorial without context */
 cob_field *
-cob_intr_e (void)
+cob_intr_factorial (cob_field *srcfield)
+{
+	return cob_intr_factorial_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_e_ctx (cob_context *ctx)
 {
 	mpf_set_ui (cob_mpft, 1UL);
 	cob_mpf_exp (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_e without context */
 cob_field *
-cob_intr_pi (void)
+cob_intr_e (void)
+{
+	return cob_intr_e_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_pi_ctx (cob_context *ctx)
 {
 	if (!set_cob_pi) setup_cob_pi ();
 
 	mpf_set (cob_mpft, cob_pi);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_pi without context */
 cob_field *
-cob_intr_exp (cob_field *srcfield)
+cob_intr_pi (void)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_pi_ctx (COB_CTX_COMPAT);
+}
 
-	cobglobptr->cob_exception_code = 0;
+cob_field *
+cob_intr_exp_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
+
+	ctx->glob.cob_exception_code = 0;
 
 	if (mpz_sgn (d1.value) == 0) {
 		/* Power is zero */
-		cob_alloc_set_field_uint (1);
+		cob_alloc_set_field_uint (ctx, 1);
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_exp (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_exp without context */
 cob_field *
-cob_intr_exp10 (cob_field *srcfield)
+cob_intr_exp (cob_field *srcfield)
+{
+	return cob_intr_exp_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_exp10_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	int		sign;	/* no const as we need the decimal set before */
 
-	cob_decimal_set_field (&d1, srcfield);
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	sign = mpz_sgn (d1.value);
 	if (sign == 0) {
 		/* Power is zero */
-		cob_alloc_set_field_uint (1);
+		cob_alloc_set_field_uint (ctx, 1);
 		return curr_field;
 	}
 
@@ -4727,37 +5154,44 @@ cob_intr_exp10 (cob_field *srcfield)
 			mpz_abs (d1.value, d1.value);
 			d1.scale = mpz_get_si (d1.value);
 			mpz_set_ui (d1.value, 1UL);
-			cob_alloc_field (&d1);
-			(void)cob_decimal_get_field (&d1, curr_field, 0);
+			cob_alloc_field (ctx, &d1);
+			(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 			return curr_field;
 		}
 		if (sign == 1 && mpz_fits_ulong_p (d1.value)) {
 			mpz_ui_pow_ui (d1.value, 10UL, mpz_get_ui (d1.value));
-			cob_alloc_field (&d1);
-			(void)cob_decimal_get_field (&d1, curr_field, 0);
+			cob_alloc_field (ctx, &d1);
+			(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 			return curr_field;
 		}
 	}
 
 	mpz_set_ui (d2.value, 10UL);
 	d2.scale = 0;
-	cob_decimal_pow (&d2, &d1);
-	cob_alloc_field (&d2);
-	(void)cob_decimal_get_field (&d2, curr_field, 0);
+	cob_decimal_pow_ctx (ctx, &d2, &d1);
+	cob_alloc_field (ctx, &d2);
+	(void)cob_decimal_get_field_ctx (ctx, &d2, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_exp10 without context */
 cob_field *
-cob_intr_log (cob_field *srcfield)
+cob_intr_exp10 (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_exp10_ctx (COB_CTX_COMPAT, srcfield);
+}
 
-	cobglobptr->cob_exception_code = 0;
+cob_field *
+cob_intr_log_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
+
+	ctx->glob.cob_exception_code = 0;
 	if (mpz_sgn (d1.value) != 1) {
 		/* value must be > 0 */
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
@@ -4767,29 +5201,36 @@ cob_intr_log (cob_field *srcfield)
 
 	if (!d1.scale && !mpz_cmp_ui (d1.value, 1UL)) {
 		/* Log (1) = 0 */
-		cob_alloc_set_field_uint (0);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_log (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_log without context */
 cob_field *
-cob_intr_log10 (cob_field *srcfield)
+cob_intr_log (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_log_ctx (COB_CTX_COMPAT, srcfield);
+}
 
-	cobglobptr->cob_exception_code = 0;
+cob_field *
+cob_intr_log10_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
+
+	ctx->glob.cob_exception_code = 0;
 	if (mpz_sgn (d1.value) != 1) {
 		/* value must be > 0 */
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
@@ -4799,34 +5240,48 @@ cob_intr_log10 (cob_field *srcfield)
 
 	if (!d1.scale && !mpz_cmp_ui (d1.value, 1UL)) {
 		/* Log10 (1) = 0 */
-		cob_alloc_set_field_uint (0);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_log10 (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_log10 without context */
+cob_field *
+cob_intr_log10 (cob_field *srcfield)
+{
+	return cob_intr_log10_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_abs_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
+	mpz_abs (d1.value, d1.value);
+
+	make_field_entry (ctx, srcfield);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
+	return curr_field;
+}
+
+/* compatibility: cob_intr_abs without context */
 cob_field *
 cob_intr_abs (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
-	mpz_abs (d1.value, d1.value);
-
-	make_field_entry (srcfield);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
-	return curr_field;
+	return cob_intr_abs_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 cob_field *
-cob_intr_acos (cob_field *srcfield)
+cob_intr_acos_ctx (cob_context *ctx, cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
 	mpz_set (d4.value, d1.value);
 	mpz_set (d5.value, d1.value);
@@ -4837,26 +5292,33 @@ cob_intr_acos (cob_field *srcfield)
 	mpz_set_ui (d3.value, 1UL);
 	d3.scale = 0;
 
-	cobglobptr->cob_exception_code = 0;
-	if (cob_decimal_cmp (&d4, &d2) < 0 || cob_decimal_cmp (&d5, &d3) > 0) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+	ctx->glob.cob_exception_code = 0;
+	if (cob_decimal_cmp_ctx (ctx, &d4, &d2) < 0 || cob_decimal_cmp_ctx (ctx, &d5, &d3) > 0) {
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_acos (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_acos without context */
 cob_field *
-cob_intr_asin (cob_field *srcfield)
+cob_intr_acos (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_acos_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_asin_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
 	mpz_set (d4.value, d1.value);
 	mpz_set (d5.value, d1.value);
@@ -4867,139 +5329,195 @@ cob_intr_asin (cob_field *srcfield)
 	mpz_set_ui (d3.value, 1UL);
 	d3.scale = 0;
 
-	cobglobptr->cob_exception_code = 0;
-	if (cob_decimal_cmp (&d4, &d2) < 0
-	 || cob_decimal_cmp (&d5, &d3) > 0) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+	ctx->glob.cob_exception_code = 0;
+	if (cob_decimal_cmp_ctx (ctx, &d4, &d2) < 0
+	 || cob_decimal_cmp_ctx (ctx, &d5, &d3) > 0) {
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
 	if (mpz_sgn (d1.value) == 0) {
 		/* Asin (0) = 0 */
-		cob_alloc_set_field_uint (0);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_asin (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_asin without context */
 cob_field *
-cob_intr_atan (cob_field *srcfield)
+cob_intr_asin (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_asin_ctx (COB_CTX_COMPAT, srcfield);
+}
 
-	cobglobptr->cob_exception_code = 0;
+cob_field *
+cob_intr_atan_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
+
+	ctx->glob.cob_exception_code = 0;
 
 	if (mpz_sgn (d1.value) == 0) {
 		/* Atan (0) = 0 */
-		cob_alloc_set_field_uint (0);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
 	cob_mpf_atan (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_atan without context */
+cob_field *
+cob_intr_atan (cob_field *srcfield)
+{
+	return cob_intr_atan_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_cos_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
+
+	ctx->glob.cob_exception_code = 0;
+
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
+	cob_mpf_cos (cob_mpft, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
+
+	return curr_field;
+}
+
+/* compatibility: cob_intr_cos without context */
 cob_field *
 cob_intr_cos (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_cos_ctx (COB_CTX_COMPAT, srcfield);
+}
 
-	cobglobptr->cob_exception_code = 0;
+cob_field *
+cob_intr_sin_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
-	cob_mpf_cos (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	ctx->glob.cob_exception_code = 0;
+
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
+	cob_mpf_sin (cob_mpft, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_sin without context */
 cob_field *
 cob_intr_sin (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	return cob_intr_sin_ctx (COB_CTX_COMPAT, srcfield);
+}
 
-	cobglobptr->cob_exception_code = 0;
+cob_field *
+cob_intr_tan_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cob_decimal_get_mpf (cob_mpft, &d1);
-	cob_mpf_sin (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	ctx->glob.cob_exception_code = 0;
+
+	cob_decimal_get_mpf (ctx, cob_mpft, &d1);
+	cob_mpf_tan (cob_mpft, cob_mpft);
+	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_tan without context */
 cob_field *
 cob_intr_tan (cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
-
-	cobglobptr->cob_exception_code = 0;
-
-	cob_decimal_get_mpf (cob_mpft, &d1);
-	cob_mpf_tan (cob_mpft, cob_mpft);
-	cob_decimal_set_mpf (&d1, cob_mpft);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
-
-	return curr_field;
+	return cob_intr_tan_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 cob_field *
-cob_intr_sqrt (cob_field *srcfield)
+cob_intr_sqrt_ctx (cob_context *ctx, cob_field *srcfield)
 {
-	cob_decimal_set_field (&d1, srcfield);
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 	if (mpz_sgn (d1.value) == -1) {
 		/* value must be >= 0 */
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
 	mpz_set_ui (d2.value, 5UL);
 	d2.scale = 1;
 	cob_trim_decimal (&d1);
-	cob_decimal_pow (&d1, &d2);
+	cob_decimal_pow_ctx (ctx, &d1, &d2);
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_sqrt without context */
 cob_field *
-cob_intr_numval (cob_field *srcfield)
+cob_intr_sqrt (cob_field *srcfield)
 {
-	return numval (srcfield, NULL, NUMVAL);
+	return cob_intr_sqrt_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 cob_field *
+cob_intr_numval_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	return numval (ctx, srcfield, NULL, NUMVAL);
+}
+
+/* compatibility: cob_intr_numval without context */
+cob_field *
+cob_intr_numval (cob_field *srcfield)
+{
+	return cob_intr_numval_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_numval_c_ctx (cob_context *ctx, cob_field *srcfield, cob_field *currency)
+{
+	return numval (ctx, srcfield, currency, NUMVAL_C);
+}
+
+/* compatibility: cob_intr_numval_c without context */
+cob_field *
 cob_intr_numval_c (cob_field *srcfield, cob_field *currency)
 {
-	return numval (srcfield, currency, NUMVAL_C);
+	return cob_intr_numval_c_ctx (COB_CTX_COMPAT, srcfield, currency);
 }
 
 /* NUMVAL-F implementation */
 
 cob_field *
-cob_intr_numval_f (cob_field *srcfield)
+cob_intr_numval_f_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	unsigned char	*final_buff;
 	unsigned char	*p, *p_end;
@@ -5015,9 +5533,9 @@ cob_intr_numval_f (cob_field *srcfield)
 	         (the testsuite checks both variants) */
 #ifdef INVALID_NUMVAL_IS_ZERO 
 	/* Validate source field */
-	if (cob_check_numval_f (srcfield)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+	if (cob_check_numval_f (ctx, srcfield)) {
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 #endif
@@ -5029,7 +5547,7 @@ cob_intr_numval_f (cob_field *srcfield)
 
 	/* no data -> zero */
 	if (datasize == 0) {
-		cob_alloc_set_field_uint (0);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 	/* not wasting buffer space (COBOL2022: 35/34 max)... */
@@ -5157,14 +5675,14 @@ game_over:
 	}
 
 	if (exception) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	}
 
 	if (mpz_sgn (d1.value) == 0) {
 		/* Value is zero ; sign and exponent irrelevant */
 		d1.scale = 0;
-		cob_alloc_field (&d1);
-		(void)cob_decimal_get_field (&d1, curr_field, 0);
+		cob_alloc_field (ctx, &d1);
+		(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 		return curr_field;
 	}
 	if (plus_minus == -1) {
@@ -5191,34 +5709,41 @@ game_over:
 		d1.scale = decimal_digits;
 	}
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
+/* compatibility: cob_intr_numval_f without context */
 cob_field *
-cob_intr_annuity (cob_field *srcfield1, cob_field *srcfield2)
+cob_intr_numval_f (cob_field *srcfield)
+{
+	return cob_intr_numval_f_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_annuity_ctx (cob_context *ctx, cob_field *srcfield1, cob_field *srcfield2)
 {
 	int		sign;	/* no const as we need the decimal set before */
 
-	cob_decimal_set_field (&d1, srcfield1);
-	cob_decimal_set_field (&d2, srcfield2);
+	cob_decimal_set_field_ctx (ctx, &d1, srcfield1);
+	cob_decimal_set_field_ctx (ctx, &d2, srcfield2);
 
 	/* P1 >= 0, P2 > 0 and integer */
 	sign = mpz_sgn (d1.value);
 	if (sign < 0 || mpz_sgn (d2.value) <= 0 || d2.scale != 0) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
 	if (sign == 0) {
 		mpz_set_ui (d1.value, 1UL);
 		d1.scale = 0;
-		cob_decimal_div (&d1, &d2);
-		cob_alloc_field (&d1);
-		(void)cob_decimal_get_field (&d1, curr_field, 0);
+		cob_decimal_div_ctx (ctx, &d1, &d2);
+		cob_alloc_field (ctx, &d1);
+		(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 		return curr_field;
 	}
 
@@ -5229,23 +5754,30 @@ cob_intr_annuity (cob_field *srcfield1, cob_field *srcfield2)
 	d3.scale = d1.scale;
 	mpz_set_ui (d4.value, 1UL);
 	d4.scale = 0;
-	cob_decimal_add (&d3, &d4);
+	cob_decimal_add_ctx (ctx, &d3, &d4);
 	cob_trim_decimal (&d3);
 	cob_trim_decimal (&d2);
-	cob_decimal_pow (&d3, &d2);
+	cob_decimal_pow_ctx (ctx, &d3, &d2);
 	mpz_set_ui (d4.value, 1UL);
 	d4.scale = 0;
-	cob_decimal_sub (&d4, &d3);
+	cob_decimal_sub_ctx (ctx, &d4, &d3);
 	cob_trim_decimal (&d4);
 	cob_trim_decimal (&d1);
-	cob_decimal_div (&d1, &d4);
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_decimal_div_ctx (ctx, &d1, &d4);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_annuity without context */
 cob_field *
-cob_intr_sum (const int params, ...)
+cob_intr_annuity (cob_field *srcfield1, cob_field *srcfield2)
+{
+	return cob_intr_annuity_ctx (COB_CTX_COMPAT, srcfield1, srcfield2);
+}
+
+static cob_field *
+cob_intr_sum_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	va_list		args;
@@ -5254,22 +5786,47 @@ cob_intr_sum (const int params, ...)
 	mpz_set_ui (d1.value, 0UL);
 	d1.scale = 0;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	for (i = 0; i < params; ++i) {
 		f = va_arg (args, cob_field *);
-		cob_decimal_set_field (&d2, f);
-		cob_decimal_add (&d1, &d2);
+		cob_decimal_set_field_ctx (ctx, &d2, f);
+		cob_decimal_add_ctx (ctx, &d1, &d2);
 	}
 	va_end (args);
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_ord_min (const int params, ...)
+cob_intr_sum_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_sum_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_sum without context */
+cob_field *
+cob_intr_sum (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_sum_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_ord_min_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	cob_field	*basef;
@@ -5277,25 +5834,50 @@ cob_intr_ord_min (const int params, ...)
 	cob_u32_t	ordmin;
 	va_list		args;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	ordmin = 1;
 	basef = va_arg (args, cob_field *);
 	for (i = 1; i < params; ++i) {
 		f = va_arg (args, cob_field *);
-		if (cob_cmp (f, basef) < 0) {
+		if (cob_cmp_ctx (ctx, f, basef) < 0) {
 			basef = f;
 			ordmin = i + 1;
 		}
 	}
 	va_end (args);
 
-	cob_alloc_set_field_uint (ordmin);
+	cob_alloc_set_field_uint (ctx, ordmin);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_ord_max (const int params, ...)
+cob_intr_ord_min_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_ord_min_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_ord_min without context */
+cob_field *
+cob_intr_ord_min (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_ord_min_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_ord_max_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	cob_field	*basef;
@@ -5303,109 +5885,209 @@ cob_intr_ord_max (const int params, ...)
 	int		i;
 	va_list		args;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	ordmax = 1;
 	basef = va_arg (args, cob_field *);
 	for (i = 1; i < params; ++i) {
 		f = va_arg (args, cob_field *);
-		if (cob_cmp (f, basef) > 0) {
+		if (cob_cmp_ctx (ctx, f, basef) > 0) {
 			basef = f;
 			ordmax = i + 1;
 		}
 	}
 	va_end (args);
 
-	cob_alloc_set_field_uint (ordmax);
+	cob_alloc_set_field_uint (ctx, ordmax);
 	return curr_field;
 }
 
+cob_field *
+cob_intr_ord_max_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_ord_max_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_ord_max without context */
+cob_field *
+cob_intr_ord_max (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_ord_max_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_min_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
+{
+	cob_field	*f;
+	cob_field	*basef;
+	va_list		args;
+	int		i;
+
+	va_copy (args, cob_va_args);
+
+	basef = va_arg (args, cob_field *);
+	for (i = 1; i < params; ++i) {
+		f = va_arg (args, cob_field *);
+		if (cob_cmp_ctx (ctx, f, basef) < 0) {
+			basef = f;
+		}
+	}
+	va_end (args);
+
+	make_field_entry (ctx, basef);
+	memcpy (curr_field->data, basef->data, basef->size);
+	return curr_field;
+}
+
+cob_field *
+cob_intr_min_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_min_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_min without context */
 cob_field *
 cob_intr_min (const int params, ...)
 {
-	cob_field	*f;
-	cob_field	*basef;
-	va_list		args;
-	int		i;
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
 
-	va_start (args, params);
-
-	basef = va_arg (args, cob_field *);
-	for (i = 1; i < params; ++i) {
-		f = va_arg (args, cob_field *);
-		if (cob_cmp (f, basef) < 0) {
-			basef = f;
-		}
-	}
-	va_end (args);
-
-	make_field_entry (basef);
-	memcpy (curr_field->data, basef->data, basef->size);
-	return curr_field;
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_min_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
 }
 
-cob_field *
-cob_intr_max (const int params, ...)
+static cob_field *
+cob_intr_max_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	cob_field	*basef;
 	va_list		args;
 	int		i;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	basef = va_arg (args, cob_field *);
 	for (i = 1; i < params; ++i) {
 		f = va_arg (args, cob_field *);
-		if (cob_cmp (f, basef) > 0) {
+		if (cob_cmp_ctx (ctx, f, basef) > 0) {
 			basef = f;
 		}
 	}
 	va_end (args);
 
-	make_field_entry (basef);
+	make_field_entry (ctx, basef);
 	memcpy (curr_field->data, basef->data, basef->size);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_midrange (const int params, ...)
+cob_intr_max_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_max_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_max without context */
+cob_field *
+cob_intr_max (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_max_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_midrange_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*basemin;
 	cob_field	*basemax;
 	va_list		args;
 
-	va_start (args, params);
-	get_min_and_max_of_args (params, args, &basemin, &basemax);
+	va_copy (args, cob_va_args);
+	get_min_and_max_of_args (ctx, params, args, &basemin, &basemax);
 	va_end (args);
 
 	/* Return (max + min) / 2 */
-	cob_decimal_set_field (&d1, basemin);
-	cob_decimal_set_field (&d2, basemax);
-	cob_decimal_add (&d1, &d2);
+	cob_decimal_set_field_ctx (ctx, &d1, basemin);
+	cob_decimal_set_field_ctx (ctx, &d2, basemax);
+	cob_decimal_add_ctx (ctx, &d1, &d2);
 	mpz_set_ui (d2.value, 2UL);
 	d2.scale = 0;
-	cob_decimal_div (&d1, &d2);
+	cob_decimal_div_ctx (ctx, &d1, &d2);
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_median (const int params, ...)
+cob_intr_midrange_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_midrange_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_midrange without context */
+cob_field *
+cob_intr_midrange (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_midrange_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_median_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	cob_field	**field_alloc;
 	va_list		args;
 	int		i;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	f = va_arg (args, cob_field *);
 	if (params == 1) {
 		va_end (args);
-		make_field_entry (f);
+		make_field_entry (ctx, f);
 		memcpy (curr_field->data, f->data, f->size);
 		return curr_field;
 	}
@@ -5424,35 +6106,60 @@ cob_intr_median (const int params, ...)
 	i = params / 2;
 	if (params % 2) {
 		f = field_alloc[i];
-		make_field_entry (f);
+		make_field_entry (ctx, f);
 		memcpy (curr_field->data, f->data, f->size);
 	} else {
-		cob_decimal_set_field (&d1, field_alloc[i-1]);
-		cob_decimal_set_field (&d2, field_alloc[i]);
-		cob_decimal_add (&d1, &d2);
+		cob_decimal_set_field_ctx (ctx, &d1, field_alloc[i-1]);
+		cob_decimal_set_field_ctx (ctx, &d2, field_alloc[i]);
+		cob_decimal_add_ctx (ctx, &d1, &d2);
 		mpz_set_ui (d2.value, 2UL);
 		d2.scale = 0;
-		cob_decimal_div (&d1, &d2);
-		cob_alloc_field (&d1);
-		(void)cob_decimal_get_field (&d1, curr_field, 0);
+		cob_decimal_div_ctx (ctx, &d1, &d2);
+		cob_alloc_field (ctx, &d1);
+		(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	}
 	cob_free (field_alloc);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_mean (const int params, ...)
+cob_intr_median_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_median_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_median without context */
+cob_field *
+cob_intr_median (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_median_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_mean_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	va_list		args;
 	int		i;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	if (params == 1) {
 		f = va_arg (args, cob_field *);
 		va_end (args);
-		make_field_entry (f);
+		make_field_entry (ctx, f);
 		memcpy (curr_field->data, f->data, f->size);
 		return curr_field;
 	}
@@ -5462,54 +6169,118 @@ cob_intr_mean (const int params, ...)
 
 	for (i = 0; i < params; ++i) {
 		f = va_arg (args, cob_field *);
-		cob_decimal_set_field (&d2, f);
-		cob_decimal_add (&d1, &d2);
+		cob_decimal_set_field_ctx (ctx, &d2, f);
+		cob_decimal_add_ctx (ctx, &d1, &d2);
 	}
 	va_end (args);
 
 	mpz_set_ui (d2.value, (cob_uli_t)params);
 	d2.scale = 0;
-	cob_decimal_div (&d1, &d2);
+	cob_decimal_div_ctx (ctx, &d1, &d2);
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 
 	return curr_field;
 }
 
 cob_field *
-cob_intr_mod (cob_field *srcfield1, cob_field *srcfield2)
+cob_intr_mean_ctx (cob_context *ctx, const int params, ...)
 {
-	return cob_mod_or_rem (srcfield1, srcfield2, 0);
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_mean_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_mean without context */
+cob_field *
+cob_intr_mean (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_mean_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
 }
 
 cob_field *
-cob_intr_range (const int params, ...)
+cob_intr_mod_ctx (cob_context *ctx, cob_field *srcfield1, cob_field *srcfield2)
+{
+	return cob_mod_or_rem (ctx, srcfield1, srcfield2, 0);
+}
+
+/* compatibility: cob_intr_mod without context */
+cob_field *
+cob_intr_mod (cob_field *srcfield1, cob_field *srcfield2)
+{
+	return cob_intr_mod_ctx (COB_CTX_COMPAT, srcfield1, srcfield2);
+}
+
+static cob_field *
+cob_intr_range_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*basemin, *basemax;
 	va_list		args;
 
-	va_start (args, params);
-	get_min_and_max_of_args (params, args, &basemin, &basemax);
+	va_copy (args, cob_va_args);
+	get_min_and_max_of_args (ctx, params, args, &basemin, &basemax);
 	va_end (args);
 
-	cob_decimal_set_field (&d1, basemax);
-	cob_decimal_set_field (&d2, basemin);
-	cob_decimal_sub (&d1, &d2);
+	cob_decimal_set_field_ctx (ctx, &d1, basemax);
+	cob_decimal_set_field_ctx (ctx, &d2, basemin);
+	cob_decimal_sub_ctx (ctx, &d1, &d2);
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_rem (cob_field *srcfield1, cob_field *srcfield2)
+cob_intr_range_ctx (cob_context *ctx, const int params, ...)
 {
-	return cob_mod_or_rem (srcfield1, srcfield2, 1);
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_range_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_range without context */
+cob_field *
+cob_intr_range (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_range_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
 }
 
 cob_field *
-cob_intr_random (const int params, ...)
+cob_intr_rem_ctx (cob_context *ctx, cob_field *srcfield1, cob_field *srcfield2)
+{
+	return cob_mod_or_rem (ctx, srcfield1, srcfield2, 1);
+}
+
+/* compatibility: cob_intr_rem without context */
+cob_field *
+cob_intr_rem (cob_field *srcfield1, cob_field *srcfield2)
+{
+	return cob_intr_rem_ctx (COB_CTX_COMPAT, srcfield1, srcfield2);
+}
+
+static cob_field *
+cob_intr_random_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	va_list		args;
@@ -5518,13 +6289,13 @@ cob_intr_random (const int params, ...)
 	cob_field_attr	attr;
 	cob_field	field;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 	if (params) {
 		cob_s64_t specified_seed;
 		f = va_arg (args, cob_field *);
-		specified_seed = cob_get_llint (f);
+		specified_seed = cob_get_llint_ctx (ctx, f);
 		if (specified_seed < 0) {
-			cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+			cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		} else {
 #ifdef _WIN32
 			seed = (unsigned long)(specified_seed & 0xFFFFFFFF);
@@ -5601,102 +6372,203 @@ cob_intr_random (const int params, ...)
 
 	COB_ATTR_INIT (COB_TYPE_NUMERIC_DOUBLE, 20, 9, COB_FLAG_HAVE_SIGN, NULL);
 	COB_FIELD_INIT (sizeof (double), NULL, &attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	memcpy (curr_field->data, &val, sizeof(val));
 	return curr_field;
 }
 
+cob_field *
+cob_intr_random_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_random_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_random without context */
+cob_field *
+cob_intr_random (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_random_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* note: uses the va_list cob_va_args of the calling function */
 #define GET_VARIANCE(num_args, args)				\
 	do {							\
 		/* Get mean in d1 */				\
-		va_start (args, num_args);			\
-		calc_mean_of_args (num_args, args);		\
+		va_copy (args, cob_va_args);		\
+		calc_mean_of_args (COB_CTX_TODO, num_args, args);		\
 		va_end (args);					\
 								\
 		mpz_set (d5.value, d1.value);	\
 		d5.scale = d1.scale;			\
 								\
 		/* Get variance in d1 */			\
-		va_start (args, num_args);			\
-		calc_variance_of_args (num_args, args, &d5);	\
+		va_copy (args, cob_va_args);		\
+		calc_variance_of_args (COB_CTX_TODO, num_args, args, &d5);	\
 		va_end (args);					\
 	} ONCE_COB
 
-cob_field *
-cob_intr_variance (const int num_args, ...)
+static cob_field *
+cob_intr_variance_va_ctx (cob_context *ctx, const int num_args, va_list cob_va_args)
 {
 	va_list	args;
 
 	GET_VARIANCE (num_args, args);
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_standard_deviation (const int num_args, ...)
+cob_intr_variance_ctx (cob_context *ctx, const int num_args, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, num_args);
+	cob_va_ret = cob_intr_variance_va_ctx (ctx, num_args, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_variance without context */
+cob_field *
+cob_intr_variance (const int num_args, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, num_args);
+	cob_va_ret = cob_intr_variance_va_ctx (COB_CTX_COMPAT, num_args, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_standard_deviation_va_ctx (cob_context *ctx, const int num_args, va_list cob_va_args)
 {
 	va_list		args;
 
 	GET_VARIANCE (num_args, args);
 	cob_trim_decimal (&d1);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Take square root of variance */
 	mpz_set_ui (d3.value, 5UL);
 	d3.scale = 1;
 
-	cob_decimal_pow (&d1, &d3);
+	cob_decimal_pow_ctx (ctx, &d1, &d3);
 
-	cob_alloc_field (&d1);
-	(void)cob_decimal_get_field (&d1, curr_field, 0);
+	cob_alloc_field (ctx, &d1);
+	(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 	return curr_field;
+}
+
+cob_field *
+cob_intr_standard_deviation_ctx (cob_context *ctx, const int num_args, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, num_args);
+	cob_va_ret = cob_intr_standard_deviation_va_ctx (ctx, num_args, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_standard_deviation without context */
+cob_field *
+cob_intr_standard_deviation (const int num_args, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, num_args);
+	cob_va_ret = cob_intr_standard_deviation_va_ctx (COB_CTX_COMPAT, num_args, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
 }
 
 #undef GET_VARIANCE
 
-cob_field *
-cob_intr_present_value (const int params, ...)
+static cob_field *
+cob_intr_present_value_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	va_list		args;
 	int		i;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	f = va_arg (args, cob_field *);
 
-	cob_decimal_set_field (&d1, f);
+	cob_decimal_set_field_ctx (ctx, &d1, f);
 	mpz_set_ui (d2.value, 1UL);
 	d2.scale = 0;
-	cob_decimal_add (&d1, &d2);
+	cob_decimal_add_ctx (ctx, &d1, &d2);
 
 	mpz_set_ui (d4.value, 0UL);
 	d4.scale = 0;
 
 	for (i = 1; i < params; ++i) {
 		f = va_arg (args, cob_field *);
-		cob_decimal_set_field (&d2, f);
+		cob_decimal_set_field_ctx (ctx, &d2, f);
 		mpz_set (d3.value, d1.value);
 		d3.scale = d1.scale;
 		if (i > 1) {
 			mpz_pow_ui (d3.value, d3.value, (cob_uli_t)i);
 			d3.scale *= i;
 		}
-		cob_decimal_div (&d2, &d3);
-		cob_decimal_add (&d4, &d2);
+		cob_decimal_div_ctx (ctx, &d2, &d3);
+		cob_decimal_add_ctx (ctx, &d4, &d2);
 	}
 	va_end (args);
 
-	cob_alloc_field (&d4);
-	(void)cob_decimal_get_field (&d4, curr_field, 0);
+	cob_alloc_field (ctx, &d4);
+	(void)cob_decimal_get_field_ctx (ctx, &d4, curr_field, 0);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_year_to_yyyy (const int params, ...)
+cob_intr_present_value_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_present_value_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_present_value without context */
+cob_field *
+cob_intr_present_value (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_present_value_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_year_to_yyyy_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	struct tm	*timeptr;
@@ -5707,19 +6579,19 @@ cob_intr_year_to_yyyy (const int params, ...)
 	int		current_year;
 	int		maxyear;
 
-	cobglobptr->cob_exception_code = 0;
-	va_start (args, params);
+	ctx->glob.cob_exception_code = 0;
+	va_copy (args, cob_va_args);
 	f = va_arg (args, cob_field *);
-	year = cob_get_int (f);
+	year = cob_get_int_ctx (ctx, f);
 	if (params > 1) {
 		f = va_arg (args, cob_field *);
-		interval = cob_get_int (f);
+		interval = cob_get_int_ctx (ctx, f);
 	} else {
 		interval = 50;
 	}
 	if (params > 2) {
 		f = va_arg (args, cob_field *);
-		current_year = cob_get_int (f);
+		current_year = cob_get_int_ctx (ctx, f);
 	} else {
 		t = time (NULL);
 		timeptr = localtime (&t);
@@ -5728,19 +6600,19 @@ cob_intr_year_to_yyyy (const int params, ...)
 	va_end (args);
 
 	if (year < 0 || year > 99) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 	if (!valid_year (current_year)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 	maxyear = current_year + interval;
 	if (maxyear < 1700 || maxyear > 9999) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 	if (maxyear % 100 >= year) {
@@ -5748,12 +6620,37 @@ cob_intr_year_to_yyyy (const int params, ...)
 	} else {
 		year += 100 * ((maxyear / 100) - 1);
 	}
-	cob_alloc_set_field_int (year);
+	cob_alloc_set_field_int (ctx, year);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_date_to_yyyymmdd (const int params, ...)
+cob_intr_year_to_yyyy_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_year_to_yyyy_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_year_to_yyyy without context */
+cob_field *
+cob_intr_year_to_yyyy (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_year_to_yyyy_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_date_to_yyyymmdd_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	va_list		args;
@@ -5763,16 +6660,16 @@ cob_intr_date_to_yyyymmdd (const int params, ...)
 	int		current_year;
 	int		maxyear;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	f = va_arg (args, cob_field *);
-	year = cob_get_int (f);
+	year = cob_get_int_ctx (ctx, f);
 	mmdd = year % 10000;
 	year /= 10000;
 
-	get_interval_and_current_year_from_args (params, args, &interval,
+	get_interval_and_current_year_from_args (ctx, params, args, &interval,
 						 &current_year);
 
 	va_end (args);
@@ -5782,8 +6679,8 @@ cob_intr_date_to_yyyymmdd (const int params, ...)
 	if (year < 0 || year > 999999
 	    || !valid_year (current_year)
 	    || (maxyear < 1700 || maxyear > 9999)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 
@@ -5794,12 +6691,37 @@ cob_intr_date_to_yyyymmdd (const int params, ...)
 	}
 	year *= 10000;
 	year += mmdd;
-	cob_alloc_set_field_int (year);
+	cob_alloc_set_field_int (ctx, year);
 	return curr_field;
 }
 
 cob_field *
-cob_intr_day_to_yyyyddd (const int params, ...)
+cob_intr_date_to_yyyymmdd_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_date_to_yyyymmdd_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_date_to_yyyymmdd without context */
+cob_field *
+cob_intr_date_to_yyyymmdd (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_date_to_yyyymmdd_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_day_to_yyyyddd_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f;
 	va_list		args;
@@ -5809,34 +6731,34 @@ cob_intr_day_to_yyyyddd (const int params, ...)
 	int		current_year;
 	int		maxyear;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	f = va_arg (args, cob_field *);
-	year = cob_get_int (f);
+	year = cob_get_int_ctx (ctx, f);
 	days = year % 1000;
 	year /= 1000;
 
-	get_interval_and_current_year_from_args (params, args, &interval,
+	get_interval_and_current_year_from_args (ctx, params, args, &interval,
 						 &current_year);
 
 	va_end (args);
 
 	if (year < 0 || year > 999999) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 	if (!valid_year (current_year)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 	maxyear = current_year + interval;
 	if (maxyear < 1700 || maxyear > 9999) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		return curr_field;
 	}
 	if (maxyear % 100 >= year) {
@@ -5846,8 +6768,33 @@ cob_intr_day_to_yyyyddd (const int params, ...)
 	}
 	year *= 1000;
 	year += days;
-	cob_alloc_set_field_int (year);
+	cob_alloc_set_field_int (ctx, year);
 	return curr_field;
+}
+
+cob_field *
+cob_intr_day_to_yyyyddd_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_day_to_yyyyddd_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_day_to_yyyyddd without context */
+cob_field *
+cob_intr_day_to_yyyyddd (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_day_to_yyyyddd_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
 }
 
 static int
@@ -5869,14 +6816,21 @@ get_seconds_past_midnight (void)
 }
 
 cob_field*
-cob_intr_seconds_past_midnight (void)
+cob_intr_seconds_past_midnight_ctx (cob_context *ctx)
 {
-	cob_alloc_set_field_int (get_seconds_past_midnight ());
+	cob_alloc_set_field_int (ctx, get_seconds_past_midnight ());
 	return curr_field;
 }
 
+/* compatibility: cob_intr_seconds_past_midnight without context */
+cob_field*
+cob_intr_seconds_past_midnight (void)
+{
+	return cob_intr_seconds_past_midnight_ctx (COB_CTX_COMPAT);
+}
+
 cob_field *
-cob_intr_seconds_from_formatted_time (cob_field *format_field, cob_field *time_field)
+cob_intr_seconds_from_formatted_time_ctx (cob_context *ctx, cob_field *format_field, cob_field *time_field)
 {
 	size_t		str_length;
 	char		format_str[2 * COB_DATETIMESTR_LEN] = { '\0' };
@@ -5891,7 +6845,7 @@ cob_intr_seconds_from_formatted_time (cob_field *format_field, cob_field *time_f
 					   format_field->size);
 	memcpy (format_str, format_field->data, str_length);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Validate the format string */
 	if (cob_valid_datetime_format (format_str, decimal_point)) {
@@ -5915,21 +6869,28 @@ cob_intr_seconds_from_formatted_time (cob_field *format_field, cob_field *time_f
 		goto invalid_args;
 	}
 
-	seconds_from_formatted_time (time_fmt, time_str, seconds);
+	seconds_from_formatted_time (ctx, time_fmt, time_str, seconds);
 
-	cob_alloc_field (seconds);
-	(void) cob_decimal_get_field (seconds, curr_field, 0);
+	cob_alloc_field (ctx, seconds);
+	(void) cob_decimal_get_field_ctx (ctx, seconds, curr_field, 0);
 
 	return curr_field;
 
  invalid_args:
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-	cob_alloc_set_field_uint (0);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+	cob_alloc_set_field_uint (ctx, 0);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_seconds_from_formatted_time without context */
 cob_field *
-cob_intr_locale_date (const int offset, const int length,
+cob_intr_seconds_from_formatted_time (cob_field *format_field, cob_field *time_field)
+{
+	return cob_intr_seconds_from_formatted_time_ctx (COB_CTX_COMPAT, format_field, time_field);
+}
+
+cob_field *
+cob_intr_locale_date_ctx (cob_context *ctx, const int offset, const int length,
 		      cob_field *srcfield, cob_field *locale_field)
 {
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
@@ -5950,11 +6911,11 @@ cob_intr_locale_date (const int offset, const int length,
 	char		locale_buff[COB_MINI_BUFF];
 #endif
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
 	if (COB_FIELD_IS_NUMERIC (srcfield)) {
-		indate = cob_get_int (srcfield);
+		indate = cob_get_int_ctx (ctx, srcfield);
 	} else {
 		unsigned char *p;
 		if (srcfield->size < 8) {
@@ -6003,7 +6964,7 @@ cob_intr_locale_date (const int offset, const int length,
 	memset (buff2, 0, sizeof(buff2));
 	snprintf(buff2, sizeof(buff2) - 1, "%s", nl_langinfo (D_FMT));
 	if (deflocale) {
-		(void) setlocale (LC_ALL, cobglobptr->cob_locale);
+		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}
 	strftime (buff, sizeof(buff), buff2, &tstruct);
 #else
@@ -6043,17 +7004,24 @@ cob_intr_locale_date (const int offset, const int length,
 		goto derror;
 	}
 #endif
-	cob_alloc_set_field_str (buff, offset, length);
+	cob_alloc_set_field_str (ctx, buff, offset, length);
 	return curr_field;
 derror:
 #endif
-	cob_alloc_set_field_spaces (10);
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+	cob_alloc_set_field_spaces (ctx, 10);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_locale_date without context */
 cob_field *
-cob_intr_locale_time (const int offset, const int length,
+cob_intr_locale_date (const int offset, const int length, cob_field *srcfield, cob_field *locale_field)
+{
+	return cob_intr_locale_date_ctx (COB_CTX_COMPAT, offset, length, srcfield, locale_field);
+}
+
+cob_field *
+cob_intr_locale_time_ctx (cob_context *ctx, const int offset, const int length,
 		      cob_field *srcfield, cob_field *locale_field)
 {
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
@@ -6066,11 +7034,11 @@ cob_intr_locale_time (const int offset, const int length,
 	char		buff[LOCTIME_BUFSIZE] = { '\0' };
 #endif
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
 	if (COB_FIELD_IS_NUMERIC (srcfield)) {
-		indate = cob_get_int (srcfield);
+		indate = cob_get_int_ctx (ctx, srcfield);
 	} else {
 		if (srcfield->size < 6) {
 			goto derror;
@@ -6101,21 +7069,28 @@ cob_intr_locale_time (const int offset, const int length,
 		goto derror;
 	}
 
-	if (locale_time (hours, minutes, seconds, locale_field, buff)) {
+	if (locale_time (ctx, hours, minutes, seconds, locale_field, buff)) {
 		goto derror;
 	}
 
-	cob_alloc_set_field_str (buff, offset, length);
+	cob_alloc_set_field_str (ctx, buff, offset, length);
 	return curr_field;
 derror:
 #endif
-	cob_alloc_set_field_spaces (10);
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+	cob_alloc_set_field_spaces (ctx, 10);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_locale_time without context */
 cob_field *
-cob_intr_lcl_time_from_secs (const int offset, const int length,
+cob_intr_locale_time (const int offset, const int length, cob_field *srcfield, cob_field *locale_field)
+{
+	return cob_intr_locale_time_ctx (COB_CTX_COMPAT, offset, length, srcfield, locale_field);
+}
+
+cob_field *
+cob_intr_lcl_time_from_secs_ctx (cob_context *ctx, const int offset, const int length,
 			     cob_field *srcfield, cob_field *locale_field)
 {
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
@@ -6126,11 +7101,11 @@ cob_intr_lcl_time_from_secs (const int offset, const int length,
 	char		buff[LOCTIME_BUFSIZE] = { '\0' };
 #endif
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined(HAVE_LANGINFO_CODESET)
 	if (COB_FIELD_IS_NUMERIC (srcfield)) {
-		indate = cob_get_int (srcfield);
+		indate = cob_get_int_ctx (ctx, srcfield);
 	} else {
 		goto derror;
 	}
@@ -6142,21 +7117,28 @@ cob_intr_lcl_time_from_secs (const int offset, const int length,
 	minutes = indate / 60;
 	seconds = indate % 60;
 
-	if (locale_time (hours, minutes, seconds, locale_field, buff)) {
+	if (locale_time (ctx, hours, minutes, seconds, locale_field, buff)) {
 		goto derror;
 	}
 
-	cob_alloc_set_field_str (buff, offset, length);
+	cob_alloc_set_field_str (ctx, buff, offset, length);
 	return curr_field;
 derror:
 #endif
-	cob_alloc_set_field_spaces (10);
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+	cob_alloc_set_field_spaces (ctx, 10);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	return curr_field;
 }
 
+/* compatibility: cob_intr_lcl_time_from_secs without context */
 cob_field *
-cob_intr_mon_decimal_point (void)
+cob_intr_lcl_time_from_secs (const int offset, const int length, cob_field *srcfield, cob_field *locale_field)
+{
+	return cob_intr_lcl_time_from_secs_ctx (COB_CTX_COMPAT, offset, length, srcfield, locale_field);
+}
+
+cob_field *
+cob_intr_mon_decimal_point_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
 	struct lconv	*p;
@@ -6165,7 +7147,7 @@ cob_intr_mon_decimal_point (void)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -6175,7 +7157,7 @@ cob_intr_mon_decimal_point (void)
 	} else {
 		field.size = 1;
 	}
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	if (size) {
 		memcpy (curr_field->data, p->mon_decimal_point, size);
 	} else {
@@ -6184,14 +7166,21 @@ cob_intr_mon_decimal_point (void)
 	}
 #else
 	field.size = 1;
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	curr_field->data[0] = COB_MODULE_PTR->decimal_point;
 #endif
 	return curr_field;
 }
 
+/* compatibility: cob_intr_mon_decimal_point without context */
 cob_field *
-cob_intr_num_decimal_point (void)
+cob_intr_mon_decimal_point (void)
+{
+	return cob_intr_mon_decimal_point_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_num_decimal_point_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
 	struct lconv	*p;
@@ -6200,7 +7189,7 @@ cob_intr_num_decimal_point (void)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -6210,7 +7199,7 @@ cob_intr_num_decimal_point (void)
 	} else {
 		field.size = 1;
 	}
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	if (size) {
 		memcpy (curr_field->data, p->decimal_point, size);
 	} else {
@@ -6219,14 +7208,21 @@ cob_intr_num_decimal_point (void)
 	}
 #else
 	field.size = 1;
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	curr_field->data[0] = COB_MODULE_PTR->decimal_point;
 #endif
 	return curr_field;
 }
 
+/* compatibility: cob_intr_num_decimal_point without context */
 cob_field *
-cob_intr_mon_thousands_sep (void)
+cob_intr_num_decimal_point (void)
+{
+	return cob_intr_num_decimal_point_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_mon_thousands_sep_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
 	struct lconv	*p;
@@ -6235,7 +7231,7 @@ cob_intr_mon_thousands_sep (void)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -6245,7 +7241,7 @@ cob_intr_mon_thousands_sep (void)
 	} else {
 		field.size = 1;
 	}
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	if (size) {
 		memcpy (curr_field->data, p->mon_thousands_sep, size);
 	} else {
@@ -6254,14 +7250,21 @@ cob_intr_mon_thousands_sep (void)
 	}
 #else
 	field.size = 1;
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	curr_field->data[0] = COB_MODULE_PTR->decimal_point;
 #endif
 	return curr_field;
 }
 
+/* compatibility: cob_intr_mon_thousands_sep without context */
 cob_field *
-cob_intr_num_thousands_sep (void)
+cob_intr_mon_thousands_sep (void)
+{
+	return cob_intr_mon_thousands_sep_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_num_thousands_sep_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
 	struct lconv	*p;
@@ -6270,7 +7273,7 @@ cob_intr_num_thousands_sep (void)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -6280,7 +7283,7 @@ cob_intr_num_thousands_sep (void)
 	} else {
 		field.size = 1;
 	}
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	if (size) {
 		memcpy (curr_field->data, p->thousands_sep, size);
 	} else {
@@ -6289,14 +7292,21 @@ cob_intr_num_thousands_sep (void)
 	}
 #else
 	field.size = 1;
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	curr_field->data[0] = COB_MODULE_PTR->decimal_point;
 #endif
 	return curr_field;
 }
 
+/* compatibility: cob_intr_num_thousands_sep without context */
 cob_field *
-cob_intr_currency_symbol (void)
+cob_intr_num_thousands_sep (void)
+{
+	return cob_intr_num_thousands_sep_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_currency_symbol_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
 	struct lconv	*p;
@@ -6305,7 +7315,7 @@ cob_intr_currency_symbol (void)
 	cob_field	field;
 
 	COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
 	p = localeconv ();
@@ -6315,7 +7325,7 @@ cob_intr_currency_symbol (void)
 	} else {
 		field.size = 1;
 	}
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	if (size) {
 		memcpy (curr_field->data, p->currency_symbol, size);
 	} else {
@@ -6324,35 +7334,63 @@ cob_intr_currency_symbol (void)
 	}
 #else
 	field.size = 1;
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 	curr_field->data[0] = COB_MODULE_PTR->currency_symbol;
 #endif
 	return curr_field;
 }
 
+/* compatibility: cob_intr_currency_symbol without context */
+cob_field *
+cob_intr_currency_symbol (void)
+{
+	return cob_intr_currency_symbol_ctx (COB_CTX_COMPAT);
+}
+
+cob_field *
+cob_intr_test_numval_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_alloc_set_field_int (ctx, cob_check_numval_ctx (ctx, srcfield, NULL, 0, 0));
+	return curr_field;
+}
+
+/* compatibility: cob_intr_test_numval without context */
 cob_field *
 cob_intr_test_numval (cob_field *srcfield)
 {
-	cob_alloc_set_field_int (cob_check_numval (srcfield, NULL, 0, 0));
+	return cob_intr_test_numval_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_test_numval_c_ctx (cob_context *ctx, cob_field *srcfield, cob_field *currency)
+{
+	cob_alloc_set_field_int (ctx, cob_check_numval_ctx (ctx, srcfield, currency, 1, 0));
 	return curr_field;
 }
 
+/* compatibility: cob_intr_test_numval_c without context */
 cob_field *
 cob_intr_test_numval_c (cob_field *srcfield, cob_field *currency)
 {
-	cob_alloc_set_field_int (cob_check_numval (srcfield, currency, 1, 0));
+	return cob_intr_test_numval_c_ctx (COB_CTX_COMPAT, srcfield, currency);
+}
+
+cob_field *
+cob_intr_test_numval_f_ctx (cob_context *ctx, cob_field *srcfield)
+{
+	cob_alloc_set_field_int (ctx, cob_check_numval_f (ctx, srcfield));
 	return curr_field;
 }
 
+/* compatibility: cob_intr_test_numval_f without context */
 cob_field *
 cob_intr_test_numval_f (cob_field *srcfield)
 {
-	cob_alloc_set_field_int (cob_check_numval_f (srcfield));
-	return curr_field;
+	return cob_intr_test_numval_f_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 cob_field *
-cob_intr_lowest_algebraic (cob_field *srcfield)
+cob_intr_lowest_algebraic_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_uli_t	expo;
 	cob_field	field;
@@ -6361,19 +7399,19 @@ cob_intr_lowest_algebraic (cob_field *srcfield)
 	case COB_TYPE_ALPHANUMERIC:
 	case COB_TYPE_NATIONAL:
 		COB_FIELD_INIT (COB_FIELD_SIZE (srcfield), NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		break;
 
 	case COB_TYPE_ALPHANUMERIC_EDITED:
 	case COB_TYPE_NATIONAL_EDITED:
 		COB_FIELD_INIT (COB_FIELD_DIGITS (srcfield), NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		break;
 
 	case COB_TYPE_NUMERIC_BINARY:
 	case COB_TYPE_NUMERIC_COMP5:
 		if (!COB_FIELD_HAVE_SIGN (srcfield)) {
-			cob_alloc_set_field_uint (0);
+			cob_alloc_set_field_uint (ctx, 0);
 			break;
 		}
 		if (COB_FIELD_REAL_BINARY (srcfield) 
@@ -6387,22 +7425,22 @@ cob_intr_lowest_algebraic (cob_field *srcfield)
 		}
 		mpz_neg (d1.value, d1.value);
 		d1.scale = COB_FIELD_SCALE (srcfield);
-		cob_alloc_field (&d1);
-		(void)cob_decimal_get_field (&d1, curr_field, 0);
+		cob_alloc_field (ctx, &d1);
+		(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 		break;
 
 	case COB_TYPE_NUMERIC_FLOAT:
 	case COB_TYPE_NUMERIC_DOUBLE:
 	case COB_TYPE_NUMERIC_L_DOUBLE:
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		break;
 
 	case COB_TYPE_NUMERIC_DISPLAY:
 	case COB_TYPE_NUMERIC_PACKED:
 	case COB_TYPE_NUMERIC_EDITED:
 		if (!COB_FIELD_HAVE_SIGN (srcfield)) {
-			cob_alloc_set_field_uint (0);
+			cob_alloc_set_field_uint (ctx, 0);
 			break;
 		}
 		expo = (cob_uli_t)COB_FIELD_DIGITS (srcfield);
@@ -6410,19 +7448,26 @@ cob_intr_lowest_algebraic (cob_field *srcfield)
 		mpz_sub_ui (d1.value, d1.value, 1UL);
 		mpz_neg (d1.value, d1.value);
 		d1.scale = COB_FIELD_SCALE (srcfield);
-		cob_alloc_field (&d1);
-		(void)cob_decimal_get_field (&d1, curr_field, 0);
+		cob_alloc_field (ctx, &d1);
+		(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 		break;
 	default:
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		break;
 	}
 	return curr_field;
 }
 
+/* compatibility: cob_intr_lowest_algebraic without context */
 cob_field *
-cob_intr_highest_algebraic (cob_field *srcfield)
+cob_intr_lowest_algebraic (cob_field *srcfield)
+{
+	return cob_intr_lowest_algebraic_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+cob_field *
+cob_intr_highest_algebraic_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	cob_uli_t	expo;
 	size_t		size;
@@ -6433,7 +7478,7 @@ cob_intr_highest_algebraic (cob_field *srcfield)
 	case COB_TYPE_NATIONAL:
 		size = COB_FIELD_SIZE (srcfield);
 		COB_FIELD_INIT (size, NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		memset (curr_field->data, 255, size);
 		break;
 
@@ -6441,7 +7486,7 @@ cob_intr_highest_algebraic (cob_field *srcfield)
 	case COB_TYPE_NATIONAL_EDITED:
 		size = COB_FIELD_DIGITS (srcfield);
 		COB_FIELD_INIT (size, NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		memset (curr_field->data, 255, size);
 		break;
 
@@ -6460,15 +7505,15 @@ cob_intr_highest_algebraic (cob_field *srcfield)
 		}
 		mpz_sub_ui (d1.value, d1.value, 1UL);
 		d1.scale = COB_FIELD_SCALE (srcfield);
-		cob_alloc_field (&d1);
-		(void)cob_decimal_get_field (&d1, curr_field, 0);
+		cob_alloc_field (ctx, &d1);
+		(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 		break;
 
 	case COB_TYPE_NUMERIC_FLOAT:
 	case COB_TYPE_NUMERIC_DOUBLE:
 	case COB_TYPE_NUMERIC_L_DOUBLE:
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		break;
 
 	case COB_TYPE_NUMERIC_DISPLAY:
@@ -6478,19 +7523,26 @@ cob_intr_highest_algebraic (cob_field *srcfield)
 		mpz_ui_pow_ui (d1.value, 10UL, expo);
 		mpz_sub_ui (d1.value, d1.value, 1UL);
 		d1.scale = COB_FIELD_SCALE (srcfield);
-		cob_alloc_field (&d1);
-		(void)cob_decimal_get_field (&d1, curr_field, 0);
+		cob_alloc_field (ctx, &d1);
+		(void)cob_decimal_get_field_ctx (ctx, &d1, curr_field, 0);
 		break;
 	default:
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-		cob_alloc_set_field_uint (0);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+		cob_alloc_set_field_uint (ctx, 0);
 		break;
 	}
 	return curr_field;
 }
 
+/* compatibility: cob_intr_highest_algebraic without context */
 cob_field *
-cob_intr_locale_compare (const int params, ...)
+cob_intr_highest_algebraic (cob_field *srcfield)
+{
+	return cob_intr_highest_algebraic_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+static cob_field *
+cob_intr_locale_compare_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	cob_field	*f1;
 	cob_field	*f2;
@@ -6507,8 +7559,8 @@ cob_intr_locale_compare (const int params, ...)
 	cob_field	field;
 	va_list		args;
 
-	cobglobptr->cob_exception_code = 0;
-	va_start (args, params);
+	ctx->glob.cob_exception_code = 0;
+	va_copy (args, cob_va_args);
 	f1 = va_arg (args, cob_field *);
 	f2 = va_arg (args, cob_field *);
 	if (params > 2) {
@@ -6519,7 +7571,7 @@ cob_intr_locale_compare (const int params, ...)
 	va_end (args);
 
 	COB_FIELD_INIT (1, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
 #ifdef	HAVE_STRCOLL
 	size = f1->size;
@@ -6571,7 +7623,7 @@ cob_intr_locale_compare (const int params, ...)
 
 #ifdef	HAVE_SETLOCALE
 	if (deflocale) {
-		(void) setlocale (LC_ALL, cobglobptr->cob_locale);
+		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}
 #endif
 
@@ -6582,13 +7634,38 @@ derror:
 	cob_free (p2);
 #endif
 	curr_field->data[0] = ' ';
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 
 	return curr_field;
 }
 
 cob_field *
-cob_intr_formatted_date (const int offset, const int length,
+cob_intr_locale_compare_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_locale_compare_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_locale_compare without context */
+cob_field *
+cob_intr_locale_compare (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_locale_compare_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+cob_field *
+cob_intr_formatted_date_ctx (cob_context *ctx, const int offset, const int length,
 			 cob_field *format_field, cob_field *days_field)
 {
 	cob_field	field;
@@ -6603,10 +7680,10 @@ cob_intr_formatted_date (const int offset, const int length,
 	field_length = strlen (format_str);
 
 	COB_FIELD_INIT (field_length, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
-	cobglobptr->cob_exception_code = 0;
-	days = cob_get_int (days_field);
+	ctx->glob.cob_exception_code = 0;
+	days = cob_get_int_ctx (ctx, days_field);
 
 	if (!valid_day_and_format (days, format_str)) {
 		goto invalid_args;
@@ -6619,7 +7696,7 @@ cob_intr_formatted_date (const int offset, const int length,
 	goto end_of_func;
 
  invalid_args:
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	memset (curr_field->data, ' ', strlen (format_str));
 
  end_of_func:
@@ -6629,9 +7706,15 @@ cob_intr_formatted_date (const int offset, const int length,
 	return curr_field;
 }
 
+/* compatibility: cob_intr_formatted_date without context */
 cob_field *
-cob_intr_formatted_time (const int offset, const int length,
-			 const int params, ...)
+cob_intr_formatted_date (const int offset, const int length, cob_field *format_field, cob_field *days_field)
+{
+	return cob_intr_formatted_date_ctx (COB_CTX_COMPAT, offset, length, format_field, days_field);
+}
+
+static cob_field *
+cob_intr_formatted_time_va_ctx (cob_context *ctx, const int offset, const int length, const int params, va_list cob_va_args)
 {
 	va_list		args;
 	cob_field	*format_field;
@@ -6650,12 +7733,12 @@ cob_intr_formatted_time (const int offset, const int length,
 
 	if (!(params == 3 || params == 4)) {
 		COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		goto invalid_args;
 	}
 
 	/* Get args */
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	format_field = va_arg (args, cob_field *);
 	time_field = va_arg (args, cob_field *);
@@ -6674,19 +7757,19 @@ cob_intr_formatted_time (const int offset, const int length,
 	field_length = strlen (format_str);
 
 	COB_FIELD_INIT (field_length, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Extract and validate the times and time format */
 
-	whole_seconds = cob_get_int (time_field);
+	whole_seconds = cob_get_int_ctx (ctx, time_field);
 	if (!valid_time (whole_seconds)) {
 		goto invalid_args;
 	}
 
 	fractional_seconds = &d2;
-	get_fractional_seconds (time_field, fractional_seconds);
+	get_fractional_seconds (ctx, time_field, fractional_seconds);
 
 	if (!cob_valid_time_format (format_str, COB_MODULE_PTR->decimal_point)) {
 		goto invalid_args;
@@ -6696,7 +7779,7 @@ cob_intr_formatted_time (const int offset, const int length,
 	if (use_system_offset) {
 		offset_time_ptr = get_system_offset_time_ptr (&offset_time);
 	} else {
-		if (try_get_valid_offset_time (offset_time_field,
+		if (try_get_valid_offset_time (ctx, offset_time_field,
 					       &offset_time)) {
 			goto invalid_args;
 		} else {
@@ -6704,14 +7787,14 @@ cob_intr_formatted_time (const int offset, const int length,
 		}
 	}
 
-	format_time (format, whole_seconds, fractional_seconds, offset_time_ptr,
+	format_time (ctx, format, whole_seconds, fractional_seconds, offset_time_ptr,
 		     buff);
 
 	memcpy (curr_field->data, buff, field_length);
 	goto end_of_func;
 
  invalid_args:
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	memset (curr_field->data, ' ', strlen (format_str));
 
  end_of_func:
@@ -6722,8 +7805,32 @@ cob_intr_formatted_time (const int offset, const int length,
 }
 
 cob_field *
-cob_intr_formatted_datetime (const int offset, const int length,
-			     const int params, ...)
+cob_intr_formatted_time_ctx (cob_context *ctx, const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_formatted_time_va_ctx (ctx, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_formatted_time without context */
+cob_field *
+cob_intr_formatted_time (const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_formatted_time_va_ctx (COB_CTX_COMPAT, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_formatted_datetime_va_ctx (cob_context *ctx, const int offset, const int length, const int params, va_list cob_va_args)
 {
 	va_list		args;
 	cob_field	*fmt_field;
@@ -6747,12 +7854,12 @@ cob_intr_formatted_datetime (const int offset, const int length,
 
 	if (!(params == 4 || params == 5)) {
 		COB_FIELD_INIT (0, NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		goto invalid_args;
 	}
 
 	/* Get arguments */
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 
 	fmt_field = va_arg (args, cob_field *);
 	days_field = va_arg (args, cob_field *);
@@ -6771,17 +7878,17 @@ cob_intr_formatted_datetime (const int offset, const int length,
 	field_length = strlen (fmt_str);
 
 	COB_FIELD_INIT (field_length, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Validate the formats, dates and times */
 	if (!cob_valid_datetime_format (fmt_str, COB_MODULE_PTR->decimal_point)) {
 		goto invalid_args;
 	}
 
-	days = cob_get_int (days_field);
-	whole_seconds = cob_get_int (time_field);
+	days = cob_get_int_ctx (ctx, days_field);
+	whole_seconds = cob_get_int_ctx (ctx, time_field);
 
 	if (!valid_integer_date (days) || !valid_time (whole_seconds)) {
 		goto invalid_args;
@@ -6795,7 +7902,7 @@ cob_intr_formatted_datetime (const int offset, const int length,
 	if (use_system_offset) {
 		offset_time_ptr = get_system_offset_time_ptr (&offset_time);
 	} else {
-		if (try_get_valid_offset_time (offset_time_field,
+		if (try_get_valid_offset_time (ctx, offset_time_field,
 					       &offset_time)) {
 			goto invalid_args;
 		} else {
@@ -6807,16 +7914,16 @@ cob_intr_formatted_datetime (const int offset, const int length,
 	/* Format */
 
 	fractional_seconds = &d1;
-	get_fractional_seconds (time_field, fractional_seconds);
+	get_fractional_seconds (ctx, time_field, fractional_seconds);
 
-	format_datetime (date_fmt, time_fmt, days, whole_seconds,
+	format_datetime (ctx, date_fmt, time_fmt, days, whole_seconds,
 			 fractional_seconds, offset_time_ptr, buff);
 
 	memcpy (curr_field->data, buff, (size_t) field_length);
 	goto end_of_func;
 
  invalid_args:
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 	memset (curr_field->data, ' ', strlen (fmt_str));
 
  end_of_func:
@@ -6827,7 +7934,32 @@ cob_intr_formatted_datetime (const int offset, const int length,
 }
 
 cob_field *
-cob_intr_test_formatted_datetime (cob_field *format_field,
+cob_intr_formatted_datetime_ctx (cob_context *ctx, const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_formatted_datetime_va_ctx (ctx, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_formatted_datetime without context */
+cob_field *
+cob_intr_formatted_datetime (const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_formatted_datetime_va_ctx (COB_CTX_COMPAT, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+cob_field *
+cob_intr_test_formatted_datetime_ctx (cob_context *ctx, cob_field *format_field,
 				  cob_field *datetime_field)
 {
 	char	datetime_format_str[COB_DATETIMESTR_LEN] = { '\0' };
@@ -6841,7 +7973,7 @@ cob_intr_test_formatted_datetime (cob_field *format_field,
 	int	time_part_offset;
 	int	error_pos;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Copy to null-terminated strings */
 	copy_data_to_null_terminated_str (format_field, datetime_format_str,
@@ -6898,37 +8030,44 @@ cob_intr_test_formatted_datetime (cob_field *format_field,
 		error_pos = test_formatted_date (parse_date_format_string (date_format_str),
 						 formatted_date, !time_present);
 		if (error_pos != 0) {
-			cob_alloc_set_field_uint (error_pos);
+			cob_alloc_set_field_uint (ctx, error_pos);
 			goto end_of_func;
 		}
 	}
 	if (date_present && time_present
 	    && formatted_datetime[strlen (formatted_date)] != 'T') {
-		cob_alloc_set_field_uint ((unsigned int)strlen (formatted_date) + 1U);
+		cob_alloc_set_field_uint (ctx, (unsigned int)strlen (formatted_date) + 1U);
 		goto end_of_func;
 	}
 	if (time_present) {
 		error_pos = test_formatted_time (parse_time_format_string (time_format_str),
 						 formatted_time, COB_MODULE_PTR->decimal_point);
 		if (error_pos != 0) {
-			cob_alloc_set_field_uint (time_part_offset + error_pos);
+			cob_alloc_set_field_uint (ctx, time_part_offset + error_pos);
 			goto end_of_func;
 		}
 	}
 
-	cob_alloc_set_field_uint (0);
+	cob_alloc_set_field_uint (ctx, 0);
 	goto end_of_func;
 
  invalid_args:
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-	cob_alloc_set_field_uint (0);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+	cob_alloc_set_field_uint (ctx, 0);
 
  end_of_func:
 	return curr_field;
 }
 
+/* compatibility: cob_intr_test_formatted_datetime without context */
 cob_field *
-cob_intr_integer_of_formatted_date (cob_field *format_field,
+cob_intr_test_formatted_datetime (cob_field *format_field, cob_field *datetime_field)
+{
+	return cob_intr_test_formatted_datetime_ctx (COB_CTX_COMPAT, format_field, datetime_field);
+}
+
+cob_field *
+cob_intr_integer_of_formatted_date_ctx (cob_context *ctx, cob_field *format_field,
 				    cob_field *date_field)
 {
 	char	original_format_str[COB_DATETIMESTR_LEN] = { '\0' };
@@ -6938,7 +8077,7 @@ cob_intr_integer_of_formatted_date (cob_field *format_field,
 	int	is_date;
 	struct date_format date_fmt;
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	copy_data_to_null_terminated_str (format_field, original_format_str,
 					  COB_DATETIMESTR_MAX);
@@ -6967,22 +8106,29 @@ cob_intr_integer_of_formatted_date (cob_field *format_field,
 		goto invalid_args;
 	}
 
-	cob_alloc_set_field_uint (integer_of_formatted_date (date_fmt, date_str));
+	cob_alloc_set_field_uint (ctx, integer_of_formatted_date (ctx, date_fmt, date_str));
 	goto end_of_func;
 
  invalid_args:
-	cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
-	cob_alloc_set_field_uint (0);
+	cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
+	cob_alloc_set_field_uint (ctx, 0);
 
  end_of_func:
 	return curr_field;
+}
+
+/* compatibility: cob_intr_integer_of_formatted_date without context */
+cob_field *
+cob_intr_integer_of_formatted_date (cob_field *format_field, cob_field *date_field)
+{
+	return cob_intr_integer_of_formatted_date_ctx (COB_CTX_COMPAT, format_field, date_field);
 }
 
 /* implementation of FUNCTION FORMATTED-CURRENT-DATE,
    using the actual current date adjusted/replaced with COB_CURRENT_DATE
    with a specified formatting */
 cob_field *
-cob_intr_formatted_current_date (const int offset, const int length,
+cob_intr_formatted_current_date_ctx (cob_context *ctx, const int offset, const int length,
 				 cob_field *format_field)
 {
 	cob_field	field;
@@ -6999,13 +8145,13 @@ cob_intr_formatted_current_date (const int offset, const int length,
 	field_length = strlen (format_str);
 
 	COB_FIELD_INIT (field_length, NULL, &const_alpha_attr);
-	make_field_entry (&field);
+	make_field_entry (ctx, &field);
 
-	cobglobptr->cob_exception_code = 0;
+	ctx->glob.cob_exception_code = 0;
 
 	/* Validate format */
 	if (!cob_valid_datetime_format (format_str, COB_MODULE_PTR->decimal_point)) {
-		cob_set_exception (COB_EC_ARGUMENT_FUNCTION);
+		cob_set_exception_ctx (ctx, COB_EC_ARGUMENT_FUNCTION);
 		memset (curr_field->data, ' ', field_length);
 		goto end_of_func;
 	}
@@ -7016,7 +8162,7 @@ cob_intr_formatted_current_date (const int offset, const int length,
 	time_fmt = parse_time_format_string (time_format_str);
 
 	/* Format current date */
-	format_current_date (date_fmt, time_fmt, formatted_date);
+	format_current_date (ctx, date_fmt, time_fmt, formatted_date);
 	memcpy (curr_field->data, formatted_date, field_length);
 
  end_of_func:
@@ -7026,6 +8172,13 @@ cob_intr_formatted_current_date (const int offset, const int length,
 	return curr_field;
 }
 
+/* compatibility: cob_intr_formatted_current_date without context */
+cob_field *
+cob_intr_formatted_current_date (const int offset, const int length, cob_field *format_field)
+{
+	return cob_intr_formatted_current_date_ctx (COB_CTX_COMPAT, offset, length, format_field);
+}
+
 /**
   FUNCTION CONTENT-LENGTH(pointer).  NUMERIC.
 
@@ -7033,12 +8186,12 @@ cob_intr_formatted_current_date (const int offset, const int length,
   addressed by the given pointer.
 **/
 cob_field *
-cob_intr_content_length (cob_field *srcfield)
+cob_intr_content_length_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	unsigned char	*pointed;
 	cob_u32_t	val = 0;
 
-	cob_set_exception (0);
+	cob_set_exception_ctx (ctx, 0);
 	if (srcfield) {
 		pointed = *((unsigned char **)srcfield->data);
 	} else {
@@ -7048,10 +8201,17 @@ cob_intr_content_length (cob_field *srcfield)
 	if (pointed && *pointed) {
 		val = (cob_u32_t)strlen ((char *)pointed);
 	} else {
-		cob_set_exception (COB_EC_DATA_PTR_NULL);
+		cob_set_exception_ctx (ctx, COB_EC_DATA_PTR_NULL);
 	}
-	cob_alloc_set_field_uint (val);
+	cob_alloc_set_field_uint (ctx, val);
 	return curr_field;
+}
+
+/* compatibility: cob_intr_content_length without context */
+cob_field *
+cob_intr_content_length (cob_field *srcfield)
+{
+	return cob_intr_content_length_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 /**
@@ -7062,8 +8222,8 @@ cob_intr_content_length (cob_field *srcfield)
   If the source pointer is null, points to null or an empty string,
   return a zero length space.
 **/
-cob_field *
-cob_intr_content_of (const int offset, const int length, const int params, ...)
+static cob_field *
+cob_intr_content_of_va_ctx (cob_context *ctx, const int offset, const int length, const int params, va_list cob_va_args)
 {
 	size_t          size = 0;
 	unsigned char   *pointed;
@@ -7073,13 +8233,13 @@ cob_intr_content_of (const int offset, const int length, const int params, ...)
 	cob_field       *srcfield;
 	cob_field       *lenfield;
 
-	cob_set_exception (0);
+	cob_set_exception_ctx (ctx, 0);
 
-	va_start (args, params);
+	va_copy (args, cob_va_args);
 	srcfield = va_arg(args, cob_field *);
 	if (params > 1) {
 		lenfield = va_arg (args, cob_field *);
-		request_len = cob_get_int (lenfield);
+		request_len = cob_get_int_ctx (ctx, lenfield);
 	} else {
 		request_len = 0;
 	}
@@ -7099,23 +8259,23 @@ cob_intr_content_of (const int offset, const int length, const int params, ...)
 			size = strlen ((char *)pointed);
 		}
 		if (size > COB_MAX_UNBOUNDED_SIZE) {
-			cob_set_exception (COB_EC_SIZE_TRUNCATION);
+			cob_set_exception_ctx (ctx, COB_EC_SIZE_TRUNCATION);
 			size = COB_MAX_UNBOUNDED_SIZE;
 		}
 	} else {
-		cob_set_exception (COB_EC_DATA_PTR_NULL);
+		cob_set_exception_ctx (ctx, COB_EC_DATA_PTR_NULL);
 		size = 0;
 	}
 	if (size != 0) {
 		COB_FIELD_INIT (size, NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		/* Testing for memory access permissions is canonically: */
 		/*   open fake pipe, use write and test for -1 and EFAULT */
 		/* Not used here, performance hit versus programmer error */
 		memcpy (curr_field->data, pointed, size);
 	} else {
 		COB_FIELD_INIT (1, NULL, &const_alpha_attr);
-		make_field_entry (&field);
+		make_field_entry (ctx, &field);
 		curr_field->data[0] = ' ';
 		curr_field->size = 0;
 	}
@@ -7125,100 +8285,226 @@ cob_intr_content_of (const int offset, const int length, const int params, ...)
 	return curr_field;
 }
 
+cob_field *
+cob_intr_content_of_ctx (cob_context *ctx, const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_content_of_va_ctx (ctx, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_content_of without context */
+cob_field *
+cob_intr_content_of (const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_content_of_va_ctx (COB_CTX_COMPAT, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
 /* RXWRXW - To be implemented */
 
 cob_field *
-cob_intr_boolean_of_integer (cob_field *f1, cob_field *f2)
+cob_intr_boolean_of_integer_ctx (cob_context *ctx, cob_field *f1, cob_field *f2)
 {
 	COB_UNUSED (f1);
 	COB_UNUSED (f2);
 
-	error_not_implemented ();
+	error_not_implemented (ctx);
+}
+
+/* compatibility: cob_intr_boolean_of_integer without context */
+cob_field *
+cob_intr_boolean_of_integer (cob_field *f1, cob_field *f2)
+{
+	return cob_intr_boolean_of_integer_ctx (COB_CTX_COMPAT, f1, f2);
 }
 
 /* implementation of FUNCTION CHAR-NATIONAL - character from ordinal
    FIXME: Not implemented, Should use the program's national program collating sequence! */
 cob_field *
-cob_intr_char_national (cob_field *srcfield)
+cob_intr_char_national_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	COB_UNUSED (srcfield);
 
-	error_not_implemented ();
+	error_not_implemented (ctx);
+}
+
+/* compatibility: cob_intr_char_national without context */
+cob_field *
+cob_intr_char_national (cob_field *srcfield)
+{
+	return cob_intr_char_national_ctx (COB_CTX_COMPAT, srcfield);
 }
 
 /* implementation of FUNCTION DISPLAY-OF - alphanumeric for national character
    FIXME: Not implemented! */
-cob_field *
-cob_intr_display_of (const int offset, const int length,
-		     const int params, ...)
+static cob_field *
+cob_intr_display_of_va_ctx (cob_context *ctx, const int offset, const int length, const int params, va_list cob_va_args)
 {
 	COB_UNUSED (offset);
 	COB_UNUSED (length);
 	COB_UNUSED (params);
 
-	error_not_implemented ();
+	error_not_implemented (ctx);
+}
+
+cob_field *
+cob_intr_display_of_ctx (cob_context *ctx, const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_display_of_va_ctx (ctx, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_display_of without context */
+cob_field *
+cob_intr_display_of (const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_display_of_va_ctx (COB_CTX_COMPAT, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
 }
 
 /* implementation of FUNCTION EXCEPTION-FILE-N
    national representation for filename that had an error last
    FIXME: Not implemented! */
 cob_field *
+cob_intr_exception_file_n_ctx (cob_context *ctx)
+{
+	error_not_implemented (ctx);
+}
+
+/* compatibility: cob_intr_exception_file_n without context */
+cob_field *
 cob_intr_exception_file_n (void)
 {
-	error_not_implemented ();
+	return cob_intr_exception_file_n_ctx (COB_CTX_COMPAT);
 }
 
 /* implementation of FUNCTION EXCEPTION-LOCATION-N
    national representation for location that had an error last
    FIXME: Not implemented! */
 cob_field *
+cob_intr_exception_location_n_ctx (cob_context *ctx)
+{
+	error_not_implemented (ctx);
+}
+
+/* compatibility: cob_intr_exception_location_n without context */
+cob_field *
 cob_intr_exception_location_n (void)
 {
-	error_not_implemented ();
+	return cob_intr_exception_location_n_ctx (COB_CTX_COMPAT);
 }
 
 cob_field *
-cob_intr_integer_of_boolean (cob_field *srcfield)
+cob_intr_integer_of_boolean_ctx (cob_context *ctx, cob_field *srcfield)
 {
 	COB_UNUSED (srcfield);
 
-	error_not_implemented ();
+	error_not_implemented (ctx);
 }
 
+/* compatibility: cob_intr_integer_of_boolean without context */
 cob_field *
-cob_intr_national_of (const int offset, const int length, const int params, ...)
+cob_intr_integer_of_boolean (cob_field *srcfield)
+{
+	return cob_intr_integer_of_boolean_ctx (COB_CTX_COMPAT, srcfield);
+}
+
+static cob_field *
+cob_intr_national_of_va_ctx (cob_context *ctx, const int offset, const int length, const int params, va_list cob_va_args)
 {
 	COB_UNUSED (offset);
 	COB_UNUSED (length);
 	COB_UNUSED (params);
 
-	error_not_implemented ();
+	error_not_implemented (ctx);
 }
 
 cob_field *
-cob_intr_standard_compare (const int params, ...)
+cob_intr_national_of_ctx (cob_context *ctx, const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_national_of_va_ctx (ctx, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_national_of without context */
+cob_field *
+cob_intr_national_of (const int offset, const int length, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_national_of_va_ctx (COB_CTX_COMPAT, offset, length, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+static cob_field *
+cob_intr_standard_compare_va_ctx (cob_context *ctx, const int params, va_list cob_va_args)
 {
 	COB_UNUSED (params);
 
-	error_not_implemented ();
+	error_not_implemented (ctx);
+}
+
+cob_field *
+cob_intr_standard_compare_ctx (cob_context *ctx, const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_standard_compare_va_ctx (ctx, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
+}
+
+/* compatibility: cob_intr_standard_compare without context */
+cob_field *
+cob_intr_standard_compare (const int params, ...)
+{
+	va_list		cob_va_args;
+	cob_field *	cob_va_ret;
+
+	va_start (cob_va_args, params);
+	cob_va_ret = cob_intr_standard_compare_va_ctx (COB_CTX_COMPAT, params, cob_va_args);
+	va_end (cob_va_args);
+	return cob_va_ret;
 }
 
 /* Initialization/exit routines */
 
+/* free the state of intrinsic.c of a context */
 void
-cob_exit_intrinsic (void)
+cob_exit_intrinsic_context (cob_context *ctx)
 {
-	if (set_cob_sqrt_two) {
-		mpf_clear (cob_sqrt_two);
-	}
-	if (set_cob_pi) {
-		mpf_clear (cob_pi);
-	}
-	if (set_cob_log_half) {
-		mpf_clear (cob_log_half);
-	}
-	if (set_cob_log_ten) {
-		mpf_clear (cob_log_ten);
+	if (ctx == NULL || ctx->intrinsic == NULL) {
+		return;
 	}
 #ifndef DISABLE_GMP_RANDOM
 	if (rand_needs_seeding == 0) {
@@ -7250,16 +8536,44 @@ cob_exit_intrinsic (void)
 		}
 		cob_free (calc_base);
 	}
+
+	cob_free (ctx->intrinsic);
+	ctx->intrinsic = NULL;
 }
 
+/* end of the runtime: state of the main context and constants */
 void
-cob_init_intrinsic (cob_global *lptr)
+cob_exit_intrinsic (cob_context *ctx)
+{
+	if (ctx == NULL || ctx->intrinsic == NULL) {
+		return;
+	}
+	cob_exit_intrinsic_context (ctx);
+
+	if (set_cob_sqrt_two) {
+		mpf_clear (cob_sqrt_two);
+	}
+	if (set_cob_pi) {
+		mpf_clear (cob_pi);
+	}
+	if (set_cob_log_half) {
+		mpf_clear (cob_log_half);
+	}
+	if (set_cob_log_ten) {
+		mpf_clear (cob_log_ten);
+	}
+}
+
+/* allocate the state of intrinsic.c of a context (the constants are
+   computed on first use) */
+void
+cob_init_intrinsic (cob_context *ctx, cob_global *lptr)
 {
 	struct calc_struct	*calc_temp;
 	cob_u32_t		i;
 
-	cobglobptr = lptr;
-
+	ctx->intrinsic = cob_malloc (sizeof (struct cob_intrinsic_state));
+	rand_needs_seeding = 1;
 	move_field = NULL;
 	curr_entry = 0;
 	curr_field = NULL;
