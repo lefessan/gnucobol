@@ -770,6 +770,8 @@ static struct unit_text	*unit_members = NULL;		/* shared data */
 static struct unit_text	*unit_members_last = NULL;
 static struct unit_text	*unit_names = NULL;		/* their names */
 static struct unit_text	*unit_names_last = NULL;
+static struct unit_text	*unit_aliases = NULL;		/* other macros */
+static struct unit_text	*unit_aliases_last = NULL;
 static struct unit_text	*unit_inits = NULL;		/* initializations */
 static struct unit_text	*unit_inits_last = NULL;
 
@@ -1191,6 +1193,9 @@ output_unit_instance (void)
 		for (t = unit_names; t; t = t->next) {
 			output_storage ("#define %s\t(unit->%s)\n", t->text, t->text);
 		}
+		for (t = unit_aliases; t; t = t->next) {
+			output_storage ("%s\n", t->text);
+		}
 	}
 	output_storage ("\n/* Slot of the compilation unit, set once for all contexts */\n");
 	output_storage ("static unsigned int\tcob_unit_slot = 0;\n");
@@ -1208,6 +1213,7 @@ output_unit_instance (void)
 
 	unit_members = unit_members_last = NULL;
 	unit_names = unit_names_last = NULL;
+	unit_aliases = unit_aliases_last = NULL;
 	unit_inits = unit_inits_last = NULL;
 	unit_progs = unit_progs_last = NULL;
 }
@@ -2457,7 +2463,7 @@ output_call_cache (void)
 		/* note: we explicit do _not_ initialize it directly as that
 		   will more likely lead to a non-consecutive memory layout,
 		   which makes the whole purpose of the fence useless */
-		output_local ("static char\tcall_fence_pre[8];\n");
+		output_prog_member ("call_fence_pre", "char\tcall_fence_pre[8];");
 	}
 	call_cache = call_list_reverse (call_cache);
 	for (call = call_cache; call; call = call->next) {
@@ -2471,7 +2477,7 @@ output_call_cache (void)
 	}
 	if ((call_cache || func_call_cache)
 	 && (cb_flag_memory_check & CB_MEMCHK_POINTER)) {
-		output_local ("static char\tcall_fence_post[8];\n");
+		output_prog_member ("call_fence_post", "char\tcall_fence_post[8];");
 	}
 	if (static_call_cache) {
 		const char			*convention_modifier;
@@ -3027,21 +3033,88 @@ compute_align_size (size_t fs, int dflt)
 /*
  * Emit storage collector variable
  */
+
+/* aligned data area 'name' of 'size' bytes, member of the instance (of
+   the program or shared); note: '#pragma align' (COB_ALIGN_PRAGMA_8)
+   cannot be used for a member, COB_ALIGN_DECL_8 / COB_ALIGN_ATTR_8 are */
+static void
+output_instance_bytes (const int shared, const char *name, const long size)
+{
+#ifdef  HAVE_ATTRIBUTE_ALIGNED
+	if (shared) {
+		output_unit_member (name, "cob_u8_t\t%s[%ld]%s;", name, size, COB_ALIGN);
+	} else {
+		output_prog_member (name, "cob_u8_t\t%s[%ld]%s;", name, size, COB_ALIGN);
+	}
+#else
+	if (shared) {
+		output_unit_member (name, "%scob_u8_t%s\t%s[%ld];",
+			COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8, name, size);
+	} else {
+		output_prog_member (name, "%scob_u8_t%s\t%s[%ld];",
+			COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8, name, size);
+	}
+#endif
+}
+
+/* data area 'name' of 'size' bytes with memory fences 'name'_fence_pre
+   and 'name'_fence_post around it (-fmemory-check), member of the
+   instance: the three arrays are in one structure, so that they are
+   consecutive (no alignment padding between them) */
+static void
+output_instance_fenced_bytes (const int shared, const char *name, const long size)
+{
+	char	area[COB_MINI_BUFF];
+
+	snprintf (area, sizeof (area), "%s_area", name);
+#ifndef HAVE_ATTRIBUTE_ALIGNED
+#define COB_ALIGN	""
+#endif
+	if (shared) {
+		output_unit_member (area,
+			"struct { cob_u8_t pre[8]; cob_u8_t data[%ld]; cob_u8_t post[8]; } %s%s;",
+			size, area, COB_ALIGN);
+		unit_text_add_str (&unit_aliases, &unit_aliases_last,
+			"#define %s\t(%s.data)", name, area);
+		unit_text_add_str (&unit_aliases, &unit_aliases_last,
+			"#define %s_fence_pre\t(%s.pre)", name, area);
+		unit_text_add_str (&unit_aliases, &unit_aliases_last,
+			"#define %s_fence_post\t(%s.post)", name, area);
+	} else {
+		output_prog_member (area,
+			"struct { cob_u8_t pre[8]; cob_u8_t data[%ld]; cob_u8_t post[8]; } %s%s;",
+			size, area, COB_ALIGN);
+		output_local ("#define %s\t(%s.data)\n", name, area);
+		output_local ("#define %s_fence_pre\t(%s.pre)\n", name, area);
+		output_local ("#define %s_fence_post\t(%s.post)\n", name, area);
+		unit_text_add_str (&prog_names, &prog_names_last, "%s", name);
+		unit_text_add_str (&prog_names, &prog_names_last, "%s_fence_pre", name);
+		unit_text_add_str (&prog_names, &prog_names_last, "%s_fence_post", name);
+	}
+#ifndef HAVE_ATTRIBUTE_ALIGNED
+#undef COB_ALIGN
+#endif
+}
+
+/* data area of an index, member of the instance */
+static void
+output_instance_int (const int shared, const char *name)
+{
+	if (shared) {
+		output_unit_member (name, "int\t%s;", name);
+	} else {
+		output_prog_member (name, "int\t%s;", name);
+	}
+}
+
 static void
 output_local_ws_group (void)
 {
 	if (ws_used > 0
 	 && cb_align_record) {
-#ifdef  HAVE_ATTRIBUTE_ALIGNED
-		output_local ("static cob_u8_t	%s%d[%ld]%s;",
-				  CB_PREFIX_WS_GROUP, ws_id, (long)ws_used, COB_ALIGN);
-#else
-#if defined(COB_ALIGN_PRAGMA_8)
-		output_local ("#pragma align 8 (%s%d)\n", CB_PREFIX_WS_GROUP, ws_id);
-#endif
-		output_local ("static %scob_u8_t%s	%s%d[%ld];",
-				  COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8, CB_PREFIX_WS_GROUP, ws_id, (long)ws_used);
-#endif
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "%s%d", CB_PREFIX_WS_GROUP, ws_id);
+		output_instance_bytes (0, name, (long)ws_used);
 	}
 }
 
@@ -3065,10 +3138,25 @@ output_local_base_cache (void)
 	ws_used = 0;
 	for (blp = local_base_cache; blp; blp = blp->next) {
 		const struct cb_field *fld = blp->f;
+		char	name[COB_MINI_BUFF];
+		/* data area with consecutive memory fences */
+		const int	fenced = fld->flag_used_in_call
+			&& fld->index_type != CB_INT_INDEX
+			&& fld->index_type != CB_STATIC_INT_INDEX
+			&& !(fld->report_flag & COB_REPORT_REF_EMITTED)
+			&& (!cb_align_record || fld->memory_size >= COB_MAX_CHAR_SIZE);
+		if (fenced) {
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, fld->id);
+			output_instance_fenced_bytes (0, name, (long)fld->memory_size);
+			optimize_defs[COB_CHK_MEMORYFENCE] = 1;
+			output_local ("\t/* %s */\n", get_field_name (fld));
+			continue;
+		}
 		if (fld->flag_used_in_call) {
 			if (fld->index_type != CB_INT_INDEX) {
-				output_local ("static ");
-			}
+				snprintf (name, sizeof (name), "%s%d_fence_pre", CB_PREFIX_BASE, fld->id);
+				output_instance_bytes (0, name, 8L);
+			} else {
 #ifdef  HAVE_ATTRIBUTE_ALIGNED
 			output_local ("cob_u8_t	%s%d_fence_pre[8]%s;\n",
 				CB_PREFIX_BASE, fld->id, COB_ALIGN);
@@ -3077,6 +3165,7 @@ output_local_base_cache (void)
 				COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8,
 				CB_PREFIX_BASE, fld->id);
 #endif
+			}
 			optimize_defs[COB_CHK_MEMORYFENCE] = 1;
 			/* note: we explicit do _not_ initialize it directly as that
 			   will more likely lead to a non-consecutive memory layout,
@@ -3086,23 +3175,13 @@ output_local_base_cache (void)
 			output_local ("int		%s%d;",
 				      CB_PREFIX_BASE, fld->id);
 		} else if (fld->index_type == CB_STATIC_INT_INDEX) {
-			output_local ("static int	%s%d;",
-				      CB_PREFIX_BASE, fld->id);
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, fld->id);
+			output_instance_int (0, name);
 		} else if( !(fld->report_flag & COB_REPORT_REF_EMITTED)) {
 			if (!cb_align_record
 			 || fld->memory_size >= COB_MAX_CHAR_SIZE) {
-#ifdef  HAVE_ATTRIBUTE_ALIGNED
-				output_local ("static cob_u8_t	%s%d[%d]%s;",
-					      CB_PREFIX_BASE, fld->id,
-					      fld->memory_size, COB_ALIGN);
-#else
-#if defined(COB_ALIGN_PRAGMA_8)
-				output_local ("#pragma align 8 (%s%d)\n", CB_PREFIX_BASE, fld->id);
-#endif
-				output_local ("static %scob_u8_t%s	%s%d[%d];",
-					      COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8, CB_PREFIX_BASE,
-					      fld->id, fld->memory_size);
-#endif
+				snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, fld->id);
+				output_instance_bytes (0, name, (long)fld->memory_size);
 			} else {
 				fs = compute_align_size (fld->memory_size, 1);
 				if (ws_used + fs > COB_MAX_CHAR_SIZE) {
@@ -3119,8 +3198,9 @@ output_local_base_cache (void)
 		output_local ("\t/* %s */\n", get_field_name (fld));
 		if (fld->flag_used_in_call) {
 			if (fld->index_type != CB_INT_INDEX) {
-				output_local ("static ");
-			}
+				snprintf (name, sizeof (name), "%s%d_fence_post", CB_PREFIX_BASE, fld->id);
+				output_instance_bytes (0, name, 8L);
+			} else {
 #ifdef  HAVE_ATTRIBUTE_ALIGNED
 			output_local ("cob_u8_t	%s%d_fence_post[8]%s;\n",
 				CB_PREFIX_BASE, fld->id, COB_ALIGN);
@@ -3129,6 +3209,7 @@ output_local_base_cache (void)
 				COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8,
 				CB_PREFIX_BASE, fld->id);
 #endif
+			}
 		}
 	}
 
@@ -3152,59 +3233,40 @@ output_nonlocal_base_cache (void)
 
 	for (blp = base_cache; blp; blp = blp->next) {
 		const struct cb_field *fld = blp->f;
+		char	name[COB_MINI_BUFF];
 		if (blp->curr_prog != prev_prog) {
 			prev_prog = blp->curr_prog;
 			output_storage ("\n/* PROGRAM-ID : %s */\n",
 					prev_prog);
 		}
 
+		if (fld->flag_used_in_call
+		 && fld->index_type == CB_NORMAL_INDEX) {
+			/* data area with consecutive memory fences */
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, fld->id);
+			output_instance_fenced_bytes (1, name, (long)fld->memory_size);
+			optimize_defs[COB_CHK_MEMORYFENCE] = 1;
+			output_storage ("/* %s: %s */\n", name, fld->name);
+			continue;
+		}
 		if (fld->flag_used_in_call) {
-#ifdef  HAVE_ATTRIBUTE_ALIGNED
-			output_storage ("static cob_u8_t	%s%d_fence_pre[8]%s;\n",
-				CB_PREFIX_BASE, fld->id, COB_ALIGN);
-#else
-#if defined(COB_ALIGN_PRAGMA_8)
-			output_storage ("#pragma align 8 (%s%d_fence_pre)\n", CB_PREFIX_BASE, fld->id);
-#endif
-			output_storage ("static %scob_u8_t%s	%s%d_fence_pre[8];\n",
-				COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8,
-				CB_PREFIX_BASE, fld->id);
-#endif
+			snprintf (name, sizeof (name), "%s%d_fence_pre", CB_PREFIX_BASE, fld->id);
+			output_instance_bytes (1, name, 8L);
 			optimize_defs[COB_CHK_MEMORYFENCE] = 1;
 			/* note: we explicit do _not_ initialize it directly as that
 			   will more likely lead to a non-consecutive memory layout,
 			   which makes the whole purpose of the fence useless */
 		}
+		snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, fld->id);
 		if (fld->index_type != CB_NORMAL_INDEX) {
-			output_storage ("static int	  %s%d;",
-					CB_PREFIX_BASE, fld->id);
+			output_instance_int (1, name);
 		} else {
-#ifdef  HAVE_ATTRIBUTE_ALIGNED
-			output_storage ("static cob_u8_t	%s%d[%d]%s;",
-				      CB_PREFIX_BASE, fld->id,
-				      fld->memory_size, COB_ALIGN);
-#else
-#if defined(COB_ALIGN_PRAGMA_8)
-			output_storage ("#pragma align 8 (%s%d)\n", CB_PREFIX_BASE, fld->id);
-#endif
-			output_storage ("static %scob_u8_t%s	%s%d[%d];",
-				      COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8, CB_PREFIX_BASE,
-				      fld->id, fld->memory_size);
-#endif
+			output_instance_bytes (1, name, (long)fld->memory_size);
 		}
-		output_storage ("\t/* %s */\n", fld->name);
+		output_storage ("/* %s: %s */\n", name, fld->name);
 		if (fld->flag_used_in_call) {
-#ifdef  HAVE_ATTRIBUTE_ALIGNED
-			output_storage ("static cob_u8_t	%s%d_fence_post[8]%s;\n",
-				CB_PREFIX_BASE, fld->id, COB_ALIGN);
-#else
-#if defined(COB_ALIGN_PRAGMA_8)
-			output_storage ("#pragma align 8 (%s%d_fence_post)\n", CB_PREFIX_BASE, fld->id);
-#endif
-			output_storage ("static %scob_u8_t%s	%s%d_fence_post[8];\n",
-				COB_ALIGN_DECL_8, COB_ALIGN_ATTR_8,
-				CB_PREFIX_BASE, fld->id);
-#endif
+			snprintf (name, sizeof (name), "%s%d_fence_post", CB_PREFIX_BASE, fld->id);
+			output_instance_bytes (1, name, 8L);
 		}
 	}
 
