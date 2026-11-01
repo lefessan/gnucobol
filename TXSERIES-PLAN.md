@@ -332,6 +332,9 @@ Conséquences pour `cobc/codegen.c` :
   - environnement COBOL par contexte (surcharges `setenv` dans `ctx`) ;
   - verrous d'enregistrements : `F_OFD_SETLK` ou table de verrous
     interne (les verrous `fcntl` classiques sont par processus) ;
+  - code généré : caches `call_X` / `func_X` (écriture concurrente
+    d'un pointeur, même valeur ; CANCEL les remet à NULL) et
+    `cob_reference_count` (incréments atomiques) ;
   - BDB `DB_THREAD` + un locker par tâche, cache d'environnements LMDB
     par chemin, connexions ODBC/OCI par tâche, mutex global pour les
     ISAM non thread-safe, libltdl sous verrou.
@@ -413,6 +416,18 @@ Conséquences pour `cobc/codegen.c` :
 3. **J3** : T1.3 + T1.4 — libcob sans état global mutable, thread-safe.
 4. **J4** : T1.5 + T1.6 — instances de programme par contexte, banc de
    test multi-thread.
+   **T1.5 fait le 2026-11-01** (un seul contexte testé) : une instance
+   par unité de compilation et par contexte (`cob_unit_enter`,
+   `ctx->units`), données de chaque programme dans une sous-structure,
+   accès par macros (DESIGN §4.2). Convertis, une famille par commit :
+   écrans, arbres XML, décimaux, étiquettes, pointeurs sauvés ;
+   EXTERNAL / BASED / LINKAGE ; rapports ; champs ; zones de données ;
+   `initialized` / `module` ; paramètres de `-fsticky-linkage`. Les
+   constantes figuratives et les champs des tables de collation sont
+   devenus `const`. Restent `static` dans le code généré : constantes,
+   slot de l'unité, caches de résolution des `CALL` (`call_X`,
+   `func_X`), `cob_module_path`, `cob_reference_count` (compteur de
+   niveau processus pour le `dlclose` : à rendre atomique en T1.4).
 5. **J5** : T1.7 — mesures et optimisations.
 
 ### Risques
