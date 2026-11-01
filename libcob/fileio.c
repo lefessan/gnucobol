@@ -10434,11 +10434,15 @@ cob_exit_fileio_closeall (cob_context *ctx)
 	}
 }
 
-void
-cob_exit_fileio (cob_context *ctx)
+/* free the state of fileio.c of the context */
+static void
+cob_exit_fileio_state (cob_context *ctx)
 {
-	cob_exit_fileio_closeall (ctx);
+	free_extfh_fcd (ctx);
 
+	if (ctx->fileio == NULL) {
+		return;
+	}
 	if (runtime_buffer) {
 		cob_free (runtime_buffer);
 		runtime_buffer = NULL;
@@ -10451,9 +10455,6 @@ cob_exit_fileio (cob_context *ctx)
 		cob_cache_free_ctx (ctx, qbl_tmp);
 		qbl_tmp = NULL;
 	}
-
-	free_extfh_fcd (ctx);
-
 	{
 		struct file_list	*l, *p;
 		for (l = file_cache; l;) {
@@ -10463,11 +10464,42 @@ cob_exit_fileio (cob_context *ctx)
 		}
 		file_cache = NULL;
 	}
+	cob_free (ctx->fileio);
+	ctx->fileio = NULL;
+}
 
-	if (ctx->fileio != NULL) {
-		cob_free (ctx->fileio);
-		ctx->fileio = NULL;
+void
+cob_exit_fileio (cob_context *ctx)
+{
+	cob_exit_fileio_closeall (ctx);
+	cob_exit_fileio_state (ctx);
+}
+
+/* end of a context other than the main one: close its open files, that
+   are in the instances of its programs, and free its state; the
+   backends stay initialized for the other contexts */
+void
+cob_exit_fileio_context (cob_context *ctx)
+{
+	struct file_list	*l, *next;
+
+	if (ctx->fileio == NULL) {
+		free_extfh_fcd (ctx);
+		return;
 	}
+	if (qblfd != -1) {
+		cob_close_qbl (ctx, qblfd, qblfilename, 1);
+		qblfd = -1;
+	}
+	for (l = file_cache; l; l = next) {
+		next = l->next;
+		if (l->file
+		 && l->file->open_mode != COB_OPEN_CLOSED
+		 && l->file->open_mode != COB_OPEN_LOCKED) {
+			cob_close_ctx (ctx, l->file, NULL, COB_CLOSE_NORMAL, 0);
+		}
+	}
+	cob_exit_fileio_state (ctx);
 }
 
 void

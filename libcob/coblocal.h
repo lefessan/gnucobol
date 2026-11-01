@@ -482,6 +482,7 @@ COB_HIDDEN void		cob_exit_screen_from_signal	(cob_context *, int);
 COB_HIDDEN void		cob_exit_numeric	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio_msg_only	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio		(cob_context *);
+COB_HIDDEN void		cob_exit_fileio_context	(cob_context *);
 COB_HIDDEN void		cob_exit_reportio	(cob_context *);
 COB_HIDDEN void		cob_exit_call		(cob_context *);
 COB_HIDDEN void		cob_exit_cobcapi	(cob_context *);
