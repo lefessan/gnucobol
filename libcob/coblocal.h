@@ -449,6 +449,7 @@ struct config_tbl {
 COB_EXPIMP const char * cob_io_version	(const int, const int);
 COB_EXPIMP const char * cob_io_name		(const int);
 COB_HIDDEN void		cob_init_numeric	(cob_context *, cob_global *);
+COB_HIDDEN void		cob_init_numeric_context	(cob_context *);
 COB_HIDDEN void		cob_init_cconv		(cob_global *);
 COB_HIDDEN void		cob_init_termio		(cob_global *, cob_settings *);
 COB_HIDDEN void		cob_init_fileio		(cob_context *, cob_global *, cob_settings *);
@@ -480,6 +481,7 @@ COB_HIDDEN void		free_extfh_fcd		(cob_context *);
 COB_HIDDEN void		cob_exit_screen		(cob_context *);
 COB_HIDDEN void		cob_exit_screen_from_signal	(cob_context *, int);
 COB_HIDDEN void		cob_exit_numeric	(cob_context *);
+COB_HIDDEN void		cob_exit_numeric_context	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio_msg_only	(cob_context *);
 COB_HIDDEN void		cob_exit_fileio		(cob_context *);
 COB_HIDDEN void		cob_exit_fileio_context	(cob_context *);
@@ -487,6 +489,7 @@ COB_HIDDEN void		cob_exit_reportio	(cob_context *);
 COB_HIDDEN void		cob_exit_call		(cob_context *);
 COB_HIDDEN void		cob_exit_cobcapi	(cob_context *);
 COB_HIDDEN void		cob_exit_intrinsic	(cob_context *);
+COB_HIDDEN void		cob_exit_intrinsic_context	(cob_context *);
 COB_HIDDEN void		cob_exit_strings	(cob_context *);
 COB_HIDDEN void		cob_exit_mlio		(void);
 

@@ -8499,23 +8499,12 @@ cob_intr_standard_compare (const int params, ...)
 
 /* Initialization/exit routines */
 
+/* free the state of intrinsic.c of a context */
 void
-cob_exit_intrinsic (cob_context *ctx)
+cob_exit_intrinsic_context (cob_context *ctx)
 {
 	if (ctx == NULL || ctx->intrinsic == NULL) {
 		return;
-	}
-	if (set_cob_sqrt_two) {
-		mpf_clear (cob_sqrt_two);
-	}
-	if (set_cob_pi) {
-		mpf_clear (cob_pi);
-	}
-	if (set_cob_log_half) {
-		mpf_clear (cob_log_half);
-	}
-	if (set_cob_log_ten) {
-		mpf_clear (cob_log_ten);
 	}
 #ifndef DISABLE_GMP_RANDOM
 	if (rand_needs_seeding == 0) {
@@ -8552,6 +8541,31 @@ cob_exit_intrinsic (cob_context *ctx)
 	ctx->intrinsic = NULL;
 }
 
+/* end of the runtime: state of the main context and constants */
+void
+cob_exit_intrinsic (cob_context *ctx)
+{
+	if (ctx == NULL || ctx->intrinsic == NULL) {
+		return;
+	}
+	cob_exit_intrinsic_context (ctx);
+
+	if (set_cob_sqrt_two) {
+		mpf_clear (cob_sqrt_two);
+	}
+	if (set_cob_pi) {
+		mpf_clear (cob_pi);
+	}
+	if (set_cob_log_half) {
+		mpf_clear (cob_log_half);
+	}
+	if (set_cob_log_ten) {
+		mpf_clear (cob_log_ten);
+	}
+}
+
+/* allocate the state of intrinsic.c of a context (the constants are
+   computed on first use) */
 void
 cob_init_intrinsic (cob_context *ctx, cob_global *lptr)
 {

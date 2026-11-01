@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_init_numeric, cob_exit_numeric, cob_exit_intrinsic),
+	  intrinsic.c (cob_intr_standard_compare, cob_exit_intrinsic),
+	  numeric.c (cob_s64_pow, cob_exit_numeric, cob_init_numeric): separate
+	  the context and process parts of numeric/intrinsic init
 	* coblocal.h (cob_exit_fileio), fileio.c (cob_exit_fileio_closeall,
 	  cob_exit_fileio): cob_exit_fileio_context, end of fileio for one
 	  context
