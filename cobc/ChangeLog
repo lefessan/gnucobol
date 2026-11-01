@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (add_field_cache, output_local_storage_pointer,
+	  output_ml_attrs_definitions, output_ml_trees_definitions,
+	  output_alter_check, output_screen_definition, ...): screens, XML
+	  trees, decimals, labels, saved pointers in the instance
 	* codegen.c (unit_text_add, output_unit_member, unit_text_add_str,
 	  output_prog_member, output_unit_prog_end, output_unit_instance, ...):
 	  files and symbol table of the programs in the instance

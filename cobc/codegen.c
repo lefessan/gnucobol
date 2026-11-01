@@ -1336,8 +1336,11 @@ add_field_cache (struct cb_field *f01, struct cb_field *f)
 					output_local ("unsigned char\t\t*%s%d = NULL;",
 							CB_PREFIX_BASE, f01->id);
 					output_local ("\t/* %s */\n", f01->name);
-					output_local ("static unsigned char\t*save_%s%d;\n",
-							CB_PREFIX_BASE, f01->id);
+					{
+						char	name[COB_MINI_BUFF];
+						snprintf (name, sizeof (name), "save_%s%d", CB_PREFIX_BASE, f01->id);
+						output_prog_member (name, "unsigned char\t*%s;", name);
+					}
 				} else {
 					output_local ("unsigned char\t*%s%d = NULL;",
 							CB_PREFIX_BASE, f01->id);
@@ -2712,7 +2715,7 @@ output_local_storage_pointer (struct cb_program *prog)
 		output_local ("unsigned char\t\t*cob_local_ptr = NULL;\n");
 		if (prog->flag_global_use
 		 || cb_flag_symbols) {
-			output_local ("static unsigned char\t*cob_local_save = NULL;\n");
+			output_prog_member ("cob_local_save", "unsigned char\t*cob_local_save;");
 		}
 	}
 }
@@ -4394,8 +4397,11 @@ output_ml_attrs_definitions (struct cb_ml_generate_tree *attr)
 {
 	/* TO-DO: Where does xa_7 come from?? (See test.c.l.h) */
 	for (; attr; attr = attr->sibling) {
-		output_local ("static cob_ml_attr\t%s%d;\n",
-			      CB_PREFIX_ML_ATTR, attr->id);
+		{
+			char	name[COB_MINI_BUFF];
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_ML_ATTR, attr->id);
+			output_prog_member (name, "cob_ml_attr\t%s;", name);
+		}
 	}
 }
 
@@ -4405,7 +4411,11 @@ output_ml_trees_definitions (struct cb_ml_generate_tree *tree)
 	for (; tree; tree = tree->sibling) {
 		output_ml_attrs_definitions (tree->attrs);
 		output_ml_trees_definitions (tree->children);
-		output_local ("static cob_ml_tree\t%s%d;\n", CB_PREFIX_ML_TREE, tree->id);
+		{
+			char	name[COB_MINI_BUFF];
+			snprintf (name, sizeof (name), "%s%d", CB_PREFIX_ML_TREE, tree->id);
+			output_prog_member (name, "cob_ml_tree\t%s;", name);
+		}
 	}
 }
 
@@ -10193,11 +10203,17 @@ output_alter_check (const struct cb_label *lp)
 {
 	struct cb_alter_id	*aid;
 
-	output_local ("static int\tlabel_%s%d = 0;\n",
-		     CB_PREFIX_LABEL, lp->id);
+	{
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "label_%s%d", CB_PREFIX_LABEL, lp->id);
+		output_prog_member (name, "int\t%s;", name);
+	}
 	if (current_prog->flag_segments) {
-		output_local ("static int\tsave_label_%s%d = 0;\n",
-			     CB_PREFIX_LABEL, lp->id);
+		{
+			char	name[COB_MINI_BUFF];
+			snprintf (name, sizeof (name), "save_label_%s%d", CB_PREFIX_LABEL, lp->id);
+			output_prog_member (name, "int\t%s;", name);
+		}
 	}
 	output_newline ();
 	output_line ("/* ALTER processing */");
@@ -11403,7 +11419,11 @@ output_screen_definition (struct cb_field *p)
 		p->count++;
 	}
 
-	output_local ("static cob_screen\t%s%d;\n", CB_PREFIX_SCR_FIELD, p->id);
+	{
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "%s%d", CB_PREFIX_SCR_FIELD, p->id);
+		output_prog_member (name, "cob_screen\t%s;", name);
+	}
 }
 
 static void
@@ -13750,7 +13770,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		}
 		if (inc) {
 			output_local ("\n/* LINAGE pointer */\n");
-			output_local ("static cob_linage\t\t*lingptr;\n");
+			output_prog_member ("lingptr", "cob_linage\t*lingptr;");
 		}
 	}
 
@@ -13841,8 +13861,11 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_local ("/* Parameter save */\n");
 		for (l = parameter_list; l; l = CB_CHAIN (l)) {
 			f = cb_code_field (CB_VALUE (l));
-			output_local ("static unsigned char\t*save_%s%d;\n",
-				CB_PREFIX_BASE, f->id);
+			{
+				char	name[COB_MINI_BUFF];
+				snprintf (name, sizeof (name), "save_%s%d", CB_PREFIX_BASE, f->id);
+				output_prog_member (name, "unsigned char\t*%s;", name);
+			}
 		}
 		output_local ("\n");
 	}
@@ -15569,8 +15592,8 @@ output_cob_prof_data ( struct cb_program * program )
 		}
 		output_local ("};\n");
 
-		output_local ("static int fallthrough_label = 0;\n");
-		output_local ("static struct cob_prof_module *prof_info;\n");
+		output_prog_member ("fallthrough_label", "int\tfallthrough_label;");
+		output_prog_member ("prof_info", "struct cob_prof_module\t*prof_info;");
 
 		output_local ("\n/* End of cob_prof data */\n");
 
@@ -15926,10 +15949,16 @@ codegen_internal (struct cb_program *prog, const int subsequent_call)
 					comment_gen = 1;
 					output_local ("\n/* Decimal constants */\n");
 				}
-				output_local ("static\tcob_decimal\t%s%d;\n",
-						CB_PREFIX_DEC_FIELD, m->id);
-				output_local ("static\tcob_decimal\t*%s%d = NULL;\n",
-						CB_PREFIX_DEC_CONST, m->id);
+				{
+					char	name[COB_MINI_BUFF];
+					snprintf (name, sizeof (name), "%s%d", CB_PREFIX_DEC_FIELD, m->id);
+					output_prog_member (name, "cob_decimal\t%s;", name);
+				}
+				{
+					char	name[COB_MINI_BUFF];
+					snprintf (name, sizeof (name), "%s%d", CB_PREFIX_DEC_CONST, m->id);
+					output_prog_member (name, "cob_decimal\t*%s;", name);
+				}
 			}
 		}
 		if (comment_gen) {
