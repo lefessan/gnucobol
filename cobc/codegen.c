@@ -2111,9 +2111,9 @@ output_globext_cache (void)
 
 	globext_cache = list_cache_sort (globext_cache, &base_cache_cmp);
 	for (blp = globext_cache; blp; blp = blp->next) {
-		output_storage ("static unsigned char\t\t*%s%d = NULL;",
-				CB_PREFIX_BASE, blp->f->id);
-		output_storage ("\t/* %s */\n", blp->f->name);
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, blp->f->id);
+		output_unit_member (name, "unsigned char\t*%s;\t/* %s */", name, blp->f->name);
 	}
 }
 
@@ -13737,9 +13737,11 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 				seen = 1;
 				output_local ("/* EXTERNAL items */\n");
 			}
-			output_local ("static unsigned char\t*%s%d = NULL;",
-				      CB_PREFIX_BASE, f->id);
-			output_local ("  /* %s */\n", f->name);
+			{
+				char	name[COB_MINI_BUFF];
+				snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, f->id);
+				output_prog_member (name, "unsigned char\t*%s;\t/* %s */", name, f->name);
+			}
 		}
 	}
 	if (seen) {
@@ -13756,9 +13758,11 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 				globext_cache = bl;
 				continue;
 			}
-			output_local ("static unsigned char\t*%s%d = NULL;",
-				      CB_PREFIX_BASE, f->id);
-			output_local ("  /* %s */\n", f->name);
+			{
+				char	name[COB_MINI_BUFF];
+				snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, f->id);
+				output_prog_member (name, "unsigned char\t*%s;\t/* %s */", name, f->name);
+			}
 		}
 	}
 
@@ -13785,8 +13789,11 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 				seen = 1;
 				output_local("\n/* BASED WORKING-STORAGE SECTION */\n");
 			}
-			output_local ("static unsigned char\t*%s%d = NULL; /* %s */\n",
-				CB_PREFIX_BASE, f->id, f->name);
+			{
+				char	name[COB_MINI_BUFF];
+				snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, f->id);
+				output_prog_member (name, "unsigned char\t*%s;\t/* %s */", name, f->name);
+			}
 		}
 	}
 	if (seen) {
@@ -13804,8 +13811,11 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 				seen = 1;
 				output_local("\n/* BASED LOCAL-STORAGE */\n");
 			}
-			output_local ("static unsigned char\t*%s%d = NULL; /* %s */\n",
-				CB_PREFIX_BASE, f->id, f->name);
+			{
+				char	name[COB_MINI_BUFF];
+				snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, f->id);
+				output_prog_member (name, "unsigned char\t*%s;\t/* %s */", name, f->name);
+			}
 		}
 	}
 	if (seen) {
@@ -13829,10 +13839,13 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 				output_local ("\n/* LINKAGE SECTION (Items not referenced by USING clause) */\n");
 			}
 			if (!f->flag_is_returning) {
-				output_local ("static ");
+				char	name[COB_MINI_BUFF];
+				snprintf (name, sizeof (name), "%s%d", CB_PREFIX_BASE, f->id);
+				output_prog_member (name, "unsigned char\t*%s;\t/* %s */", name, f->name);
+			} else {
+				output_local ("unsigned char\t*%s%d = NULL;  /* %s */\n",
+					     CB_PREFIX_BASE, f->id, f->name);
 			}
-			output_local ("unsigned char\t*%s%d = NULL;  /* %s */\n",
-				     CB_PREFIX_BASE, f->id, f->name);
 		}
 	}
 	if (seen) {
@@ -15433,6 +15446,8 @@ output_function_prototypes (struct cb_program *prog)
 			for (l = cp->parameter_list; l; l = CB_CHAIN (l)) {
 				output (", cob_u8_t *");
 				if (cb_sticky_linkage) {
+					/* TODO (T1.5): set in the entry function, before
+					   the instance is known, stays static for now */
 					output_storage ("static cob_u8_t\t\t\t*cob_parm_%d = NULL;\n",
 							cb_code_field (CB_VALUE (l))->id);
 				}
