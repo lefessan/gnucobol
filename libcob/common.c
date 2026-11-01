@@ -784,14 +784,65 @@ cob_context_free (cob_context *ctx)
 	cob_free (ctx);
 }
 
+/* free the data of the run unit of the context: command line,
+   environment, EXTERNAL items, allocations */
 static void
-cob_exit_common (cob_context *ctx)
+cob_exit_common_state (cob_context *ctx)
 {
 	struct cob_external	*p;
 	struct cob_external	*q;
 	struct cob_alloc_cache	*x;
 	struct cob_alloc_cache	*y;
 
+	if (common_state (ctx)->commlnptr) {
+		cob_free (common_state (ctx)->commlnptr);
+		common_state (ctx)->commlnptr = NULL;
+	}
+	if (common_state (ctx)->cob_local_env) {
+		cob_free (common_state (ctx)->cob_local_env);
+		common_state (ctx)->cob_local_env = NULL;
+	}
+
+	/* Free library routine stuff */
+
+	if (ctx->glob.cob_term_buff) {
+		cob_free (ctx->glob.cob_term_buff);
+		ctx->glob.cob_term_buff = NULL;
+	}
+
+	/* Free cached externals */
+	for (p = basext; p;) {
+		q = p;
+		p = p->next;
+		if (q->ename) {
+			cob_free (q->ename);
+		}
+		if (q->ext_alloc) {
+			cob_free (q->ext_alloc);
+		}
+		cob_free (q);
+	}
+	basext = NULL;
+
+	/* Free cached mallocs */
+	for (x = cob_alloc_base; x;) {
+		y = x;
+		x = x->next;
+		cob_free (y->cob_pointer);
+		cob_free (y);
+	}
+	cob_alloc_base = NULL;
+	dyn_attr_list = NULL;
+
+	if (cob_last_sfile) {
+		cob_free ((void *)cob_last_sfile);
+		cob_last_sfile = NULL;
+	}
+}
+
+static void
+cob_exit_common (cob_context *ctx)
+{
 #ifdef	HAVE_SETLOCALE
 	if (ctx->glob.cob_locale_orig) {
 		(void) setlocale (LC_ALL, ctx->glob.cob_locale_orig);
@@ -820,45 +871,9 @@ cob_exit_common (cob_context *ctx)
 	}
 #endif
 
-	if (common_state (ctx)->commlnptr) {
-		cob_free (common_state (ctx)->commlnptr);
-	}
-	if (common_state (ctx)->cob_local_env) {
-		cob_free (common_state (ctx)->cob_local_env);
-	}
-
-	/* Free library routine stuff */
-
-	if (ctx->glob.cob_term_buff) {
-		cob_free (ctx->glob.cob_term_buff);
-	}
-
-	/* Free cached externals */
-	for (p = basext; p;) {
-		q = p;
-		p = p->next;
-		if (q->ename) {
-			cob_free (q->ename);
-		}
-		if (q->ext_alloc) {
-			cob_free (q->ext_alloc);
-		}
-		cob_free (q);
-	}
-
-	/* Free cached mallocs */
-	for (x = cob_alloc_base; x;) {
-		y = x;
-		x = x->next;
-		cob_free (y->cob_pointer);
-		cob_free (y);
-	}
-	dyn_attr_list = NULL;
+	cob_exit_common_state (ctx);
 
 	/* Free last stuff */
-	if (cob_last_sfile) {
-		cob_free ((void *)cob_last_sfile);
-	}
 	if (cob_main_context) {
 		if (cob_main_context->glob.cob_main_argv0) {
 			cob_free ((void *)(cob_main_context->glob.cob_main_argv0));
@@ -3896,6 +3911,25 @@ void
 cob_context_leave (cob_context *prev)
 {
 	cob_current_context = prev;
+}
+
+/* Set switches of the context from the environment */
+static void
+cob_init_switches (cob_context *ctx)
+{
+	const char	*s;
+	int		i;
+
+	for (i = 0; i <= COB_SWITCH_MAX; ++i) {
+		char	switch_name[16];
+		sprintf (switch_name, "COB_SWITCH_%d", i);
+		s = getenv (switch_name);
+		if (s && (*s == '1' || strcasecmp (s, "ON") == 0)) {
+			cob_switch[i] = 1;
+		} else {
+			cob_switch[i] = 0;
+		}
+	}
 }
 
 /* Get the instance of a compilation unit (the mutable data of its
@@ -11481,7 +11515,6 @@ cob_init (const int argc, char **argv)
 {
 	cob_context	*ctx = COB_CTX_TODO;
 	char		*s;
-	int		i;
 
 	/* Ensure initialization is only done once. Within generated modules and
 	   libcob this is already ensured, but an external caller may call this
@@ -11618,17 +11651,7 @@ cob_init (const int argc, char **argv)
 	/* Set up library routine stuff */
 	ctx->glob.cob_term_buff = cob_malloc ((size_t)COB_MEDIUM_BUFF);
 
-	/* Set switches */
-	for (i = 0; i <= COB_SWITCH_MAX; ++i) {
-		char	switch_name[16];
-		sprintf (switch_name, "COB_SWITCH_%d", i);
-		s = getenv (switch_name);
-		if (s && (*s == '1' || strcasecmp (s, "ON") == 0)) {
-			cob_switch[i] = 1;
-		} else {
-			cob_switch[i] = 0;
-		}
-	}
+	cob_init_switches (ctx);
 
 #ifndef	HAVE_DESIGNATED_INITS
 	init_statement_list ();
