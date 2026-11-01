@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-T1-DESIGN.md: T1.5 done, statics left in the generated code
 	* TXSERIES-T1-DESIGN.md: design of the program instances
 	* TXSERIES-T1-INVENTORY.md: TERMINATE / GENERATE statics are resume
 	  state
