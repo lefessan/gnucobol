@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_globext_cache, output_internal_function,
+	  output_function_prototypes): EXTERNAL, BASED and LINKAGE pointers in
+	  the instance
 	* codegen.c (add_field_cache, output_local_storage_pointer,
 	  output_ml_attrs_definitions, output_ml_trees_definitions,
 	  output_alter_check, output_screen_definition, ...): screens, XML
