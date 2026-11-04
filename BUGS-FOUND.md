@@ -67,3 +67,20 @@ source / signalé par une analyse, non vérifié).
 - Correction : `snprintf` avec `sizeof (exec_root)` et contrôle de la
   place restante avant d'ajouter le séparateur, ou allocation dynamique
   (`COB_FILE_MAX` au lieu de 128).
+
+## 2026-11-04 — trouvés pendant T1.4 (verrou de `call.c`)
+
+### `libcob/call.c:1670, 1803, 1937` — mauvais arguments au-delà de 150 dans `cob_call`
+- Statut : **vérifié** dans le source (non reproduit par un test).
+- Dans `cob_call_ctx`, `cob_call_cobol_va_ctx` et `cob_call_entry_va_ctx`,
+  la liste des arguments transmis contient
+  `pargv[148], pargv[149], pargv[130], pargv[131]` au lieu de
+  `pargv[150], pargv[151]` : avec `MAX_CALL_FIELD_PARAMS` = 192 (valeur
+  par défaut), les 151ᵉ et 152ᵉ paramètres reçoivent les 131ᵉ et 132ᵉ.
+- Dans le bloc `MAX_CALL_FIELD_PARAMS > 192`, il manque aussi
+  `pargv[196..199]` et `pargv[236..239]` : les paramètres suivants sont
+  décalés (et la liste a moins d'arguments que le prototype : erreur de
+  compilation avec 252).
+- Déclencheur : `cob_call` (ou `CALL` via ces fonctions) avec plus de
+  150 paramètres.
+- Correction : corriger les indices dans les trois listes.

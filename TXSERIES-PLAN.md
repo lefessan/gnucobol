@@ -345,6 +345,19 @@ Conséquences pour `cobc/codegen.c` :
       `localtime_s` (ces fonctions ne prennent pas encore `ctx`) ;
     - `flmdb.c` : tampons statiques (`db_buff`, lecture de
       `/proc/partitions`) ;
+    - **2026-11-04, faits** (banc à 8 threads sans aucun rapport TSan
+      sur 10 exécutions, procédure dans `HOWTO-TSAN.md`) : verrous de
+      processus (`COB_LOCK_DEFINE`, pthread / SRWLOCK, `coblocal.h`) ;
+      état de tâche de `call.c` dans `ctx->call` ; verrou de la table
+      des programmes et des listes de modules, que le module ne quitte
+      plus : CANCEL le cherche dans le contexte (corrige un CANCEL
+      inopérant dans un second contexte) ; slot des unités de
+      compilation (lecture atomique, écriture sous verrou) ;
+      `cob_localtime` / `cob_gmtime` réentrants partout ; cache de
+      l'heure sous verrou. Restent : CANCEL physique alors que d'autres
+      contextes ont une instance du module ; `flmdb.c` ; backends
+      indexés en multi-thread (BDB `DB_THREAD`…) — le banc n'utilise
+      plus que LINE SEQUENTIAL ;
   - code généré : caches `call_X` / `func_X` (écriture concurrente
     d'un pointeur, même valeur ; CANCEL les remet à NULL) et
     `cob_reference_count` (incréments atomiques) ;
