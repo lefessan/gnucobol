@@ -1901,6 +1901,7 @@ typedef struct __cob_global {
 
 typedef struct cob_runtime	cob_runtime;	/* opaque */
 
+struct cob_call_state;		/* opaque, call.c */
 struct cob_cobcapi_state;	/* opaque, cobcapi.c */
 struct cob_common_state;	/* opaque, common.c */
 struct cob_fextfh_state;	/* opaque, fextfh.c */
@@ -1926,6 +1927,7 @@ typedef struct cob_context {
 	struct cob_strings_state	*strings;	/* allocated on first use */
 	struct cob_termio_state		*termio;	/* allocated on first use */
 	struct cob_cobcapi_state	*cobcapi;	/* allocated on first use */
+	struct cob_call_state		*call;		/* allocated on first use */
 	struct cob_fextfh_state		*fextfh;	/* allocated on first use */
 	struct cob_fileio_state		*fileio;	/* allocated on first use */
 	struct cob_prof_state		*prof;		/* allocated on first use */

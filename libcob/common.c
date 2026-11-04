@@ -3998,6 +3998,7 @@ cob_context_destroy (cob_context *ctx)
 	cob_exit_numeric_context (ctx);
 	cob_exit_common_modules (ctx);
 	cob_exit_cobcapi (ctx);
+	cob_exit_call_context (ctx);
 	cob_exit_common_state (ctx);
 
 	cob_context_leave (prev == ctx ? NULL : prev);

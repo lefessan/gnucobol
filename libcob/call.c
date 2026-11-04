@@ -170,19 +170,37 @@ static struct struct_handle	*base_dynload_ptr;
 
 
 static char			**resolve_path;
-static char			*resolve_error;
 static char			*resolve_alloc;
-static char			*resolve_error_buff;
-static void			*call_buffer;
-static char			*call_filename_buff;
 
 #ifndef	COB_BORKED_DLOPEN
 static lt_dlhandle		mainhandle;
 #endif
 
-static size_t			call_lastsize;
 static size_t			resolve_size = 0;
-static unsigned int		cob_jmp_primed;
+
+/* State of a context */
+struct cob_call_state {
+	char		*resolve_error;		/* last error, NULL or resolve_error_buff */
+	char		resolve_error_buff[CALL_BUFF_SIZE];
+	void		*call_buffer;		/* name of the program in CALL / CANCEL */
+	size_t		call_lastsize;
+	unsigned int	cob_jmp_primed;
+};
+
+static struct cob_call_state *
+call_state (cob_context *ctx)
+{
+	if (ctx->call == NULL) {
+		ctx->call = cob_malloc (sizeof (struct cob_call_state));
+	}
+	return ctx->call;
+}
+
+#define resolve_error		(call_state (ctx)->resolve_error)
+#define resolve_error_buff	(call_state (ctx)->resolve_error_buff)
+#define call_buffer		(call_state (ctx)->call_buffer)
+#define call_lastsize		(call_state (ctx)->call_lastsize)
+#define cob_jmp_primed		(call_state (ctx)->cob_jmp_primed)
 
 #undef	COB_SYSTEM_GEN
 #define	COB_SYSTEM_GEN(cob_name, pmin, pmax, c_name)	\
@@ -500,7 +518,7 @@ do_cancel_module (cob_context *ctx, struct call_hash *p, struct call_hash **base
 }
 
 static void *
-cob_get_buff (const size_t buffsize)
+cob_get_buff (cob_context *ctx, const size_t buffsize)
 {
 	if (buffsize > call_lastsize) {
 		call_lastsize = buffsize;
@@ -599,8 +617,7 @@ cache_preload (cob_context *ctx, const char *path)
 	   this will be empty during initial setup but likely set
 	   on calls of cob_try_preload later on (only expected when
 	   done via interactive debugger) */
-	if (call_buffer
-	 && call_table) {
+	if (call_table) {
 		struct call_hash	*p;
 		size_t	i;
 		for (i = 0; i < HASH_SIZE; ++i) {
@@ -783,6 +800,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 	lt_dlhandle		handle;
 	size_t			i;
 	char call_entry_buff[COB_MINI_BUFF];	/* entry name, possibly encoded */
+	char call_filename_buff[COB_NORMAL_BUFF];	/* path of the module */
 	unsigned char call_module_buff[COB_MAX_NAMELEN + 1];
 	const unsigned char *s;
 
@@ -1243,7 +1261,7 @@ cob_call_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_
 	}
 	/* LCOV_EXCL_STOP */
 
-	name = cob_get_buff (f->size + 1);
+	name = cob_get_buff (ctx, f->size + 1);
 	cob_field_to_string (f, name, f->size, CCM_NONE);
 
 	/* check for uncommon leading space - trim it */
@@ -1410,7 +1428,7 @@ cob_cancel_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_cal
 	if (!f || f->size == 0) {
 		return;
 	}
-	name = cob_get_buff (f->size + 1);
+	name = cob_get_buff (ctx, f->size + 1);
 	cob_field_to_string (f, name, f->size, CCM_NONE);
 	entry = cob_chk_dirp (name);
 
@@ -2086,21 +2104,24 @@ close_and_free_module_list (cob_context *ctx, struct struct_handle ** module_lis
 	*module_list_ptr = NULL;
 }
 
+/* free the state of a context */
 void
-cob_exit_call (cob_context *ctx)
+cob_exit_call_context (cob_context *ctx)
 {
-	if (call_filename_buff) {
-		cob_free (call_filename_buff);
-		call_filename_buff = NULL;
+	if (ctx->call == NULL) {
+		return;
 	}
 	if (call_buffer) {
 		cob_free (call_buffer);
-		call_buffer = NULL;
 	}
-	if (resolve_error_buff) {
-		cob_free (resolve_error_buff);
-		resolve_error_buff = NULL;
-	}
+	cob_free (ctx->call);
+	ctx->call = NULL;
+}
+
+void
+cob_exit_call (cob_context *ctx)
+{
+	cob_exit_call_context (ctx);
 	if (resolve_alloc) {
 		cob_free (resolve_alloc);
 		resolve_alloc = NULL;
@@ -2204,10 +2225,6 @@ cob_init_call (cob_context *ctx, cob_global *lptr, cob_settings* sptr, const int
 	base_dynload_ptr = NULL;
 	resolve_path = NULL;
 	resolve_alloc = NULL;
-	resolve_error = NULL;
-	call_buffer = NULL;
-	call_lastsize = 0;
-	cob_jmp_primed = 0;
 
 #ifndef	HAVE_DESIGNATED_INITS
 	init_valid_char = 0;
@@ -2216,9 +2233,6 @@ cob_init_call (cob_context *ctx, cob_global *lptr, cob_settings* sptr, const int
 		valid_char[*pv] = 1;
 	}
 #endif
-
-	/* Big enough for anything from libdl/libltdl */
-	resolve_error_buff = cob_malloc ((size_t)CALL_BUFF_SIZE);
 
 	call_table = cob_malloc (sizeof (struct call_hash *) * HASH_SIZE);
 
@@ -2247,8 +2261,6 @@ cob_init_call (cob_context *ctx, cob_global *lptr, cob_settings* sptr, const int
 	}
 #endif
 
-	call_filename_buff = cob_malloc ((size_t)COB_NORMAL_BUFF);
-
 	if (ctx->settings->cob_preload_str != NULL) {
 		char	*p;
 		char	*s;
@@ -2267,6 +2279,4 @@ cob_init_call (cob_context *ctx, cob_global *lptr, cob_settings* sptr, const int
 		}
 		cob_free (p);
 	}
-	call_buffer = cob_fast_malloc ((size_t)CALL_BUFF_SIZE);
-	call_lastsize = CALL_BUFF_SIZE;
 }

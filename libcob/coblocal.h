@@ -487,6 +487,7 @@ COB_HIDDEN void		cob_exit_fileio		(cob_context *);
 COB_HIDDEN void		cob_exit_fileio_context	(cob_context *);
 COB_HIDDEN void		cob_exit_reportio	(cob_context *);
 COB_HIDDEN void		cob_exit_call		(cob_context *);
+COB_HIDDEN void		cob_exit_call_context	(cob_context *);
 COB_HIDDEN void		cob_exit_cobcapi	(cob_context *);
 COB_HIDDEN void		cob_exit_intrinsic	(cob_context *);
 COB_HIDDEN void		cob_exit_intrinsic_context	(cob_context *);
