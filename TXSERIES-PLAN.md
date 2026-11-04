@@ -450,9 +450,22 @@ Conséquences pour `cobc/codegen.c` :
    `-fsanitize=thread`, exécution sous `setarch -R` à cause de l'ASLR du
    noyau), corrigés : utilisation après libération dans
    `cob_exit_strings`, tampon statique de `cob_get_env_ctx` ; restent les
-   courses listées en T1.4. Reste à faire : intégrer le banc
-   multi-thread à la suite (test conditionné à pthread), script de
-   contrôle des statiques du code généré.
+   courses listées en T1.4.
+   **2026-11-04** : les tests du runtime réentrant sont regroupés dans
+   un fichier propre, `tests/testsuite.src/run_reentrant.at` (mot-clé
+   `runreentrant`) : plusieurs contextes ; 8 threads × 1000 appels, un
+   contexte par thread (ignoré sans pthread ; le module est chargé avant
+   les threads tant que la table de `call.c` n'a pas de verrou) ; contrôle
+   des statiques modifiables du code généré (`objdump` +
+   `build_aux/list-mutable-globals.sh`, liste blanche : `cob_unit_slot`,
+   `cob_module_path`, `cob_reference_count`, `call_X`, `func_X`). Ce
+   contrôle, appliqué aux ~1270 programmes de la suite, a trouvé trois
+   données jamais modifiées et passées `const` : champs des alphabets
+   personnalisés, `st_source_files`, `PROG_num_sym`. Suite complète
+   avec BDB (gestionnaire par défaut) : aucun échec.
+   Reste pour T1.6 : test COBOL → C → COBOL entre contextes, `CANCEL` /
+   `IS INITIAL` par contexte, `CALL` dynamique concurrent (après le
+   verrou de T1.4).
 5. **J5** : T1.7 — mesures et optimisations.
 
 ### Risques
