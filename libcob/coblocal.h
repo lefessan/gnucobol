@@ -245,6 +245,16 @@
 #define cob_lock_release(l)	(void)(l)
 #endif
 
+/* Atomic load / store of an unsigned int, for a value set once and
+   read without lock (with the lock to set it) */
+#if	defined(__GNUC__) || defined(__clang__)
+#define cob_atomic_load_uint(p)		__atomic_load_n ((p), __ATOMIC_ACQUIRE)
+#define cob_atomic_store_uint(p,v)	__atomic_store_n ((p), (v), __ATOMIC_RELEASE)
+#else	/* aligned unsigned int: atomic on the supported platforms */
+#define cob_atomic_load_uint(p)		(*(volatile unsigned int *)(p))
+#define cob_atomic_store_uint(p,v)	(*(volatile unsigned int *)(p) = (v))
+#endif
+
 /* TODO (T1.2/T1.3): context for callers that do not receive it yet;
    every use must disappear when 'ctx' is propagated */
 #define COB_CTX_TODO	(cob_get_current_context ())
@@ -262,7 +272,7 @@
    filled in T1.3 when the global state is moved */
 struct cob_runtime {
 	unsigned int	last_unit_slot;	/* slots of the compilation units,
-					   TODO (T1.4): atomic */
+					   set under unit_slot_lock */
 };
 
 /* Global settings structure */

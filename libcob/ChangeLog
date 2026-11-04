@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h, common.c (cob_context_destroy, cob_unit_enter): slot of a
+	  compilation unit set under a lock
 	* call.c (cob_set_library_path, do_cancel_module, cache_preload,
 	  cob_encode_program_id, cob_resolve_internal, cob_set_cancel_ctx,
 	  ...): lock of the table of the resolved programs
