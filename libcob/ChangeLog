@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (cob_set_library_path, do_cancel_module, insert,
+	  cob_resolve_internal, cob_set_cancel_ctx, cob_call_field), coblocal.h
+	  (cob_print_field), common.c (cob_module_leave, cob_module_free_ctx):
+	  CANCEL finds the module in the context
 	* call.c (cache_preload, cob_resolve_internal, cob_call_field_ctx,
 	  cob_cancel_field_ctx, close_and_free_module_list, cob_exit_call,
 	  ...), coblocal.h (cob_exit_call), common.c (cob_context_destroy),

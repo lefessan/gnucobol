@@ -143,7 +143,6 @@ struct call_hash {
 	struct call_hash	*next;		/* Linked list next pointer */
 	const char		*name;		/* Original called name */
 	void			*func;		/* Function address */
-	cob_module		*module;	/* Program module structure */
 	lt_dlhandle		handle;		/* Handle to loaded module */
 	const char		*path;		/* Full path of module */
 	unsigned int		no_phys_cancel;	/* No physical cancel */
@@ -443,11 +442,14 @@ cob_set_library_path (cob_context *ctx)
 	}
 }
 
+/* cancel the program of the entry 'p' in the context: its module is
+   searched in the context, the entry is shared by all the contexts */
 static void
 do_cancel_module (cob_context *ctx, struct call_hash *p, struct call_hash **base_hash,
 		  struct call_hash *prev)
 {
 	struct struct_handle	*dynptr;
+	cob_module	*module;
 	int	(*cancel_func)(const int);
 	int nocancel;
 	nocancel = 0;
@@ -456,28 +458,25 @@ do_cancel_module (cob_context *ctx, struct call_hash *p, struct call_hash **base
 	   CBL_ERROR_PROC / CBL_EXIT_PROC which defines: If a program containing
 	   an exit/error procedure is canceled, the exit/error procedure is removed. */
 
-	if (!p->module) {
+	module = cob_find_module_ctx (ctx, p->name);
+	if (!module) {
 		return;
 	}
-	if (!p->module->module_cancel.funcvoid) {
-		return;
-	}
-	if (p->module->flag_no_phys_canc) {
+	if (module->flag_no_phys_canc) {
 		nocancel = 1;
 	}
 	/* This should be impossible */
 	/* LCOV_EXCL_START */
-	if (p->module->module_active) {
+	if (module->module_active) {
 		nocancel = 1;
 	}
 	/* LCOV_EXCL_STOP */
-	if (p->module->module_ref_count
-	 && *p->module->module_ref_count) {
+	if (module->module_ref_count
+	 && *module->module_ref_count) {
 		nocancel = 1;
 	}
-	cancel_func = (int (*)(const int))p->module->module_cancel.funcint;
+	cancel_func = (int (*)(const int))module->module_cancel.funcint;
 	(void)cancel_func (-1);
-	p->module = NULL;
 
 	if (nocancel) {
 		return;
@@ -665,8 +664,7 @@ hash (const unsigned char *s)
 
 static void
 insert (cob_context *ctx, const char *name, void *func, lt_dlhandle handle,
-	cob_module *module, const char *path,
-	const unsigned int nocanc)
+	const char *path, const unsigned int nocanc)
 {
 	struct call_hash	*p;
 	unsigned int		val;
@@ -675,7 +673,6 @@ insert (cob_context *ctx, const char *name, void *func, lt_dlhandle handle,
 	p->name = cob_strdup (name);
 	p->func = func;
 	p->handle = handle;
-	p->module = module;
 
 	if (path) {
 		p->path = cob_path_to_absolute_ctx (ctx, path);
@@ -838,7 +835,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 		  currently loaded linked libraries, but possibly not on MSVC! */
 		func = lt_dlsym (mainhandle, call_entry_buff);
 		if (func != NULL) {
-			insert (ctx, name, func, mainhandle, NULL, NULL, 1);
+			insert (ctx, name, func, mainhandle, NULL, 1);
 			resolve_error = NULL;
 			return func;
 		}
@@ -849,7 +846,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 	for (preptr = base_preload_ptr; preptr; preptr = preptr->next) {
 		func = lt_dlsym (preptr->handle, call_entry_buff);
 		if (func != NULL) {
-			insert (ctx, name, func, preptr->handle,	NULL, preptr->path, 1);
+			insert (ctx, name, func, preptr->handle, preptr->path, 1);
 			resolve_error = NULL;
 			return func;
 		}
@@ -863,7 +860,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 		func = lt_dlsym (preptr->handle, call_entry_buff);
 		if (func != NULL) {
 			insert (ctx, name, func, preptr->handle,
-				NULL, preptr->path, 1);
+				preptr->path, 1);
 			resolve_error = NULL;
 			return func;
 		}
@@ -873,7 +870,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 #if	defined(USE_LIBDL) && defined (RTLD_DEFAULT)
 	func = lt_dlsym (RTLD_DEFAULT, call_entry_buff);
 	if (func != NULL) {
-		insert (ctx, name, func, NULL, NULL, NULL, 1);
+		insert (ctx, name, func, NULL, NULL, 1);
 		resolve_error = NULL;
 		return func;
 	}
@@ -892,7 +889,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 		cache_dynload (call_filename_buff, handle);
 		func = lt_dlsym (handle, call_entry_buff);
 		if (func != NULL) {
-			insert (ctx, name, func, handle, NULL, call_filename_buff, 0);
+			insert (ctx, name, func, handle, call_filename_buff, 0);
 			resolve_error = NULL;
 			return func;
 		}
@@ -935,7 +932,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 			cache_dynload (call_filename_buff, handle);
 			func = lt_dlsym (handle, call_entry_buff);
 			if (func != NULL) {
-				insert (ctx, name, func, handle, NULL,
+				insert (ctx, name, func, handle,
 					call_filename_buff, 0);
 				resolve_error = NULL;
 				return func;
@@ -968,7 +965,7 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 				cache_dynload (call_filename_buff, handle);
 				func = lt_dlsym (handle, call_entry_buff);
 				if (func != NULL) {
-					insert (ctx, name, func, handle, NULL,
+					insert (ctx, name, func, handle,
 						call_filename_buff, 0);
 					resolve_error = NULL;
 					return func;
@@ -1087,7 +1084,6 @@ cob_set_cancel_ctx (cob_context *ctx, cob_module *m)
 	p = call_table[hash ((const unsigned char *)(m->module_name))];
 	for (; p; p = p->next) {
 		if (strcmp (m->module_name, p->name) == 0) {
-			p->module = m;
 			/* Set path in program module structure */
 			if (p->path && m->module_path && !*(m->module_path)) {
 				*(m->module_path) = p->path;
@@ -1095,7 +1091,7 @@ cob_set_cancel_ctx (cob_context *ctx, cob_module *m)
 			return;
 		}
 	}
-	insert (ctx, m->module_name, m->module_entry.funcvoid, NULL, m, NULL, 1);
+	insert (ctx, m->module_name, m->module_entry.funcvoid, NULL, NULL, 1);
 }
 
 /* compatibility: cob_set_cancel without context */
@@ -1337,29 +1333,6 @@ void *
 cob_call_field (const cob_field *f, const struct cob_call_struct *cs, const unsigned int errind, const int fold_case)
 {
 	return cob_call_field_ctx (COB_CTX_COMPAT, f, cs, errind, fold_case);
-}
-
-void
-cob_module_clean (cob_module *m)
-{
-	struct call_hash	*p;
-	struct call_hash	**q;
-	
-#ifndef	COB_ALT_HASH
-	const char		*entry;
-
-	entry = cob_chk_dirp (m->module_name);
-	q = &call_table[hash ((const unsigned char *)entry)];
-#else
-	q = &call_table;
-#endif
-	p = *q;
-	for (; p; p = p->next) {
-		if (p->module == m) {
-			p->module = NULL;
-			return;
-		}
-	}
 }
 
 void

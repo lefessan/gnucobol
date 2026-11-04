@@ -467,7 +467,7 @@ COB_HIDDEN void		cob_init_mlio		(cob_global * const);
 COB_HIDDEN const char *cob_statement_name[STMT_MAX_ENTRY];
 
 COB_HIDDEN void		cob_print_field		(cob_context *, FILE *, cob_field *, int, int);
-COB_HIDDEN void		cob_module_clean	(cob_module *);
+COB_HIDDEN cob_module	*cob_find_module_ctx	(cob_context *, const char *);
 
 COB_HIDDEN void		cob_check_trace_file (void);
 

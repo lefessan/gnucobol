@@ -4208,6 +4208,25 @@ cob_module_leave (cob_module *module)
 	cob_module_leave_ctx (COB_CTX_COMPAT, module);
 }
 
+/* the module of the program 'name' (not nested) activated in the
+   context, NULL if there is none */
+cob_module *
+cob_find_module_ctx (cob_context *ctx, const char *name)
+{
+	struct cob_alloc_module	*ptr;
+
+	for (ptr = cob_module_list; ptr; ptr = ptr->next) {
+		cob_module	*mod = ptr->cob_mod_ptr;
+		if (mod
+		 && mod->module_cancel.funcvoid
+		 && mod->module_name
+		 && strcmp (mod->module_name, name) == 0) {
+			return mod;
+		}
+	}
+	return NULL;
+}
+
 void
 cob_module_free_ctx (cob_context *ctx, cob_module **module)
 {
@@ -4215,8 +4234,6 @@ cob_module_free_ctx (cob_context *ctx, cob_module **module)
 	if (*module == NULL) {
 		return;
 	}
-
-	cob_module_clean (*module);
 
 	/* TODO: consider storing the last entry and a prev pointer
 	   to optimize for the likely case of "program added last is removed"
