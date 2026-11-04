@@ -745,7 +745,7 @@ AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([memmove memset setlocale fcntl strerror strcasecmp
 	strchr strrchr strdup strstr atol strtol atoll strtoll gettimeofday localeconv
 	getexecname canonicalize_file_name popen raise readlink realpath
-	setenv strcoll flockfile])
+	setenv strcoll flockfile localtime_r gmtime_r])
 
 # more things to save...
 AC_CACHE_SAVE

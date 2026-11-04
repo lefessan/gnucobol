@@ -1,6 +1,13 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_find_module_ctx), common.c
+	  (get_function_ptr_for_precise_time, set_cob_time_from_localtime,
+	  cob_get_current_datetime, check_current_date), fileio.c
+	  (write_mf_header, cob_sys_check_file_exist, cob_sys_file_info),
+	  intrinsic.c (get_interval_and_current_year_from_args,
+	  cob_intr_year_to_yyyy_va_ctx, get_seconds_past_midnight): reentrant
+	  localtime and gmtime
 	* coblocal.h, common.c (cob_context_destroy, cob_unit_enter): slot of a
 	  compilation unit set under a lock
 	* call.c (cob_set_library_path, do_cancel_module, cache_preload,

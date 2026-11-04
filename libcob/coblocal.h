@@ -496,6 +496,9 @@ COB_HIDDEN const char *cob_statement_name[STMT_MAX_ENTRY];
 
 COB_HIDDEN void		cob_print_field		(cob_context *, FILE *, cob_field *, int, int);
 COB_HIDDEN cob_module	*cob_find_module_ctx	(cob_context *, const char *);
+struct tm;
+COB_HIDDEN struct tm	*cob_localtime		(const time_t *, struct tm *);
+COB_HIDDEN struct tm	*cob_gmtime		(const time_t *, struct tm *);
 
 COB_HIDDEN void		cob_check_trace_file (void);
 

@@ -5672,12 +5672,63 @@ get_function_ptr_for_precise_time (void)
 }
 #endif
 
+/* lock for localtime / gmtime without a reentrant variant */
+#if !defined (HAVE_LOCALTIME_R) || !defined (HAVE_GMTIME_R)
+COB_LOCK_DEFINE (tm_lock);
+#endif
+
+/* reentrant localtime: the result is stored in 'buf', which is
+   returned (NULL on error) */
+struct tm *
+cob_localtime (const time_t *t, struct tm *buf)
+{
+#if defined (HAVE_LOCALTIME_R)
+	tzset ();	/* as localtime does, for a change of TZ */
+	return localtime_r (t, buf);
+#elif defined (_WIN32)
+	return localtime_s (buf, t) == 0 ? buf : NULL;
+#else
+	struct tm	*p;
+	cob_lock_acquire (&tm_lock);
+	p = localtime (t);
+	if (p) {
+		*buf = *p;
+		p = buf;
+	}
+	cob_lock_release (&tm_lock);
+	return p;
+#endif
+}
+
+/* reentrant gmtime: the result is stored in 'buf', which is returned
+   (NULL on error) */
+struct tm *
+cob_gmtime (const time_t *t, struct tm *buf)
+{
+#if defined (HAVE_GMTIME_R)
+	return gmtime_r (t, buf);
+#elif defined (_WIN32)
+	return gmtime_s (buf, t) == 0 ? buf : NULL;
+#else
+	struct tm	*p;
+	cob_lock_acquire (&tm_lock);
+	p = gmtime (t);
+	if (p) {
+		*buf = *p;
+		p = buf;
+	}
+	cob_lock_release (&tm_lock);
+	return p;
+#endif
+}
+
 /* split the timep to cob_time and set the offset from UTC */
 void
 static set_cob_time_from_localtime (time_t curtime,
 		struct cob_time *cb_time) {
 
 	struct tm	*tmptr;
+	struct tm	tm_buf;
 #if !defined (_BSD_SOURCE) && !defined (HAVE_TIMEZONE)
 	time_t		utctime, lcltime, difftime;
 #endif
@@ -5719,7 +5770,7 @@ static set_cob_time_from_localtime (time_t curtime,
 	}
 	last_time = curtime;
 
-	tmptr = localtime (&curtime);
+	tmptr = cob_localtime (&curtime, &tm_buf);
 
 	cb_time->year = tmptr->tm_year + 1900;
 	cb_time->month = tmptr->tm_mon + 1;
@@ -5752,7 +5803,7 @@ static set_cob_time_from_localtime (time_t curtime,
 #else
 	lcltime = mktime (tmptr);
 
-	tmptr = gmtime (&curtime);
+	tmptr = cob_gmtime (&curtime, &tm_buf);
 	utctime = mktime (tmptr);
 
 	if (utctime != -1 && lcltime != -1) { /* LCOV_EXCL_BR_LINE */
@@ -5911,9 +5962,10 @@ cob_get_current_datetime (const enum cob_datetime_res res)
 			if (needs_calculation) {
 				time_t		t;
 				struct tm 	*tmptr;
+				struct tm	tm_buf;
 				/* allocate tmptr (needs a correct time) */
 				time (&t);
-				tmptr = localtime (&t);
+				tmptr = cob_localtime (&t, &tm_buf);
 				tmptr->tm_isdst = -1;
 				tmptr->tm_sec	= cb_time.second;
 				tmptr->tm_min	= cb_time.minute;
@@ -5970,6 +6022,7 @@ check_current_date (cob_context *ctx)
 	int		i, ret;
 	time_t		t;
 	struct tm	*tmptr;
+	struct tm	tm_buf;
 	char	iso_timezone[7] = { 0 };
 	unsigned char	*p = (unsigned char*)cobsetptr->cob_date;
 
@@ -6235,7 +6288,7 @@ check_current_date (cob_context *ctx)
 
 	/* get local time, allocate tmptr */
 	time (&t);
-	tmptr = localtime (&t);
+	tmptr = cob_localtime (&t, &tm_buf);
 	/* override given parts in time */
 	if (ss != -1) {
 		tmptr->tm_sec	= ss;

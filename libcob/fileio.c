@@ -4082,6 +4082,7 @@ write_mf_header(cob_file *f, char *filename)
 	unsigned char mfhdr[128];
 	time_t	nowis;
 	struct tm *lclNow;
+	struct tm tm_buf;
 
 	fd = fopen(filename,"w");
 	if (fd == NULL) {
@@ -4096,7 +4097,7 @@ write_mf_header(cob_file *f, char *filename)
 		f->record_prefix = 4;
 	}
 	time(&nowis);
-	lclNow = localtime(&nowis);
+	lclNow = cob_localtime (&nowis, &tm_buf);
 	strftime(wrk,sizeof(wrk),"%y%m%d%H%M%S00",lclNow);
 	memcpy(&mfhdr[8],wrk,14);
 	memcpy(&mfhdr[22],wrk,14);
@@ -8927,6 +8928,7 @@ cob_sys_check_file_exist (unsigned char *fname, unsigned char *file_info)
 	cob_field	*f;
 	const char	*file_name;
 	struct tm	*tm;
+	struct tm	tm_buf;
 	cob_s64_t	sz;
 	struct stat	st;
 	short		y;
@@ -8957,7 +8959,7 @@ cob_sys_check_file_exist (unsigned char *fname, unsigned char *file_info)
 	}
 
 	sz = (cob_s64_t)st.st_size;
-	tm = localtime (&st.st_mtime);
+	tm = cob_localtime (&st.st_mtime, &tm_buf);
 	d = (short)tm->tm_mday;
 	m = (short)(tm->tm_mon + 1);
 	y = (short)(tm->tm_year + 1900);
@@ -9205,6 +9207,7 @@ cob_sys_file_info (unsigned char *file_name, unsigned char *file_info)
 	cob_context	*ctx = cob_get_current_context ();
 	char			*fn;
 	struct tm		*tm;
+	struct tm		tm_buf;
 	cob_u64_t		sz;
 	unsigned int		dt;
 	short			y;
@@ -9238,7 +9241,7 @@ cob_sys_file_info (unsigned char *file_name, unsigned char *file_info)
 	}
 	cob_free (fn);
 	sz = (cob_u64_t)st.st_size;
-	tm = localtime (&st.st_mtime);
+	tm = cob_localtime (&st.st_mtime, &tm_buf);
 	d = (short)tm->tm_mday;
 	m = (short)(tm->tm_mon + 1);
 	y = (short)(tm->tm_year + 1900);

@@ -1797,6 +1797,7 @@ get_interval_and_current_year_from_args (cob_context *ctx, const int num_args, v
 	cob_field	*f;
 	time_t		t;
 	struct tm	*timeptr;
+	struct tm	tm_buf;
 
 	if (num_args > 1) {
 		f = va_arg (args, cob_field *);
@@ -1810,7 +1811,7 @@ get_interval_and_current_year_from_args (cob_context *ctx, const int num_args, v
 		*current_year = cob_get_int_ctx (ctx, f);
 	} else {
 		t = time (NULL);
-		timeptr = localtime (&t);
+		timeptr = cob_localtime (&t, &tm_buf);
 		*current_year = 1900 + timeptr->tm_year;
 	}
 }
@@ -6572,6 +6573,7 @@ cob_intr_year_to_yyyy_va_ctx (cob_context *ctx, const int params, va_list cob_va
 {
 	cob_field	*f;
 	struct tm	*timeptr;
+	struct tm	tm_buf;
 	va_list		args;
 	time_t		t;
 	int		year;
@@ -6594,7 +6596,7 @@ cob_intr_year_to_yyyy_va_ctx (cob_context *ctx, const int params, va_list cob_va
 		current_year = cob_get_int_ctx (ctx, f);
 	} else {
 		t = time (NULL);
-		timeptr = localtime (&t);
+		timeptr = cob_localtime (&t, &tm_buf);
 		current_year = 1900 + timeptr->tm_year;
 	}
 	va_end (args);
@@ -6801,11 +6803,12 @@ static int
 get_seconds_past_midnight (void)
 {
 	struct tm	*timeptr;
+	struct tm	tm_buf;
 	time_t		t;
 	int		seconds;
 
 	t = time (NULL);
-	timeptr = localtime (&t);
+	timeptr = cob_localtime (&t, &tm_buf);
 	/* Leap seconds ? */
 	if (timeptr->tm_sec >= 60) {
 		timeptr->tm_sec = 59;
