@@ -256,3 +256,74 @@ AT_CHECK([for i in 01 02 03 04 05 06 07; do cmp f00.txt f$i.txt || exit 1; done]
 AT_CLEANUP
 
 
+AT_SETUP([no mutable static data in the generated code])
+AT_KEYWORDS([runreentrant static])
+
+# all the mutable data of the programs lives in the instance of the
+# compilation unit, allocated in each context; the only static data
+# left are shared by the contexts:
+# - cob_unit_slot: slot of the compilation unit, set once
+# - cob_module_path, cob_reference_count: process-level data of the
+#   module (dlclose)
+# - call_X / func_X: caches of the resolution of dynamic CALLs
+
+AT_CHECK([objdump --version >/dev/null 2>&1 || exit 77])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       ENVIRONMENT      DIVISION.
+       CONFIGURATION    SECTION.
+       SPECIAL-NAMES.
+           ALPHABET ALPHA-CUSTOM IS "A" THRU "Z", "0" THRU "9".
+           ALPHABET ALPHA-NATIVE IS NATIVE.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT F ASSIGN TO "f.txt" ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD F.
+       01 FR            PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 X             PIC 9(4) VALUE 0.
+       01 Y             PIC S9(20)V9(5) VALUE 1.
+       01 S             PIC X(10).
+       01 P             USAGE POINTER.
+       01 E             PIC X(4) EXTERNAL.
+       01 B             PIC X(10) BASED.
+       LINKAGE          SECTION.
+       01 L             PIC X(10).
+       PROCEDURE        DIVISION USING L.
+           ADD 1 TO X
+           COMPUTE Y = Y * 3 / 7 + FUNCTION PI
+           MOVE "abc" TO S
+           INSPECT S CONVERTING "abc" TO "ABC"
+           INSPECT S CONVERTING ALPHA-CUSTOM TO ALPHA-NATIVE
+           CALL "sub" USING S
+           CALL "nested" USING S
+           OPEN OUTPUT F
+           CLOSE F
+           GOBACK.
+
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      nested.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 Z             PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 L             PIC X(10).
+       PROCEDURE        DIVISION USING L.
+           ADD 1 TO Z
+           GOBACK.
+       END PROGRAM nested.
+       END PROGRAM prog.
+])
+
+AT_CHECK([$COBC -c ${FLAGS} prog.cob], [0], [], [])
+AT_CHECK([$SHELL "$abs_top_srcdir/build_aux/list-mutable-globals.sh" prog.o \
+          | cut -f5 | sed -e 's/\.[[0-9]]*$//' \
+          | $GREP -v -E '^(cob_unit_slot|cob_module_path|cob_reference_count|call_.*|func_.*)$'],
+         [1], [], [])
+
+AT_CLEANUP
+

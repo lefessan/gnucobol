@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: no mutable static data in the
+	  generated code
 	* testsuite.src/run_reentrant.at: new file, move the tests of execution
 	  contexts to run_reentrant.at
 	* Makefile.am, testsuite.at, testsuite.src/run_misc.at: move the tests
