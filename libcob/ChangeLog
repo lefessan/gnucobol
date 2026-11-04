@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h: constant data of the generated code are const
 	* common.c (cob_get_env_ctx): no static scratch buffer in
 	  cob_get_env_ctx
 	* common.c (cob_init_switches), common.h (cob_context_leave):

@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* codegen.c (output_local_fields, output_source_cache, output_param,
+	  output_alphabet_name_definition): constant data of the generated code
+	  are const
 	* codegen.c (unit_text_prepend, output_entry_function,
 	  output_function_prototypes): sticky linkage parameters in the
 	  instance

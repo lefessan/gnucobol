@@ -3679,7 +3679,7 @@ output_local_fields (struct cb_program *prog)
 			unit_text_prepend (&prog_inits, &prog_inits_last,
 				"memcpy (%s, %s_tpl, sizeof (%s_tpl));", name, name, name);
 		}
-		output_line ("static unsigned int %s_num_sym = %d;",prog->program_id,max);
+		output_line ("static const unsigned int %s_num_sym = %d;",prog->program_id,max);
 		output_newline ();
 	}
 	/* Switch to main storage file */
@@ -3937,7 +3937,7 @@ output_source_cache (void)
 
 	output_storage ("\n/* Source file names */\n");
 	source_cache = string_list_reverse (source_cache);
-	output_storage ("static const char *%ssource_files[]\t= { \"\" ", CB_PREFIX_STRING);
+	output_storage ("static const char *const %ssource_files[]\t= { \"\" ", CB_PREFIX_STRING);
 	if (source_cache) {
 		for (stp = source_cache; stp; stp = stp->next) {
 			output_storage ("\n\t\t,\"");
@@ -5019,7 +5019,7 @@ output_param (cb_tree x, int id)
 				break;
 			case CB_ALPHABET_CUSTOM:
 				gen_custom = 1;
-				output ("&%s%s", CB_PREFIX_FIELD, rbp->cname);
+				output ("(cob_field *)&%s%s", CB_PREFIX_FIELD, rbp->cname);
 				break;
 			default:
 				break;
@@ -13296,7 +13296,7 @@ output_alphabet_name_definition (struct cb_alphabet_name *p)
 	}
 	i = lookup_attr (is_national_alphabet ? COB_TYPE_NATIONAL : COB_TYPE_ALPHANUMERIC,
 			0, 0, 0, NULL, 0);
-	output_local ("static cob_field %s%s = { %d, (cob_u8_ptr)%s%s, &%s%d };\n",
+	output_local ("static const cob_field %s%s = { %d, (cob_u8_ptr)%s%s, &%s%d };\n",
 		CB_PREFIX_FIELD, p->cname,
 		size,
 		CB_PREFIX_SEQUENCE, p->cname,
