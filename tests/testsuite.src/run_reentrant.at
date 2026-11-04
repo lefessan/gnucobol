@@ -219,11 +219,7 @@ main (int argc, char **argv)
    int i;
 
    cob_init (argc, argv);
-   /* load the module before starting the threads: the table of
-      loaded modules is not protected by a lock yet */
-   if (cob_resolve ("calc") == NULL) {
-      return 1;
-   }
+   /* the module is loaded by the first CALL, in one of the threads */
    for (i = 0; i < NTHREADS; i++) {
       pthread_create (&th[i], NULL, task, &bads[i]);
    }

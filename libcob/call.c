@@ -177,6 +177,14 @@ static lt_dlhandle		mainhandle;
 
 static size_t			resolve_size = 0;
 
+/* Lock of the data above, shared by all the contexts (process level);
+   they are set up by cob_init_call and freed by cob_exit_call without
+   the lock, when a single thread runs; the lock is never held while a
+   program runs */
+COB_LOCK_DEFINE (call_lock);
+#define call_lock_acquire()	cob_lock_acquire (&call_lock)
+#define call_lock_release()	cob_lock_release (&call_lock)
+
 /* State of a context */
 struct cob_call_state {
 	char		*resolve_error;		/* last error, NULL or resolve_error_buff */
@@ -442,13 +450,28 @@ cob_set_library_path (cob_context *ctx)
 	}
 }
 
-/* cancel the program of the entry 'p' in the context: its module is
-   searched in the context, the entry is shared by all the contexts */
+static COB_INLINE unsigned int
+hash (const unsigned char *s)
+{
+	register const unsigned char *p = s;
+	register unsigned int	val = 0;
+
+	while (*p) {
+		val += *p++;
+	}
+	return val % HASH_SIZE;
+}
+
+/* cancel the program 'name' in the context: its module is searched in
+   the context; the entry of the program in the table is shared by all
+   the contexts, it is only removed by a physical cancel */
 static void
-do_cancel_module (cob_context *ctx, struct call_hash *p, struct call_hash **base_hash,
-		  struct call_hash *prev)
+do_cancel_module (cob_context *ctx, const char *name)
 {
 	struct struct_handle	*dynptr;
+	struct call_hash	*p;
+	struct call_hash	*prev;
+	struct call_hash	**base_hash;
 	cob_module	*module;
 	int	(*cancel_func)(const int);
 	int nocancel;
@@ -458,7 +481,7 @@ do_cancel_module (cob_context *ctx, struct call_hash *p, struct call_hash **base
 	   CBL_ERROR_PROC / CBL_EXIT_PROC which defines: If a program containing
 	   an exit/error procedure is canceled, the exit/error procedure is removed. */
 
-	module = cob_find_module_ctx (ctx, p->name);
+	module = cob_find_module_ctx (ctx, name);
 	if (!module) {
 		return;
 	}
@@ -484,10 +507,22 @@ do_cancel_module (cob_context *ctx, struct call_hash *p, struct call_hash **base
 	if (!ctx->settings->cob_physical_cancel) {
 		return;
 	}
-	if (p->no_phys_cancel) {
-		return;
+
+	/* physical cancel; TODO (T1.4): not possible while the module has
+	   instances in other contexts */
+	call_lock_acquire ();
+	base_hash = &call_table[hash ((const unsigned char *)name)];
+	prev = NULL;
+	for (p = *base_hash; p; p = p->next) {
+		if (strcmp (name, p->name) == 0) {
+			break;
+		}
+		prev = p;
 	}
-	if (!p->handle) {
+	if (!p
+	 || p->no_phys_cancel
+	 || !p->handle) {
+		call_lock_release ();
 		return;
 	}
 
@@ -514,6 +549,7 @@ do_cancel_module (cob_context *ctx, struct call_hash *p, struct call_hash **base
 		cob_free ((void *)(p->path));
 	}
 	cob_free (p);
+	call_lock_release ();
 }
 
 static void *
@@ -650,18 +686,6 @@ cache_preload (cob_context *ctx, const char *path)
 	return 1;
 }
 
-static COB_INLINE unsigned int
-hash (const unsigned char *s)
-{
-	register const unsigned char *p = s;
-	register unsigned int	val = 0;
-
-	while (*p) {
-		val += *p++;
-	}
-	return val % HASH_SIZE;
-}
-
 static void
 insert (cob_context *ctx, const char *name, void *func, lt_dlhandle handle,
 	const char *path, const unsigned int nocanc)
@@ -788,8 +812,9 @@ cob_encode_program_id (const unsigned char *const name,
 	return pos;
 }
 
+/* called with the lock */
 static void *
-cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
+cob_resolve_locked (cob_context *ctx, const char *name, const char *dirent,
 	const int fold_case, int module_type, int cache_check)
 {
 	void			*func;
@@ -988,6 +1013,19 @@ cob_resolve_internal  (cob_context *ctx, const char *name, const char *dirent,
 	return NULL;
 }
 
+static void *
+cob_resolve_internal (cob_context *ctx, const char *name, const char *dirent,
+	const int fold_case, int module_type, int cache_check)
+{
+	void	*func;
+
+	call_lock_acquire ();
+	func = cob_resolve_locked (ctx, name, dirent, fold_case, module_type,
+		cache_check);
+	call_lock_release ();
+	return func;
+}
+
 static const char *
 cob_chk_dirp (const char *name)
 {
@@ -1081,6 +1119,7 @@ cob_set_cancel_ctx (cob_context *ctx, cob_module *m)
 {
 	struct call_hash	*p;
 
+	call_lock_acquire ();
 	p = call_table[hash ((const unsigned char *)(m->module_name))];
 	for (; p; p = p->next) {
 		if (strcmp (m->module_name, p->name) == 0) {
@@ -1088,10 +1127,12 @@ cob_set_cancel_ctx (cob_context *ctx, cob_module *m)
 			if (p->path && m->module_path && !*(m->module_path)) {
 				*(m->module_path) = p->path;
 			}
+			call_lock_release ();
 			return;
 		}
 	}
 	insert (ctx, m->module_name, m->module_entry.funcvoid, NULL, NULL, 1);
+	call_lock_release ();
 }
 
 /* compatibility: cob_set_cancel without context */
@@ -1292,7 +1333,9 @@ cob_call_field_ctx (cob_context *ctx, const cob_field *f, const struct cob_call_
 	}
 
 	/* Search the cache */
+	call_lock_acquire ();
 	p = lookup (entry);
+	call_lock_release ();
 	if (p) {
 		return p;
 	}
@@ -1338,11 +1381,6 @@ cob_call_field (const cob_field *f, const struct cob_call_struct *cs, const unsi
 void
 cob_cancel_ctx (cob_context *ctx, const char *name)
 {
-	const char		*entry;
-	struct call_hash	*p;
-	struct call_hash	**q;
-	struct call_hash	*r;
-
 	/* LCOV_EXCL_START */
 	if (!ctx) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
@@ -1363,18 +1401,7 @@ cob_cancel_ctx (cob_context *ctx, const char *name)
 		return;
 	}
 
-	entry = cob_chk_dirp (name);
-
-	q = &call_table[hash ((const unsigned char *)entry)];
-	p = *q;
-	r = NULL;
-	for (; p; p = p->next) {
-		if (strcmp (entry, p->name) == 0) {
-			do_cancel_module (ctx, p, q, r);
-			return;
-		}
-		r = p;
-	}
+	do_cancel_module (ctx, cob_chk_dirp (name));
 }
 
 /* compatibility: cob_cancel without context */
