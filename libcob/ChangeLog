@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (cache_preload, cob_resolve_internal, cob_call_field_ctx,
+	  cob_cancel_field_ctx, close_and_free_module_list, cob_exit_call,
+	  ...), coblocal.h (cob_exit_call), common.c (cob_context_destroy),
+	  common.h: state of call.c in the context
 	* common.h: constant data of the generated code are const
 	* common.c (cob_get_env_ctx): no static scratch buffer in
 	  cob_get_env_ctx
