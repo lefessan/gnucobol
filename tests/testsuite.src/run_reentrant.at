@@ -256,6 +256,103 @@ AT_CHECK([for i in 01 02 03 04 05 06 07; do cmp f00.txt f$i.txt || exit 1; done]
 AT_CLEANUP
 
 
+AT_SETUP([CANCEL in one execution context])
+AT_KEYWORDS([runreentrant cob_context_create cob_cancel CANCEL])
+
+# CANCEL acts on the instance of the program in the current context
+# only: the WORKING-STORAGE of the other contexts is kept
+
+AT_DATA([counter.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      counter.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG ": " CNT
+           GOBACK.
+])
+
+AT_DATA([canceller.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      canceller.
+       PROCEDURE        DIVISION.
+           CANCEL "counter"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_counter (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("counter", 1, argv);
+   cob_context_leave (prev);
+}
+
+static void
+cancel_counter (cob_context *ctx, int from_cobol)
+{
+   cob_context *prev = cob_context_enter (ctx);
+   if (from_cobol) {
+      (void)cob_call ("canceller", 0, NULL);
+   } else {
+      cob_cancel ("counter");
+   }
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx2 = cob_context_create ();
+
+   call_counter (main_ctx, "main");
+   call_counter (main_ctx, "main");
+   call_counter (ctx2, "ctx2");
+   call_counter (ctx2, "ctx2");
+
+   /* two CANCELs in a row, in two contexts */
+   cancel_counter (ctx2, 0);
+   call_counter (main_ctx, "main");
+   cancel_counter (main_ctx, 1);
+   call_counter (main_ctx, "main");
+   call_counter (ctx2, "ctx2");
+   call_counter (main_ctx, "main");
+
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE counter.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE canceller.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[main: 0001
+main: 0002
+ctx2: 0001
+ctx2: 0002
+main: 0003
+main: 0001
+ctx2: 0001
+main: 0002
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
