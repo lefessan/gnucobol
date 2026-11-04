@@ -5722,10 +5722,15 @@ cob_gmtime (const time_t *t, struct tm *buf)
 #endif
 }
 
-/* split the timep to cob_time and set the offset from UTC */
-void
-static set_cob_time_from_localtime (time_t curtime,
-		struct cob_time *cb_time) {
+/* the cache of the last time of set_cob_time_locked is shared by the
+   threads */
+COB_LOCK_DEFINE (time_cache_lock);
+
+/* split the timep to cob_time and set the offset from UTC;
+   called with time_cache_lock */
+static void
+set_cob_time_locked (time_t curtime, struct cob_time *cb_time)
+{
 
 	struct tm	*tmptr;
 	struct tm	tm_buf;
@@ -5825,6 +5830,15 @@ static set_cob_time_from_localtime (time_t curtime,
 
 	/* keep backup for next call */
 	memcpy (&last_cobtime, cb_time, sizeof (struct cob_time));
+}
+
+/* split the timep to cob_time and set the offset from UTC */
+static void
+set_cob_time_from_localtime (time_t curtime, struct cob_time *cb_time)
+{
+	cob_lock_acquire (&time_cache_lock);
+	set_cob_time_locked (curtime, cb_time);
+	cob_lock_release (&time_cache_lock);
 }
 
 #if defined (_WIN32) /* cygwin does not define _WIN32 */
