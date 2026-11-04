@@ -5437,6 +5437,133 @@ ctx3
 AT_CLEANUP
 
 
+AT_SETUP([CALL in from C, execution contexts in several threads])
+AT_KEYWORDS([runmisc cob_context_create cob_context_destroy cob_context_enter reentrant thread])
+
+# each thread creates its own execution context and calls the same
+# program many times; the WORKING-STORAGE and the files of the program
+# must be private to each context (arithmetic, intrinsic functions,
+# STRING / INSPECT and LINE SEQUENTIAL files are exercised)
+
+AT_DATA([calc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      calc.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT F ASSIGN TO FNAME ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD F.
+       01 FR            PIC X(40).
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(8) VALUE 0.
+       01 X             PIC S9(20)V9(5) VALUE 0.
+       01 S             PIC X(40).
+       01 FNAME         PIC X(30).
+       01 D             PIC X(21).
+       LINKAGE          SECTION.
+       01 RES           PIC 9(8).
+       01 TID           PIC 9(2).
+       PROCEDURE        DIVISION USING RES TID.
+           IF CNT = 0
+              STRING "f" TID ".txt" DELIMITED SIZE INTO FNAME
+              OPEN OUTPUT F
+           END-IF
+           ADD 1 TO CNT
+           COMPUTE X = (CNT * 3) / 7 + FUNCTION SQRT (CNT * CNT)
+           MOVE FUNCTION CURRENT-DATE TO D
+           MOVE SPACES TO S
+           STRING "v" CNT " " X DELIMITED SIZE INTO S
+           INSPECT S REPLACING ALL "0" BY "o"
+           MOVE S TO FR
+           WRITE FR
+           MOVE CNT TO RES
+           GOBACK.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <libcob.h>
+
+#define NTHREADS 8
+#define NCALLS 1000
+
+static int bads[NTHREADS];
+
+static void *
+task (void *arg)
+{
+   int *bad = (int *)arg;
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char res[9] = "00000000";
+   char tid[3];
+   void *argv[2];
+   int i;
+
+   snprintf (tid, sizeof tid, "%02d", (int)(bad - bads));
+   argv[0] = res;
+   argv[1] = tid;
+   for (i = 1; i <= NCALLS; i++) {
+      char expected[9];
+      (void)cob_call ("calc", 2, argv);
+      snprintf (expected, sizeof expected, "%08d", i);
+      if (memcmp (res, expected, 8)) {
+         (*bad)++;
+      }
+   }
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+
+int
+main (int argc, char **argv)
+{
+   pthread_t th[NTHREADS];
+   int i;
+
+   cob_init (argc, argv);
+   /* load the module before starting the threads: the table of
+      loaded modules is not protected by a lock yet */
+   if (cob_resolve ("calc") == NULL) {
+      return 1;
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_create (&th[i], NULL, task, &bads[i]);
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_join (th[i], NULL);
+      printf ("thread %d: %d bad\n", i, bads[i]);
+   }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([$COMPILE_MODULE calc.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+AT_CHECK([wc -l < f00.txt], [0], [1000
+], [])
+AT_CHECK([tail -1 f00.txt], [0], [voooo1ooo oooooooooooooooo142857142
+], [])
+AT_CHECK([for i in 01 02 03 04 05 06 07; do cmp f00.txt f$i.txt || exit 1; done], [0], [], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([CALL C with callback, PROCEDURE DIVISION EXTERN])
 AT_KEYWORDS([runmisc extensions call-convention])
 
