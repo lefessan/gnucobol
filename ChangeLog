@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md: status with "TXSeries plan: T1.4 progress (locks,
+	  call.c, time), bug in cob_call"
 	* TXSERIES-PLAN.md: status with "tests: no mutable static data in the
 	  generated code (T1.6)"
 	* TXSERIES-PLAN.md: status with "TXSeries plan: T1.6 contexts API,
