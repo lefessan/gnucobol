@@ -1438,7 +1438,7 @@ typedef struct __cob_module {
 	unsigned int		module_stmt;		/* Position of last statement executed
 											   as modulated source line
 											   and index to module_sources for source file */
-	const char		**module_sources;	/* Source module names compiled */
+	const char *const	*module_sources;	/* Source module names compiled */
 
 	unsigned int		param_buf_size;		/* Size of 'param_buf' */
 	unsigned int		param_buf_used;		/* amount used from 'param_buf' */
