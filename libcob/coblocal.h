@@ -227,6 +227,24 @@
     #define COB_TLS	static	/* fallback definition */
 #endif
 
+/* Process-level locks of libcob, for the data shared by all the
+   contexts (T1.4); a lock is defined statically with COB_LOCK_DEFINE,
+   on Win32 the file must include <windows.h> */
+#if	defined(_WIN32)
+#define COB_LOCK_DEFINE(l)	static SRWLOCK l = SRWLOCK_INIT
+#define cob_lock_acquire(l)	AcquireSRWLockExclusive (l)
+#define cob_lock_release(l)	ReleaseSRWLockExclusive (l)
+#elif	defined(COB_HAVE_PTHREAD_LOCKS)
+#include <pthread.h>
+#define COB_LOCK_DEFINE(l)	static pthread_mutex_t l = PTHREAD_MUTEX_INITIALIZER
+#define cob_lock_acquire(l)	(void)pthread_mutex_lock (l)
+#define cob_lock_release(l)	(void)pthread_mutex_unlock (l)
+#else	/* no threads */
+#define COB_LOCK_DEFINE(l)	static const int l = 0
+#define cob_lock_acquire(l)	(void)(l)
+#define cob_lock_release(l)	(void)(l)
+#endif
+
 /* TODO (T1.2/T1.3): context for callers that do not receive it yet;
    every use must disappear when 'ctx' is propagated */
 #define COB_CTX_TODO	(cob_get_current_context ())
