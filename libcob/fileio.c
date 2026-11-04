@@ -10425,6 +10425,20 @@ cob_exit_fileio_msg_only (cob_context *ctx)
 	}
 }
 
+/* end of a context for the backends: free their state of the context */
+static void
+cob_exit_fileio_backends_context (cob_context *ctx)
+{
+	int		k;
+
+	for (k=0; k < COB_IO_MAX; k++) {
+		if (fileio_funcs[k] != NULL
+		 && fileio_funcs[k]->ioexit_context != NULL) {
+			fileio_funcs[k]->ioexit_context (ctx, &file_api);
+		}
+	}
+}
+
 static void
 cob_exit_fileio_closeall (cob_context *ctx)
 {
@@ -10434,6 +10448,7 @@ cob_exit_fileio_closeall (cob_context *ctx)
 		cob_close_qbl (ctx,  qblfd, qblfilename, 1);
 		qblfd = -1;
 	}
+	cob_exit_fileio_backends_context (ctx);
 	for (k=0; k < COB_IO_MAX; k++) {
 		if (fileio_funcs[k] != NULL) {
 			fileio_funcs[k]->ioexit (ctx, &file_api);
@@ -10490,22 +10505,21 @@ cob_exit_fileio_context (cob_context *ctx)
 {
 	struct file_list	*l, *next;
 
-	if (ctx->fileio == NULL) {
-		free_extfh_fcd (ctx);
-		return;
-	}
-	if (qblfd != -1) {
-		cob_close_qbl (ctx, qblfd, qblfilename, 1);
-		qblfd = -1;
-	}
-	for (l = file_cache; l; l = next) {
-		next = l->next;
-		if (l->file
-		 && l->file->open_mode != COB_OPEN_CLOSED
-		 && l->file->open_mode != COB_OPEN_LOCKED) {
-			cob_close_ctx (ctx, l->file, NULL, COB_CLOSE_NORMAL, 0);
+	if (ctx->fileio != NULL) {
+		if (qblfd != -1) {
+			cob_close_qbl (ctx, qblfd, qblfilename, 1);
+			qblfd = -1;
+		}
+		for (l = file_cache; l; l = next) {
+			next = l->next;
+			if (l->file
+			 && l->file->open_mode != COB_OPEN_CLOSED
+			 && l->file->open_mode != COB_OPEN_LOCKED) {
+				cob_close_ctx (ctx, l->file, NULL, COB_CLOSE_NORMAL, 0);
+			}
 		}
 	}
+	cob_exit_fileio_backends_context (ctx);
 	cob_exit_fileio_state (ctx);
 }
 

@@ -1,6 +1,11 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h, fbdb.c (ix_bdb_fork, bdb_lock_record, bdb_test_record_lock,
+	  bdb_nofile, ix_bdb_exit_fileio, cob_bdb_init_fileio), fileio.c
+	  (cob_exit_fileio_msg_only, cob_exit_fileio_closeall,
+	  cob_exit_fileio_context), fileio.h: state of fbdb.c in the context,
+	  end of a context for the backends
 	* common.c (cob_gmtime, set_cob_time_from_localtime): cache of the last
 	  local time under a lock
 	* coblocal.h (cob_find_module_ctx), common.c

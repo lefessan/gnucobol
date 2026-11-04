@@ -161,6 +161,7 @@ struct cob_fileio_funcs {
 	int	(*rollback)		(cob_context *, cob_file_api *, cob_file *);
 	int	(*iounlock)		(cob_context *, cob_file_api *, cob_file *);
 	char * (*ioversion)	(void);
+	void (*ioexit_context)	(cob_context *, cob_file_api *);	/* end of a context, optional */
 };
 
 

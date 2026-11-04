@@ -44,6 +44,7 @@ static int ix_bdb_rewrite	(cob_context *, cob_file_api *,cob_file *, const int);
 static int ix_bdb_file_unlock (cob_context *, cob_file_api *a, cob_file *f);
 static void ix_bdb_exit_fileio (cob_context *, cob_file_api *a);
 static int ix_bdb_fork (cob_context *, cob_file_api *a);
+static void ix_bdb_exit_context (cob_context *, cob_file_api *a);
 static char * ix_bdb_version (void);
 
 static int ix_bdb_dummy () { return 0; }
@@ -65,17 +66,37 @@ static const struct cob_fileio_funcs ext_indexed_funcs = {
 	(void*)ix_bdb_dummy,	/* commit */
 	(void*)ix_bdb_dummy,	/* rollback */
 	ix_bdb_file_unlock,
-	ix_bdb_version
+	ix_bdb_version,
+	ix_bdb_exit_context
 };
 
 static DB_ENV	*bdb_env = NULL;
 static char		*bdb_home_dir = NULL;
-static char		*bdb_buff = NULL;
 static const char	**bdb_data_dir = NULL;
-static void		*record_lock_object = NULL;
-static size_t	rlo_size = 0;
 static unsigned int	bdb_lock_id = 0;
 static int		bdb_join = 1;
+
+/* State of a context */
+struct cob_fbdb_state {
+	char		bdb_buff[COB_SMALL_BUFF];	/* path of the file being opened */
+	void		*record_lock_object;	/* name of a record lock */
+	size_t		rlo_size;
+};
+
+static struct cob_fbdb_state *
+fbdb_state (cob_context *ctx)
+{
+	if (ctx->fbdb == NULL) {
+		ctx->fbdb = cob_malloc (sizeof (struct cob_fbdb_state));
+		ctx->fbdb->rlo_size = COB_SMALL_BUFF;
+		ctx->fbdb->record_lock_object = cob_malloc (COB_SMALL_BUFF);
+	}
+	return ctx->fbdb;
+}
+
+#define bdb_buff		(fbdb_state (ctx)->bdb_buff)
+#define record_lock_object	(fbdb_state (ctx)->record_lock_object)
+#define rlo_size		(fbdb_state (ctx)->rlo_size)
 
 #define DB_PUT(db,key,data,flags)	db->put (db, NULL, key, data, flags)
 #define DB_GET(db,key,data,flags)	db->get (db, NULL, key, data, flags)
@@ -489,7 +510,7 @@ bdb_lock_file (cob_context *ctx, cob_file *f, char *filename, int lock_mode)
 }
 
 static void
-set_dbt (struct indexed_file *p, DBT *dbt, const char *key, const unsigned int keylen)
+set_dbt (cob_context *ctx, struct indexed_file *p, DBT *dbt, const char *key, const unsigned int keylen)
 {
 	size_t	len = keylen + p->filenamelen + 1;
 	if (len > rlo_size) {
@@ -531,7 +552,7 @@ bdb_lock_record (cob_context *ctx, cob_file *f, const char *key, const unsigned 
 		interval = ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1;
 	}
 
-	set_dbt (p, &dbt, key, keylen);
+	set_dbt (ctx, p, &dbt, key, keylen);
 
 	if (retry > 0) {
 		retry = retry * interval * COB_RETRY_PER_SECOND;
@@ -618,7 +639,7 @@ bdb_test_record_lock (cob_context *ctx, cob_file *f, const char *key, const unsi
 	}
 
 	memset(&test_lock,0,sizeof(test_lock));
-	set_dbt (p, &dbt, key, keylen);
+	set_dbt (ctx, p, &dbt, key, keylen);
 
 	if (retry > 0) {
 		retry = retry * interval * COB_RETRY_PER_SECOND ;
@@ -1200,8 +1221,7 @@ bdb_nofile (cob_context *ctx, const char *filename)
 
 	if (!bdb_env || is_absolute (filename)) {
 		errno = 0;
-		if (bdb_buff)
-			strcpy(bdb_buff, filename);
+		strcpy (bdb_buff, filename);
 		if (access (filename, F_OK) && errno == ENOENT) {
 			return 1;
 		}
@@ -2131,10 +2151,6 @@ static void
 ix_bdb_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
-	if (record_lock_object) {
-		cob_free (record_lock_object);
-		record_lock_object = NULL;
-	}
 	if (bdb_env) {
 		DB_LOCKREQ	lckreq[1];
 		memset (lckreq, 0, sizeof (DB_LOCKREQ));
@@ -2151,15 +2167,19 @@ ix_bdb_exit_fileio (cob_context *ctx, cob_file_api *a)
 		bdb_home_dir = NULL;
 		bdb_env = NULL;
 	}
-	if (record_lock_object) {
-		cob_free (record_lock_object);
-		record_lock_object = NULL;
-		rlo_size = 0;
+}
+
+/* end of a context: free its state */
+static void
+ix_bdb_exit_context (cob_context *ctx, cob_file_api *a)
+{
+	COB_UNUSED (a);
+	if (ctx->fbdb == NULL) {
+		return;
 	}
-	if (bdb_buff) {
-		cob_free (bdb_buff);
-		bdb_buff = NULL;
-	}
+	cob_free (record_lock_object);
+	cob_free (ctx->fbdb);
+	ctx->fbdb = NULL;
 }
 
 void
@@ -2168,9 +2188,6 @@ cob_bdb_init_fileio (cob_context *ctx, cob_file_api *a)
 	a->io_funcs[COB_IO_BDB] = (void*)&ext_indexed_funcs;
 	bdb_env = NULL;
 	bdb_data_dir = NULL;
-	bdb_buff = cob_malloc ((size_t)COB_SMALL_BUFF);
-	rlo_size = COB_SMALL_BUFF;
-	record_lock_object = cob_malloc (rlo_size);
 }
 
 #endif
