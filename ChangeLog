@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* HOWTO-TSAN.md: new file, finding and fixing data races with
+	  ThreadSanitizer
 	* configure.ac: reentrant localtime and gmtime
 	* configure.ac: process-level locks
 	* TXSERIES-T1-DESIGN.md: T1.6 contexts API, ThreadSanitizer findings
