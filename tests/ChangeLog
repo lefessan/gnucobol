@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_misc.at: execution contexts in several threads
 	* testsuite.src/run_misc.at: cob_context_create and cob_context_destroy
 	* testsuite.src/run_misc.at: suffix _ctx for functions taking the
 	  context, old names kept
