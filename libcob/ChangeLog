@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h: process-level locks
 	* call.c (cob_set_library_path, do_cancel_module, insert,
 	  cob_resolve_internal, cob_set_cancel_ctx, cob_call_field), coblocal.h
 	  (cob_print_field), common.c (cob_module_leave, cob_module_free_ctx):
