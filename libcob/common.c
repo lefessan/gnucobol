@@ -4005,6 +4005,9 @@ cob_context_destroy (cob_context *ctx)
 	cob_context_free (ctx);
 }
 
+/* lock for the first setting of the slot of a compilation unit */
+COB_LOCK_DEFINE (unit_slot_lock);
+
 /* Get the instance of a compilation unit (the mutable data of its
    programs) in the current context, creating it on first use with
    'init'; '*slot' identifies the unit, it is set on the first call in
@@ -4016,6 +4019,7 @@ cob_unit_enter (cob_context **pctx, unsigned int *slot, const size_t size,
 		const int auto_init)
 {
 	cob_context	*ctx = cob_current_context;
+	unsigned int	s;
 
 	if (ctx == NULL && !cob_initialized && auto_init) {
 		cob_init (0, NULL);
@@ -4026,11 +4030,19 @@ cob_unit_enter (cob_context **pctx, unsigned int *slot, const size_t size,
 	}
 	*pctx = ctx;
 
-	if (*slot == 0) {
-		*slot = ++ctx->rt->last_unit_slot;
+	/* the slot of the unit is shared by the contexts, it is set once */
+	s = cob_atomic_load_uint (slot);
+	if (s == 0) {
+		cob_lock_acquire (&unit_slot_lock);
+		s = *slot;
+		if (s == 0) {
+			s = ++ctx->rt->last_unit_slot;
+			cob_atomic_store_uint (slot, s);
+		}
+		cob_lock_release (&unit_slot_lock);
 	}
-	if (*slot >= ctx->units_size) {
-		const unsigned int	new_size = *slot + 16;
+	if (s >= ctx->units_size) {
+		const unsigned int	new_size = s + 16;
 		if (ctx->units == NULL) {
 			ctx->units = cob_malloc (new_size * sizeof (void *));
 		} else {
@@ -4040,13 +4052,13 @@ cob_unit_enter (cob_context **pctx, unsigned int *slot, const size_t size,
 		}
 		ctx->units_size = new_size;
 	}
-	if (ctx->units[*slot] == NULL) {
-		ctx->units[*slot] = cob_malloc (size);
+	if (ctx->units[s] == NULL) {
+		ctx->units[s] = cob_malloc (size);
 		if (init) {
-			init (ctx, ctx->units[*slot]);
+			init (ctx, ctx->units[s]);
 		}
 	}
-	*unit = ctx->units[*slot];
+	*unit = ctx->units[s];
 	return 0;
 }
 
