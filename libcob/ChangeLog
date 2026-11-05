@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fileio.c (cob_put_qbl, cob_load_module, output_io_module_error,
+	  cob_open_ctx, cob_delete_file_ctx, cob_exit_fileio_backends_context):
+	  loading of the I/O routines under a lock
 	* fbdb.c (fbdb_state, bdb_err_event, join_environment, bdb_lock_file,
 	  bdb_lock_record, bdb_test_record_lock, ...): one BDB environment
 	  handle and locker per context
