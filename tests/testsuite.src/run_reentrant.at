@@ -378,6 +378,130 @@ thread 7: 0 bad
 AT_CLEANUP
 
 
+AT_SETUP([dynamic CALL and CANCEL in several threads])
+AT_KEYWORDS([runreentrant cob_context_create CALL CANCEL thread])
+
+# each thread creates its own execution context and calls a program
+# which CALLs dynamically two programs of the same module (a literal
+# and a field) and CANCELs one of them: the resolved entries and the
+# count of active programs of a module are specific to each context
+
+AT_DATA([calc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      calc.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(8) VALUE 0.
+       01 SUBNAME       PIC X(8) VALUE "sub2".
+       LINKAGE          SECTION.
+       01 RES           PIC 9(8).
+       01 TID           PIC 9(2).
+       PROCEDURE        DIVISION USING RES TID.
+           CALL "sub" USING CNT
+           CALL SUBNAME USING CNT
+           IF FUNCTION MOD (CNT 100) = 0
+              CANCEL "sub"
+           END-IF
+           MOVE CNT TO RES
+           GOBACK.
+       END PROGRAM calc.
+])
+
+AT_DATA([sub.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 C             PIC 9(8).
+       PROCEDURE        DIVISION USING C.
+           ADD 1 TO C
+           GOBACK.
+       END PROGRAM sub.
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub2.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 C             PIC 9(8).
+       PROCEDURE        DIVISION USING C.
+           GOBACK.
+       END PROGRAM sub2.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <libcob.h>
+
+#define NTHREADS 8
+#define NCALLS 1000
+
+static int bads[NTHREADS];
+
+static void *
+task (void *arg)
+{
+   int *bad = (int *)arg;
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char res[9] = "00000000";
+   char tid[3];
+   void *argv[2];
+   int i;
+
+   snprintf (tid, sizeof tid, "%02d", (int)(bad - bads));
+   argv[0] = res;
+   argv[1] = tid;
+   for (i = 1; i <= NCALLS; i++) {
+      char expected[9];
+      (void)cob_call ("calc", 2, argv);
+      snprintf (expected, sizeof expected, "%08d", i);
+      if (memcmp (res, expected, 8)) {
+         (*bad)++;
+      }
+   }
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+
+int
+main (int argc, char **argv)
+{
+   pthread_t th[NTHREADS];
+   int i;
+
+   cob_init (argc, argv);
+   /* the module is loaded by the first CALL, in one of the threads */
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_create (&th[i], NULL, task, &bads[i]);
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_join (th[i], NULL);
+      printf ("thread %d: %d bad\n", i, bads[i]);
+   }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([$COMPILE_MODULE calc.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sub.cob], [0], [], [])
+AT_CHECK([cp sub.$COB_MODULE_EXT sub2.$COB_MODULE_EXT], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([CANCEL in one execution context])
 AT_KEYWORDS([runreentrant cob_context_create cob_cancel CANCEL])
 
