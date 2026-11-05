@@ -61,16 +61,6 @@
 #define ISRECLEN isreclen
 #define ISSTAT1 isstat1
 #define ISSTAT2 isstat2
-#ifdef cobglobptr
-#undef cobglobptr
-#endif
-#ifdef cobsetptr
-#undef cobsetptr
-#endif
-#define cobglobptr	isam_globptr
-#define cobsetptr	isam_setptr
-static	cob_global		*isam_globptr;
-static	cob_settings	*isam_setptr;
 #if defined(WITH_VBISAM) && defined(WITH_DISAM)
 #undef WITH_DISAM
 #endif
@@ -206,22 +196,22 @@ struct indexfile {
 
 /* Local variables */
 
-static int isam_open	(cob_file_api *a, cob_file *, char *, const enum cob_open_mode, const int);
-static int isam_close	(cob_file_api *a, cob_file *, const int);
-static int isam_start	(cob_file_api *a, cob_file *, const int, cob_field *);
-static int isam_read	(cob_file_api *a, cob_file *, cob_field *, const int);
-static int isam_read_next(cob_file_api *a, cob_file *, const int);
-static int isam_write	(cob_file_api *a, cob_file *, const int);
-static int isam_delete	(cob_file_api *a, cob_file *);
-static int isam_rewrite	(cob_file_api *a, cob_file *, const int);
-static int isam_file_delete (cob_file_api *a, cob_file *f, char *name);
-static int isam_sync (cob_file_api *a, cob_file *f);
-static int isam_commit (cob_file_api *a, cob_file *f);
-static int isam_rollback (cob_file_api *a, cob_file *f);
+static int isam_open	(cob_context *, cob_file_api *a, cob_file *, char *, const enum cob_open_mode, const int);
+static int isam_close	(cob_context *, cob_file_api *a, cob_file *, const int);
+static int isam_start	(cob_context *, cob_file_api *a, cob_file *, const int, cob_field *);
+static int isam_read	(cob_context *, cob_file_api *a, cob_file *, cob_field *, const int);
+static int isam_read_next(cob_context *, cob_file_api *a, cob_file *, const int);
+static int isam_write	(cob_context *, cob_file_api *a, cob_file *, const int);
+static int isam_delete	(cob_context *, cob_file_api *a, cob_file *);
+static int isam_rewrite	(cob_context *, cob_file_api *a, cob_file *, const int);
+static int isam_file_delete (cob_context *, cob_file_api *a, cob_file *f, char *name);
+static int isam_sync (cob_context *, cob_file_api *a, cob_file *f);
+static int isam_commit (cob_context *, cob_file_api *a, cob_file *f);
+static int isam_rollback (cob_context *, cob_file_api *a, cob_file *f);
 static char *isam_version (void);
-static void cob_isam_exit_fileio (cob_file_api *a);
+static void cob_isam_exit_fileio (cob_context *, cob_file_api *a);
 
-COB_EXT_EXPORT void cob_isam_init_fileio (cob_file_api *a);
+COB_EXT_EXPORT void cob_isam_init_fileio (cob_context *, cob_file_api *a);
 
 static int
 isam_dummy ()
@@ -333,14 +323,14 @@ indexed_cmpkey (struct indexfile *fh, unsigned char *data, int idx, int partlen)
 /* Build 'keydesc' from 'cob_file_key'
    Return total length of the key */
 static int
-indexed_keydesc (cob_file *f, struct keydesc *kd, cob_file_key *key)
+indexed_keydesc (cob_context *ctx, cob_file *f, struct keydesc *kd, cob_file_key *key)
 {
 	int	keylen, part, keytype;
 	/* LCOV_EXCL_START */
 	if (key->count_components < 1) {
 		/* Should not happen as this was generated pre GC 3.0 */
-		cob_runtime_error ("file i/o version mismatch");
-		cob_stop_run (1);
+		cob_runtime_error_ctx (ctx, "file i/o version mismatch");
+		cob_stop_run_ctx (ctx, 1);
 	}
 	/* LCOV_EXCL_STOP */
 
@@ -360,7 +350,7 @@ indexed_keydesc (cob_file *f, struct keydesc *kd, cob_file_key *key)
 	/* LCOV_EXCL_START */
 	if (key->count_components > max_keycomp) {
 		/* not translated as this is safety guard unlikely to be ever triggered */
-		cob_runtime_warning ("module specifies %d key components, "
+		cob_runtime_warning_ctx (ctx, "module specifies %d key components, "
 			"%s runtime ignores all parts greater than %d",
 			key->count_components, isam_name, max_keycomp);
 		key->count_components = max_keycomp;
@@ -452,7 +442,7 @@ indexed_keycmp (struct keydesc *k1, struct keydesc *k2)
 }
 
 static int
-isam_sync (cob_file_api *a, cob_file *f)
+isam_sync (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	struct indexfile	*fh;
 
@@ -476,7 +466,7 @@ isam_sync (cob_file_api *a, cob_file *f)
 }
 
 static int
-isam_commit (cob_file_api *a, cob_file *f)
+isam_commit (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 #ifndef ISSYNCWR
@@ -496,7 +486,7 @@ isam_commit (cob_file_api *a, cob_file *f)
 }
 
 static int
-isam_rollback (cob_file_api *a, cob_file *f)
+isam_rollback (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	COB_UNUSED (f);
@@ -656,7 +646,7 @@ savefileposition (cob_file *f)
 
 /* Get length of variable length record */
 static COB_INLINE COB_A_INLINE void
-get_isreclen (cob_file *f)
+get_isreclen (cob_context *ctx, cob_file *f)
 {
 	if (f->record_min != f->record_max) {
 #if ISVARLEN == 0
@@ -665,14 +655,14 @@ get_isreclen (cob_file *f)
 		if (f->variable_record) {
 			for (k = f->record_max; k > f->record_min && f->record->data[k-1] == 0; k--);
 			f->record->size = k;
-			cob_set_int (f->variable_record, (int) k);
+			cob_set_int_ctx (ctx, f->variable_record, (int) k);
 		}
 #else
 		f->record->size = ISRECLEN;
 		if (f->record->size < f->record_max)
 			memset(&f->record->data[f->record->size], 0, f->record_max - f->record->size);
 		if (f->variable_record)
-			cob_set_int (f->variable_record, (int) f->record->size);
+			cob_set_int_ctx (ctx, f->variable_record, (int) f->record->size);
 #endif
 	}
 }
@@ -695,7 +685,7 @@ set_isreclen (cob_file *f)
  * Open ISAM File, if locked retry as requested
  */
 static int
-isopen_retry(cob_file *f, char *filename, int mode)
+isopen_retry(cob_context *ctx, cob_file *f, char *filename, int mode)
 {
 	int	isfd, retry, interval;
 
@@ -706,12 +696,12 @@ isopen_retry(cob_file *f, char *filename, int mode)
 	if ((f->retry_mode & COB_RETRY_SECONDS)) {
 		retry = 1;
 		interval = f->retry_seconds>0?f->retry_seconds:
-			(isam_setptr->cob_retry_seconds>0?isam_setptr->cob_retry_seconds:1);
+			(ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1);
 	} else
 	if ((f->retry_mode & COB_RETRY_TIMES)) {
 		retry = f->retry_times>0?f->retry_times:
-			(isam_setptr->cob_retry_times>0?isam_setptr->cob_retry_times:1);
-		interval = isam_setptr->cob_retry_seconds>0?isam_setptr->cob_retry_seconds:1;
+			(ctx->settings->cob_retry_times>0?ctx->settings->cob_retry_times:1);
+		interval = ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1;
 	}
 	if (retry > 0) {
 		retry = retry * interval * COB_RETRY_PER_SECOND ;
@@ -739,7 +729,7 @@ isopen_retry(cob_file *f, char *filename, int mode)
  * Read ISAM record, if locked retry as requested
  */
 static int
-isread_retry(cob_file *f, void *data, int mode)
+isread_retry(cob_context *ctx, cob_file *f, void *data, int mode)
 {
 	int	isfd, sts, retry, interval;
 	struct indexfile	*fh;
@@ -754,12 +744,12 @@ isread_retry(cob_file *f, void *data, int mode)
 	if ((f->retry_mode & COB_RETRY_SECONDS)) {
 		retry = 1;
 		interval = f->retry_seconds>0?f->retry_seconds:
-			(isam_setptr->cob_retry_seconds>0?isam_setptr->cob_retry_seconds:1);
+			(ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1);
 	} else
 	if ((f->retry_mode & COB_RETRY_TIMES)) {
 		retry = f->retry_times>0?f->retry_times:
-			(isam_setptr->cob_retry_times>0?isam_setptr->cob_retry_times:1);
-		interval = isam_setptr->cob_retry_seconds>0?isam_setptr->cob_retry_seconds:1;
+			(ctx->settings->cob_retry_times>0?ctx->settings->cob_retry_times:1);
+		interval = ctx->settings->cob_retry_seconds>0?ctx->settings->cob_retry_seconds:1;
 	}
 	if (retry > 0) {
 		retry = retry * interval * COB_RETRY_PER_SECOND ;
@@ -794,7 +784,7 @@ isread_retry(cob_file *f, void *data, int mode)
 /* Delete file */
 
 static int
-isam_file_delete (cob_file_api *a, cob_file *f, char *filename)
+isam_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename)
 {
 	struct stat	st;
 	char	file_name_buf [COB_FILE_MAX];
@@ -876,7 +866,7 @@ isam_set_mode (cob_file *f)
 }
 
 static int
-isam_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+isam_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
 	/* Note filename points to file_open_name */
 	/* cob_chk_file_mapping manipulates file_open_name directly */
@@ -1056,7 +1046,7 @@ isam_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		if (isfd >= 0) {
 			isfullclose (isfd);
 		}
-		isam_file_delete (a, f, filename);
+		isam_file_delete (ctx, a, f, filename);
 		ISERRNO = 0;
 		dobld = 1;
 		break;
@@ -1082,7 +1072,7 @@ isam_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 dobuild:
 		/* copy index information cob_file_key -> keydesc */
 		for (k = 0; k < f->nkeys; ++k) {
-			len = indexed_keydesc (f, &fh->key[k], &f->keys[k]);
+			len = indexed_keydesc (ctx, f, &fh->key[k], &f->keys[k]);
 			if (fh->lenkey < len) {
 				fh->lenkey = len;
 			}
@@ -1102,7 +1092,7 @@ dobuild:
 #endif
 			) {
 				/* Erase file and redo the 'isbuild' */
-				isam_file_delete (a, f, filename);
+				isam_file_delete (ctx, a, f, filename);
 #if	ISVARLEN != 0
 				if (f->record_min != f->record_max) {
 					ISRECLEN = f->record_min;
@@ -1125,7 +1115,7 @@ dobuild:
 		if (lmode == ISMANULOCK) {
 			fh->lmode = ISLOCK; 	/* fileio will handle Record locking */
 		}
-		isfd = isopen_retry (f, (char *)filename, omode | lmode | vmode);
+		isfd = isopen_retry (ctx, f, (char *)filename, omode | lmode | vmode);
 		if (isfd >= 0) {
 			struct dictinfo		di = { 0 };		/* Defined in (c|d|vb)isam.h */
 			isindexinfo (isfd, (void *)&di, 0);
@@ -1148,7 +1138,7 @@ dobuild:
 					f->record_min = f->record_max = di.di_recsize;
 					f->record->size = di.di_recsize;
 					if (f->variable_record)
-						cob_set_int (f->variable_record, (int) f->record->size);
+						cob_set_int_ctx (ctx, f->variable_record, (int) f->record->size);
 				} else
 				if (f->flag_keycheck
 				|| f->record_max < di.di_recsize) {
@@ -1169,7 +1159,7 @@ dobuild:
 				/* Verify that COBOL keys defined match some real ISAM key */
 				for (j = 0; j < f->nkeys && !ret; ++j) {
 					struct keydesc	kd = { 0 };
-					indexed_keydesc (f, &kd, &f->keys[j]);
+					indexed_keydesc (ctx, f, &kd, &f->keys[j]);
 					for (k = 0; k < fh->nkeys; ++k) {
 						if (indexed_keycmp (&kd, &fh->key[k]) == 0) {
 							fh->idxmap[j] = k;
@@ -1196,7 +1186,7 @@ dobuild:
 						fh->lenkey = len;
 					}
 					/* get key info from cob_key */
-					len_key = indexed_keydesc (f, &kd, &f->keys[k]);
+					len_key = indexed_keydesc (ctx, f, &kd, &f->keys[k]);
 					/* verify that COBOL keys match exactly to real ISAM keys */
 					if (len_key != len
 					 || indexed_keycmp (&kd, &key) != 0) {
@@ -1286,7 +1276,7 @@ dobuild:
 /* Close the INDEXED file */
 
 static int
-isam_close (cob_file_api *a, cob_file *f, const int opt)
+isam_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexfile	*fh = f->file;
 
@@ -1308,7 +1298,7 @@ isam_close (cob_file_api *a, cob_file *f, const int opt)
 /* START INDEXED file with positioning */
 
 static int
-isam_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
+isam_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 {
 	struct indexfile	*fh = f->file;
 	int			k;
@@ -1445,7 +1435,7 @@ isam_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 /* Random READ of the INDEXED file  */
 
 static int
-isam_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
+isam_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
 	struct indexfile	*fh;
 	int			k,fullkeylen,partlen;
@@ -1499,7 +1489,7 @@ isam_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 	ISERRNO = 0;
 	fh->readdir = -1;
 	ret = COB_STATUS_00_SUCCESS;
-	if (isread_retry (f, (void *)f->record->data, ISEQUAL | lmode)) {
+	if (isread_retry (ctx, f, (void *)f->record->data, ISEQUAL | lmode)) {
 		ret = fisretsts (COB_STATUS_21_KEY_INVALID);
 	}
 	if ((ret != COB_STATUS_00_SUCCESS)) {
@@ -1515,14 +1505,14 @@ isam_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 	f->flag_begin_of_file = 0;
 	indexed_savekey (fh, f->record->data, 0);
 	fh->recnum = ISRECNUM;
-	get_isreclen (f);
+	get_isreclen (ctx, f);
 	return 0;
 }
 
 /* Sequential READ of the INDEXED file */
 
 static int
-isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+isam_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
 	struct indexfile	*fh;
 	int			ret;
@@ -1587,11 +1577,11 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		if (fh->startiscur) {
 			if (fh->startcond == COB_LA) {
 				skip_read = ISPREV;
-				if (isread_retry (f, (void *)f->record->data, ISLAST | lmode)) {
+				if (isread_retry (ctx, f, (void *)f->record->data, ISLAST | lmode)) {
 					ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 				}
 			} else if (fh->startcond == COB_FI) {
-				if (isread_retry (f, (void *)f->record->data, ISFIRST | lmode)) {
+				if (isread_retry (ctx, f, (void *)f->record->data, ISFIRST | lmode)) {
 					ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 				}
 			} else if (isread (fh->isfd, (void *)f->record->data, ISCURR)) {
@@ -1633,7 +1623,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 					}
 					break;
 				}
-				if (isread_retry (f, (void *)f->record->data, ISCURR | lmode)) {
+				if (isread_retry (ctx, f, (void *)f->record->data, ISCURR | lmode)) {
 					ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 				}
 				dupcheck = 1;
@@ -1646,7 +1636,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 			dupcheck = 1;
 			if (fh->lmode & ISLOCK) {
 				/* Now lock 'peek ahead' record */
-				if (isread_retry (f, (void *)f->record->data, ISCURR | fh->lmode)) {
+				if (isread_retry (ctx, f, (void *)f->record->data, ISCURR | fh->lmode)) {
 					ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 				}
 			}
@@ -1655,7 +1645,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 				isread (fh->isfd, (void *)f->record->data, ISNEXT);
 				fh->wrkhasrec = 0;
 			}
-			if (isread_retry (f, (void *)f->record->data, ISNEXT | lmode)) {
+			if (isread_retry (ctx, f, (void *)f->record->data, ISNEXT | lmode)) {
 				ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 			}
 		}
@@ -1673,15 +1663,15 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		}
 		if (fh->startiscur) {
 			if (fh->startcond == COB_FI) {
-				if (isread_retry (f, (void *)f->record->data, ISFIRST | lmode)) {
+				if (isread_retry (ctx, f, (void *)f->record->data, ISFIRST | lmode)) {
 					ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 				}
 			} else if (fh->startcond == COB_LA) {
 				skip_read = ISPREV;
-				if (isread_retry (f, (void *)f->record->data, ISLAST | lmode)) {
+				if (isread_retry (ctx, f, (void *)f->record->data, ISLAST | lmode)) {
 					ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 				}
-			} else if (isread_retry (f, (void *)f->record->data, ISCURR | lmode)) {
+			} else if (isread_retry (ctx, f, (void *)f->record->data, ISCURR | lmode)) {
 				ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 			} else {
 				switch (fh->startcond) {
@@ -1726,7 +1716,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 					}
 					break;
 				}
-				if (isread_retry (f, (void *)f->record->data, ISCURR | lmode)) {
+				if (isread_retry (ctx, f, (void *)f->record->data, ISCURR | lmode)) {
 					ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 				}
 				dupcheck = 1;
@@ -1739,7 +1729,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 			dupcheck = 1;
 			if (fh->lmode & ISLOCK) {
 				/* Now lock 'peek ahead' record */
-				if (isread_retry (f, (void *)f->record->data, ISCURR | fh->lmode)) {
+				if (isread_retry (ctx, f, (void *)f->record->data, ISCURR | fh->lmode)) {
 					ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 				}
 			}
@@ -1749,7 +1739,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 				fh->wrkhasrec = 0;
 			}
 			skip_read = ISPREV;
-			if (isread_retry (f, (void *)f->record->data, ISPREV | lmode)) {
+			if (isread_retry (ctx, f, (void *)f->record->data, ISPREV | lmode)) {
 				ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 			}
 		}
@@ -1757,7 +1747,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 	case COB_READ_FIRST:
 		fh->readdir = ISNEXT;
 		fh->wrkhasrec = 0;
-		if (isread_retry (f, (void *)f->record->data, ISFIRST | lmode)) {
+		if (isread_retry (ctx, f, (void *)f->record->data, ISFIRST | lmode)) {
 			ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 		}
 		break;
@@ -1765,7 +1755,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		skip_read = ISPREV;
 		fh->readdir = ISPREV;
 		fh->wrkhasrec = 0;
-		if (isread_retry (f, (void *)f->record->data, ISLAST | lmode)) {
+		if (isread_retry (ctx, f, (void *)f->record->data, ISLAST | lmode)) {
 			ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 		}
 		break;
@@ -1775,7 +1765,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 			memcpy (f->record->data, fh->recwrk, f->record_max);
 			fh->wrkhasrec = 0;
 		} else
-		if (isread_retry (f, (void *)f->record->data, ISNEXT | lmode)) {
+		if (isread_retry (ctx, f, (void *)f->record->data, ISNEXT | lmode)) {
 			ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 		}
 		break;
@@ -1784,7 +1774,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 	&& ((f->retry_mode & COB_ADVANCING_LOCK)
 	 || (read_opts & COB_READ_ADVANCING_LOCK))) {
 		ret = COB_STATUS_00_SUCCESS;
-		if (isread_retry (f, (void *)f->record->data, skip_read | lmode)) {
+		if (isread_retry (ctx, f, (void *)f->record->data, skip_read | lmode)) {
 			ret = fisretsts (COB_STATUS_10_END_OF_FILE);
 		}
 	}
@@ -1803,7 +1793,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 	f->flag_begin_of_file = 0;
 	indexed_savekey (fh, f->record->data, 0);
 	fh->recnum = ISRECNUM;
-	get_isreclen (f);
+	get_isreclen (ctx, f);
 
 #ifdef COB_WITH_STATUS_02
 	/* If first read after a START then Read ahead to see if next record has same key value */
@@ -1877,7 +1867,7 @@ isam_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 /* WRITE to the INDEXED file  */
 
 static int
-isam_write (cob_file_api *a, cob_file *f, const int opt)
+isam_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexfile	*fh = f->file;
 	int			ret, retdup;
@@ -1922,7 +1912,7 @@ isam_write (cob_file_api *a, cob_file *f, const int opt)
 		}
 		ret = COB_CHECK_DUP (ret);
 		/* Then read placing lock on the record */
-		if (isread_retry (f, (void *)f->record->data, ISCURR | ISLOCK)) {
+		if (isread_retry (ctx, f, (void *)f->record->data, ISCURR | ISLOCK)) {
 			return fisretsts (COB_STATUS_49_I_O_DENIED);
 		}
 	} else {
@@ -1951,7 +1941,7 @@ isam_write (cob_file_api *a, cob_file *f, const int opt)
 /* DELETE record from the INDEXED file  */
 
 static int
-isam_delete (cob_file_api *a, cob_file *f)
+isam_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	struct indexfile	*fh;
 	int			ret;
@@ -1979,7 +1969,7 @@ isam_delete (cob_file_api *a, cob_file *f)
 		}
 	}
 	ISERRNO = 0;
-	if (isread_retry (f, (void *)f->record->data, ISEQUAL | ISLOCK)) {
+	if (isread_retry (ctx, f, (void *)f->record->data, ISEQUAL | ISLOCK)) {
 		ret = fisretsts (COB_STATUS_21_KEY_INVALID);
 	} else {
 		if (isdelete (fh->isfd, (void *)f->record->data)) {
@@ -1996,7 +1986,7 @@ isam_delete (cob_file_api *a, cob_file *f)
 /* REWRITE record to the INDEXED file  */
 
 static int
-isam_rewrite (cob_file_api *a, cob_file *f, const int opt)
+isam_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexfile	*fh;
 	int			k;
@@ -2097,7 +2087,7 @@ isam_rewrite (cob_file_api *a, cob_file *f, const int opt)
 			memcpy (fh->recwrk, f->record->data, f->record_max);
 			isstart (fh->isfd, &fh->key[0], fh->key[0].k_len,
 				(void *)fh->recwrk, ISEQUAL);
-			if (isread_retry (f, (void *)fh->recwrk, ISEQUAL | ISLOCK)) {
+			if (isread_retry (ctx, f, (void *)fh->recwrk, ISEQUAL | ISLOCK)) {
 				ret = fisretsts (COB_STATUS_49_I_O_DENIED);
 			} else {
 				set_isreclen (f);
@@ -2117,7 +2107,7 @@ isam_rewrite (cob_file_api *a, cob_file *f, const int opt)
 	} else {	/* Index is not active */
 
 		memcpy (fh->recwrk, f->record->data, f->record_max);
-		if (isread_retry (f, (void *)fh->recwrk, ISEQUAL | ISLOCK)) {
+		if (isread_retry (ctx, f, (void *)fh->recwrk, ISEQUAL | ISLOCK)) {
 			ret = fisretsts (COB_STATUS_49_I_O_DENIED);
 		} else {
 			set_isreclen (f);
@@ -2151,7 +2141,7 @@ isam_rewrite (cob_file_api *a, cob_file *f, const int opt)
 }
 
 static void
-cob_isam_exit_fileio (cob_file_api *a)
+cob_isam_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 #ifndef	WITH_DISAM
@@ -2160,7 +2150,7 @@ cob_isam_exit_fileio (cob_file_api *a)
 }
 
 void
-cob_isam_init_fileio (cob_file_api *a)
+cob_isam_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 #ifdef NPARTS
 	if (max_keycomp > NPARTS)
@@ -2193,8 +2183,6 @@ cob_isam_init_fileio (cob_file_api *a)
 	}
 #endif
 #endif
-	isam_globptr = a->glbptr;
-	isam_setptr = a->setptr;
 }
 
 #endif

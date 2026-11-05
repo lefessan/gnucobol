@@ -34,7 +34,7 @@
 #include <sqlext.h>
 #endif
 
-void cob_odbc_init_fileio (cob_file_api *a);
+void cob_odbc_init_fileio (cob_context *, cob_file_api *a);
 
 /* Local variables */
 #ifdef COB_DEBUG_LOG
@@ -43,21 +43,21 @@ static const char *condname[20] = {"0","EQ","LT","LE","GT","GE","NE","FI","LA",
 #endif
 
 static int odbcStmt			(struct db_state *db, char *stmt);
-static int odbc_sync		(cob_file_api *, cob_file *);
-static int odbc_commit		(cob_file_api *, cob_file *);
-static int odbc_rollback	(cob_file_api *, cob_file *);
-static int odbc_open		(cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
-static int odbc_close		(cob_file_api *, cob_file *, const int);
-static int odbc_start		(cob_file_api *, cob_file *, const int, cob_field *);
-static int odbc_read		(cob_file_api *, cob_file *, cob_field *, const int);
-static int odbc_read_next	(cob_file_api *, cob_file *, const int);
-static int odbc_write		(cob_file_api *, cob_file *, const int);
-static int odbc_delete		(cob_file_api *, cob_file *);
-static int odbc_file_delete	(cob_file_api *, cob_file *, char *);
-static int odbc_rewrite		(cob_file_api *, cob_file *, const int);
-static int odbc_file_unlock (cob_file_api *, cob_file *);
-static void odbc_exit_fileio(cob_file_api *);
-static int odbc_fork 		(cob_file_api *);
+static int odbc_sync		(cob_context *, cob_file_api *, cob_file *);
+static int odbc_commit		(cob_context *, cob_file_api *, cob_file *);
+static int odbc_rollback	(cob_context *, cob_file_api *, cob_file *);
+static int odbc_open		(cob_context *, cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
+static int odbc_close		(cob_context *, cob_file_api *, cob_file *, const int);
+static int odbc_start		(cob_context *, cob_file_api *, cob_file *, const int, cob_field *);
+static int odbc_read		(cob_context *, cob_file_api *, cob_file *, cob_field *, const int);
+static int odbc_read_next	(cob_context *, cob_file_api *, cob_file *, const int);
+static int odbc_write		(cob_context *, cob_file_api *, cob_file *, const int);
+static int odbc_delete		(cob_context *, cob_file_api *, cob_file *);
+static int odbc_file_delete	(cob_context *, cob_file_api *, cob_file *, char *);
+static int odbc_rewrite		(cob_context *, cob_file_api *, cob_file *, const int);
+static int odbc_file_unlock (cob_context *, cob_file_api *, cob_file *);
+static void odbc_exit_fileio(cob_context *, cob_file_api *);
+static int odbc_fork 		(cob_context *, cob_file_api *);
 static char * odbc_version (void);
 
 static const struct cob_fileio_funcs odbc_indexed_funcs = {
@@ -757,7 +757,7 @@ odbc_free_stmt ( SQL_STMT *s)
 }
 
 static int
-odbc_commit (cob_file_api *a, cob_file *f)
+odbc_commit (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	COB_UNUSED (f);
@@ -829,7 +829,7 @@ odbc_commit (cob_file_api *a, cob_file *f)
 }
 
 static int
-odbc_rollback (cob_file_api *a, cob_file *f)
+odbc_rollback (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	COB_UNUSED (f);
@@ -897,7 +897,7 @@ odbc_rollback (cob_file_api *a, cob_file *f)
 }
 
 static int
-odbc_sync (cob_file_api *a, cob_file *f)
+odbc_sync (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	if (!db->isopen)
 		return 0;
@@ -915,7 +915,7 @@ odbc_sync (cob_file_api *a, cob_file *f)
 		Return number of rows with same key
 *****************************************************/
 static int
-odbcCountIndex(
+odbcCountIndex(cob_context *ctx,
 	struct db_state	*db,
 	cob_file *f,
 	struct file_xfd *fx,
@@ -933,7 +933,7 @@ odbcCountIndex(
 	}
 
 	if (fx->key[idx]->count_eq.text == NULL)
-		cob_sql_select (db, fx, idx, COB_COUNT, 0, odbc_free_stmt);
+		cob_sql_select (ctx, db, fx, idx, COB_COUNT, 0, odbc_free_stmt);
 	varFetch[0] = 0;
 	if (f->keys[idx].tf_suppress) {
 		notsup = 0;
@@ -1168,7 +1168,7 @@ odbc_recreate_index (
 }
 
 static void
-odbc_create_table (
+odbc_create_table (cob_context *ctx,
 	struct db_state	*db,
 	struct file_xfd *fx)
 {
@@ -1177,9 +1177,9 @@ odbc_create_table (
 		sdir = (char*)COB_SCHEMA_DIR;
 	sprintf (filedd, "%s%s%s",sdir,SLASH_STR,fx->tablename);
 	if (db->a)
-		db->a->cob_write_dict (fx->fl, filedd);
+		db->a->cob_write_dict (ctx, fx->fl, filedd);
 
-	cob_load_ddl (db, fx);
+	cob_load_ddl (ctx, db, fx);
 	if (fx->create_table == NULL) {
 		db->dbStatus = db->dbStsNoTable;
 		return;
@@ -1201,7 +1201,7 @@ odbc_create_table (
 /* INDEXED */
 
 static void
-join_environment (cob_file_api *a, cob_file *f)
+join_environment (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	char	*env, tmp[256];
 	SQLSMALLINT		len;
@@ -1245,19 +1245,19 @@ join_environment (cob_file_api *a, cob_file *f)
 		DEBUG_LOG("db",("SQLAllocHandle DBC status %d; Failed!\n",db->dbStatus));
 		return;
 	}
-	if((env=getSchemaEnvName(db,tmp,"_DSN",db->dbDsn)) != NULL) {
+	if((env=getSchemaEnvName(ctx, db,tmp,"_DSN",db->dbDsn)) != NULL) {
 		DEBUG_LOG("db",("Env: %s -> %s\n",tmp,env));
 	}
-	if((env=getSchemaEnvName(db,tmp,"_UID",db->dbUser)) != NULL) {
+	if((env=getSchemaEnvName(ctx, db,tmp,"_UID",db->dbUser)) != NULL) {
 		DEBUG_LOG("db",("Env: %s -> %s\n",tmp,env));
 	}
-	if((env=getSchemaEnvName(db,tmp,"_PWD",db->dbPwd)) != NULL) {
+	if((env=getSchemaEnvName(ctx, db,tmp,"_PWD",db->dbPwd)) != NULL) {
 		DEBUG_LOG("db",("Env: %s -> %s\n",tmp,env));
 	}
-	if((env=getSchemaEnvName(db,tmp,"_CON",db->dbCon)) != NULL) {
+	if((env=getSchemaEnvName(ctx, db,tmp,"_CON",db->dbCon)) != NULL) {
 		DEBUG_LOG("db",("Env: %s -> %s\n",tmp,env));
 	}
-	if((env=getSchemaEnvName(db,tmp,"_COMMIT",NULL)) != NULL) {
+	if((env=getSchemaEnvName(ctx, db,tmp,"_COMMIT",NULL)) != NULL) {
 		DEBUG_LOG("db",("Env: %s -> %s\n",tmp,env));
 		db->commitInterval = atoi(env);
 	} else {
@@ -1335,9 +1335,9 @@ join_environment (cob_file_api *a, cob_file *f)
 		|| db->dbUser[0] <= ' '
 		|| db->dbPwd[0] <= ' ') {
 			DEBUG_LOG("db",("~ERROR ODBC Connection is not defined\n"));
-			logSchemaEnvName (db, "_NAME");
-			logSchemaEnvName (db, "_DSN");
-			logSchemaEnvName (db, "_UID");
+			logSchemaEnvName (ctx, db, "_NAME");
+			logSchemaEnvName (ctx, db, "_DSN");
+			logSchemaEnvName (ctx, db, "_UID");
 			db->dbStatus = -99;
 			db->isopen = FALSE;			/* Data Base is NOT connected */
 			if(db->dbDbcH) {
@@ -1396,7 +1396,7 @@ join_environment (cob_file_api *a, cob_file *f)
 							db->dbType,"Experimental",amsg));
 	}
 
-	if((env=getSchemaEnvName(db,tmp,"_TRC",NULL)) != NULL) {
+	if((env=getSchemaEnvName(ctx, db,tmp,"_TRC",NULL)) != NULL) {
 		if(odbcStmt(db,(char*)"ALTER SESSION SET SQL_TRACE = TRUE"))
 			return;
 	}
@@ -1524,7 +1524,7 @@ join_environment (cob_file_api *a, cob_file *f)
 
 /* Delete file */
 static int
-odbc_file_delete (cob_file_api *a, cob_file *f, char *filename)
+odbc_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename)
 {
 	struct indexed_file	*p;
 	char		buff[COB_FILE_MAX+1];
@@ -1532,13 +1532,13 @@ odbc_file_delete (cob_file_api *a, cob_file *f, char *filename)
 
 	DEBUG_LOG("db",("DELETE FILE %s\n",f->select_name));
 	if (db_join) {			/* Join DataBase, on first OPEN of INDEXED file */
-		join_environment (a, f);
+		join_environment (ctx, a, f);
 		if (db_join < 0) {
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
 	}
 	if (f->file == NULL) {
-		fx = cob_load_xfd (db, f, NULL, sizeof(SQLLEN), 0);
+		fx = cob_load_xfd (ctx, db, f, NULL, sizeof(SQLLEN), 0);
 		if (fx == NULL) {
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
@@ -1552,7 +1552,7 @@ odbc_file_delete (cob_file_api *a, cob_file *f, char *filename)
 	fx = p->fx;
 	snprintf(buff,sizeof(buff),"DROP TABLE %s",fx->tablename);
 	if (f->open_mode == COB_OPEN_CLOSED) {
-		odbc_close (a, f, 0);
+		odbc_close (ctx, a, f, 0);
 	}
 	DEBUG_LOG("db",("%s\n",buff));
 	if (odbcStmt(db,buff)
@@ -1569,7 +1569,7 @@ odbc_file_delete (cob_file_api *a, cob_file *f, char *filename)
 
 /* OPEN INDEXED file */
 static int
-odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+odbc_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
 	struct indexed_file	*p;
 	int				i, k, ln, joined = 0;
@@ -1579,13 +1579,13 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 #endif
 	struct file_xfd	*fx;
 
-	fx = cob_load_xfd (db, f, NULL, sizeof(SQLLEN), 0);
+	fx = cob_load_xfd (ctx, db, f, NULL, sizeof(SQLLEN), 0);
 	if (fx == NULL) {
 		return COB_STATUS_30_PERMANENT_ERROR;
 	}
 	if (db_join) {			/* Join DataBase, on first OPEN of INDEXED file */
 		joined = 1;
-		join_environment (a, f);
+		join_environment (ctx, a, f);
 		if (db_join < 0) {
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
@@ -1629,7 +1629,7 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		 && (db->dbStatus == db->dbStsNoTable
 		 ||  db->dbStatus == 1042
 		 ||  memcmp(db->odbcState,"HY000",4) == 0)) {
-			odbc_create_table (db, fx);
+			odbc_create_table (ctx, db, fx);
 		}
 		if (db->dbStatus != db->dbStsOk
 		 && db->dbStatus != db->dbStsNotFound) {
@@ -1643,7 +1643,7 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		if (odbcStmt(db,buff)
 		 && (db->dbStatus == db->dbStsNoTable
 		 ||  db->dbStatus == 1042)) {
-			odbc_create_table (db, fx);
+			odbc_create_table (ctx, db, fx);
 			if (db->dbStatus != db->dbStsOk)
 				return COB_STATUS_30_PERMANENT_ERROR;
 		} else if (db->dbStatus != db->dbStsNotFound) {
@@ -1652,8 +1652,8 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		break;
 	/* LCOV_EXCL_START */
 	default:
-		cob_runtime_error (_("invalid internal call of %s"), "indexed_open");
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_runtime_error_ctx (ctx, _("invalid internal call of %s"), "indexed_open");
+		cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 	/* LCOV_EXCL_STOP */
 	}
 
@@ -1680,7 +1680,7 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		 && db->dbStatus != db->dbStsNotFound) {
 			int		ln;
 			int		clearit = 0;
-			cob_load_ddl (db, fx);
+			cob_load_ddl (ctx, db, fx);
 			odbc_recreate_sequence (db, fx);
 			ln = snprintf(buff,sizeof(buff),"ALTER TABLE %s ADD rid_%s ",fx->tablename,fx->tablename);
 			if (db->mysql) {
@@ -1707,7 +1707,7 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 					f->limitreads = 0;
 				}
 				cob_drop_xfd (fx);
-				fx = cob_load_xfd (db, f, NULL, sizeof(SQLLEN), 1);
+				fx = cob_load_xfd (ctx, db, f, NULL, sizeof(SQLLEN), 1);
 				p->fx = fx;
 				if (fx == NULL) {
 					return COB_STATUS_30_PERMANENT_ERROR;
@@ -1829,18 +1829,18 @@ odbc_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 /* Close the INDEXED file */
 
 static int
-odbc_close (cob_file_api *a, cob_file *f, const int opt)
+odbc_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int		k;
 
 	if (opt == COB_CLOSE_ABORT) {
-		odbc_rollback (a, f);
+		odbc_rollback (ctx, a, f);
 	} else
 	if (db->updatesDone > 0) {
 		db->updatesDone = db->commitInterval + 1;	/* Force COMMIT */
-		odbc_commit (a, f);
+		odbc_commit (ctx, a, f);
 	}
 	p = f->file;
 
@@ -1882,14 +1882,14 @@ odbc_close (cob_file_api *a, cob_file *f, const int opt)
 /* START INDEXED file with positioning */
 
 static int
-odbc_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
+odbc_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 {
 	int		ky, klen, partlen, paramtype;
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	COB_UNUSED (a);
 
-	ky = cob_findkey (f, key, &klen, &partlen);
+	ky = cob_findkey_ctx (ctx, f, key, &klen, &partlen);
 	if (ky < 0) {
 		DEBUG_LOG("db",("Start key not found!\n"));
 		return COB_STATUS_30_PERMANENT_ERROR;
@@ -1905,28 +1905,28 @@ odbc_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 	switch (cond) {
 	case COB_EQ:
 	case COB_NE:
-		fx->start = cob_sql_select (db, fx, ky, cond, 0, odbc_free_stmt);
+		fx->start = cob_sql_select (ctx, db, fx, ky, cond, 0, odbc_free_stmt);
 		paramtype = SQL_BIND_EQ;
 		break;
 	case COB_GE:
 	case COB_GT:
-		fx->start = cob_sql_select (db, fx, ky, cond, 0, odbc_free_stmt);
+		fx->start = cob_sql_select (ctx, db, fx, ky, cond, 0, odbc_free_stmt);
 		paramtype = SQL_BIND_WHERE;
 		if (fx->precnum) strcpy(fx->precnum,"0");
 		break;
 	case COB_LE:
 	case COB_LT:
-		fx->start = cob_sql_select (db, fx, ky, cond, 0, odbc_free_stmt);
+		fx->start = cob_sql_select (ctx, db, fx, ky, cond, 0, odbc_free_stmt);
 		paramtype = SQL_BIND_WHERE;
 		if (fx->precnum) strcpy(fx->precnum,"99999999999999");
 		break;
 	case COB_FI:
-		fx->start = cob_sql_select (db, fx, ky, cond, 0, odbc_free_stmt);
+		fx->start = cob_sql_select (ctx, db, fx, ky, cond, 0, odbc_free_stmt);
 		if (fx->precnum) strcpy(fx->precnum,"0");
 		paramtype = SQL_BIND_NO;
 		break;
 	case COB_LA:
-		fx->start = cob_sql_select (db, fx, ky, cond, 0, odbc_free_stmt);
+		fx->start = cob_sql_select (ctx, db, fx, ky, cond, 0, odbc_free_stmt);
 		if (fx->precnum) strcpy(fx->precnum,"99999999999999");
 		paramtype = SQL_BIND_NO;
 		break;
@@ -1938,7 +1938,7 @@ odbc_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 		DEBUG_LOG("db",("~START %s index %d, cond %s, Bind %02X\n",
 						f->select_name,ky,condname[cond],paramtype));
 	}
-	cob_index_to_xfd (db, fx, f, ky, cond);
+	cob_index_to_xfd (ctx, db, fx, f, ky, cond);
 	if (fx->start && fx->start->iscursor) {
 		chkSts(db,(char*)"Pre-Close cursor",fx->start->handle,
 				SQLCloseCursor (fx->start->handle));
@@ -1963,7 +1963,7 @@ odbc_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 /* Random READ of the INDEXED file  */
 
 static int
-odbc_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
+odbc_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
@@ -1977,7 +1977,7 @@ odbc_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 	if (fx->fileorg == COB_ORG_RELATIVE) {
 		ky = 0;
 	} else {
-		ky = cob_findkey (f, key, &klen, &partlen);
+		ky = cob_findkey_ctx (ctx, f, key, &klen, &partlen);
 		if (ky < 0) {
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
@@ -1986,9 +1986,9 @@ odbc_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 	p->startcond = -1;
 	if (fx->start)
 		odbc_close_stmt (fx->start);
-	fx->start = cob_sql_select (db, fx, ky, COB_EQ, read_opts, odbc_free_stmt);
+	fx->start = cob_sql_select (ctx, db, fx, ky, COB_EQ, read_opts, odbc_free_stmt);
 	odbc_close_stmt (fx->start);
-	cob_index_to_xfd (db, fx, f, ky, COB_EQ);
+	cob_index_to_xfd (ctx, db, fx, f, ky, COB_EQ);
 	odbc_setup_stmt (db, fx, fx->start, SQL_BIND_COLS, 0);
 	if (fx->start->status) {
 		fx->start = NULL;
@@ -2022,7 +2022,7 @@ odbc_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 		DEBUG_LOG("db",("Read: %s; OK\n",f->select_name));
 		odbc_any_nulls (db, fx);
 		cob_sql_dump_data (db, fx);
-		cob_xfd_to_file (db, fx, f);
+		cob_xfd_to_file (ctx, db, fx, f);
 	}
 
 	return ret;
@@ -2030,7 +2030,7 @@ odbc_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 
 /* READ of the INDEXED file, continue as required */
 static int
-odbc_read_cont (cob_file *f)
+odbc_read_cont (cob_context *ctx, cob_file *f)
 {
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
@@ -2055,7 +2055,7 @@ TryAgain:
 		 && db->dbStatus == db->dbStsNotFound
 		 && retry == 0) {
 			odbc_close_stmt (fx->start);
-			fx->start = cob_sql_select (db,fx,f->curkey,p->startcond,read_opts,odbc_free_stmt);
+			fx->start = cob_sql_select (ctx, db,fx,f->curkey,p->startcond,read_opts,odbc_free_stmt);
 			odbc_setup_stmt (db, fx, fx->start, SQL_BIND_COLS|SQL_BIND_WHERE, f->curkey);
 			if(chkSts(db,(char*)"Read Restart",fx->start->handle,
 					SQLExecute(fx->start->handle))){
@@ -2073,14 +2073,14 @@ TryAgain:
 	} else {
 		DEBUG_LOG("db",("~%s: %s; OK\n",readmsg,f->select_name));
 		odbc_any_nulls (db, fx);
-		cob_xfd_to_file (db, fx, f);
+		cob_xfd_to_file (ctx, db, fx, f);
 	}
 	return ret;
 }
 
 /* Sequential READ of the INDEXED file */
 static int
-odbc_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+odbc_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
@@ -2103,7 +2103,7 @@ odbc_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 	default:
     case COB_READ_NEXT:
 		if (p->startcond != COB_GT) {
-			fx->start = cob_sql_select (db, fx, ky, COB_GT, read_opts, odbc_free_stmt);
+			fx->start = cob_sql_select (ctx, db, fx, ky, COB_GT, read_opts, odbc_free_stmt);
 			odbc_close_stmt (fx->start);
 			odbc_setup_stmt (db, fx, fx->start, SQL_BIND_COLS|SQL_BIND_WHERE, f->curkey);
 			if(chkSts(db,(char*)"Read Next Exec",fx->start->handle,
@@ -2114,14 +2114,14 @@ odbc_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		}
 		if (fx->start
 		 && !fx->start->isdesc) {
-			ret = odbc_read_cont (f);
+			ret = odbc_read_cont (ctx, f);
 		} else {
 			ret = COB_STATUS_10_END_OF_FILE;
 		}
 		break;
 	case COB_READ_PREVIOUS:
 		if (p->startcond != COB_LT) {
-			fx->start = cob_sql_select (db, fx, ky, COB_LT, read_opts, odbc_free_stmt);
+			fx->start = cob_sql_select (ctx, db, fx, ky, COB_LT, read_opts, odbc_free_stmt);
 			odbc_close_stmt (fx->start);
 			odbc_setup_stmt (db, fx, fx->start, SQL_BIND_COLS|SQL_BIND_WHERE, f->curkey);
 			if(chkSts(db,(char*)"Read Prev Exec",fx->start->handle,
@@ -2132,13 +2132,13 @@ odbc_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		}
 		if (fx->start
 		 && fx->start->isdesc) {
-			ret = odbc_read_cont (f);
+			ret = odbc_read_cont (ctx, f);
 		} else {
 			ret = COB_STATUS_10_END_OF_FILE;
 		}
 		break;
 	case COB_READ_FIRST:
-		fx->start = cob_sql_select (db, fx, ky, COB_FI, read_opts, odbc_free_stmt);
+		fx->start = cob_sql_select (ctx, db, fx, ky, COB_FI, read_opts, odbc_free_stmt);
 		if (fx->precnum) strcpy(fx->precnum,"0");
 		odbc_close_stmt (fx->start);
 		odbc_setup_stmt (db, fx, fx->start, SQL_BIND_COLS, 0);
@@ -2161,11 +2161,11 @@ odbc_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		} else {
 			DEBUG_LOG("db",("~READ FIRST: %s; OK\n",f->select_name));
 			odbc_any_nulls (db, fx);
-			cob_xfd_to_file (db, fx, f);
+			cob_xfd_to_file (ctx, db, fx, f);
 		}
 		break;
 	case COB_READ_LAST:
-		fx->start = cob_sql_select (db, fx, ky, COB_LA, read_opts, odbc_free_stmt);
+		fx->start = cob_sql_select (ctx, db, fx, ky, COB_LA, read_opts, odbc_free_stmt);
 		if (fx->precnum) strcpy(fx->precnum,"99999999999999");
 		odbc_close_stmt (fx->start);
 		odbc_setup_stmt (db, fx, fx->start, SQL_BIND_COLS, 0);
@@ -2188,7 +2188,7 @@ odbc_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 		} else {
 			DEBUG_LOG("db",("~READ LAST: %s; OK\n",f->select_name));
 			odbc_any_nulls (db, fx);
-			cob_xfd_to_file (db, fx, f);
+			cob_xfd_to_file (ctx, db, fx, f);
 		}
 		break;
 	}
@@ -2215,7 +2215,7 @@ odbc_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 /* WRITE to the INDEXED file  */
 
 static int
-odbc_write (cob_file_api *a, cob_file *f, const int opt)
+odbc_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
@@ -2226,16 +2226,16 @@ odbc_write (cob_file_api *a, cob_file *f, const int opt)
 	p = f->file;
 	fx = p->fx;
 	if (fx->insert.text == NULL) {
-		fx->insert.text = cob_sql_stmt (db, fx, (char*)"INSERT", 0, 0, 0);
+		fx->insert.text = cob_sql_stmt (ctx, db, fx, (char*)"INSERT", 0, 0, 0);
 	}
 
-	cob_file_to_xfd (db, fx, f);
+	cob_file_to_xfd (ctx, db, fx, f);
 
 	odbc_set_nulls (db, fx);
 	if (f->flag_read_chk_dups) {
 		for (k=1; k < fx->nkeys; k++) {
 			if (f->keys[k].tf_duplicates == 1) {
-				num = odbcCountIndex (db, f, fx, k);
+				num = odbcCountIndex (ctx, db, f, fx, k);
 				if( num > 0)
 					ret = COB_STATUS_02_SUCCESS_DUPLICATE;
 			}
@@ -2267,7 +2267,7 @@ odbc_write (cob_file_api *a, cob_file *f, const int opt)
 		DEBUG_LOG("db",("WRITE: %.40s...  Good! return %02d\n",fx->insert.text,ret));
 	}
 	if (!db->autocommit)
-		odbc_commit (a, f);
+		odbc_commit (ctx, a, f);
 
 	return ret;
 }
@@ -2276,7 +2276,7 @@ odbc_write (cob_file_api *a, cob_file *f, const int opt)
 /* DELETE record from the INDEXED file  */
 
 static int
-odbc_delete (cob_file_api *a, cob_file *f)
+odbc_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
@@ -2290,10 +2290,10 @@ odbc_delete (cob_file_api *a, cob_file *f)
 	p = f->file;
 	fx = p->fx;
 	if (fx->delete.text == NULL) {
-		fx->delete.text = cob_sql_stmt (db, fx, (char*)"DELETE", 0, 0, 0);
+		fx->delete.text = cob_sql_stmt (ctx, db, fx, (char*)"DELETE", 0, 0, 0);
 	}
 
-	cob_index_to_xfd (db, fx, f, 0, COB_EQ);
+	cob_index_to_xfd (ctx, db, fx, f, 0, COB_EQ);
 
 	if (!fx->delete.preped) {
 		odbc_setup_stmt (db, fx, &fx->delete, SQL_BIND_NO, 0);
@@ -2321,7 +2321,7 @@ odbc_delete (cob_file_api *a, cob_file *f)
 	DEBUG_LOG("db",("DELETE: %s status %d; %d deleted, return %02d\n",f->select_name,
 							db->dbStatus,k,ret));
 	if (!db->autocommit)
-		odbc_commit (a, f);
+		odbc_commit (ctx, a, f);
 
 	return ret;
 }
@@ -2329,7 +2329,7 @@ odbc_delete (cob_file_api *a, cob_file *f)
 /* REWRITE record to the INDEXED file  */
 
 static int
-odbc_rewrite (cob_file_api *a, cob_file *f, const int opt)
+odbc_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
@@ -2343,13 +2343,13 @@ odbc_rewrite (cob_file_api *a, cob_file *f, const int opt)
 	p = f->file;
 	fx = p->fx;
 	if (fx->update.text == NULL) {
-		fx->update.text = cob_sql_stmt (db, fx, (char*)"UPDATE", 0, 0, 0);
+		fx->update.text = cob_sql_stmt (ctx, db, fx, (char*)"UPDATE", 0, 0, 0);
 	}
 
 	if (f->flag_read_chk_dups) {
 		memcpy (p->saverec, f->record->data, f->record_max);
 		DEBUG_LOG("db",("~REWRITE: %s, begin check dups\n",f->select_name));
-		if(!odbc_read (a, f, f->keys[0].field, 0)) {
+		if(!odbc_read (ctx, a, f, f->keys[0].field, 0)) {
 			for (k=1; k < fx->nkeys && ret == COB_STATUS_00_SUCCESS; k++) {
 				if (f->keys[k].tf_duplicates == 1) {
 					klen = db_savekey (f, p->suppkey, f->record->data, k);
@@ -2357,15 +2357,15 @@ odbc_rewrite (cob_file_api *a, cob_file *f, const int opt)
 					if (memcmp(p->suppkey, p->savekey, klen) != 0) {
 						DEBUG_LOG("db",("REWRITE: %s, index %d dups\n",f->select_name,k));
 						cob_xfd_swap_data ((char*)p->saverec, (char*)f->record->data, f->record_max);
-						cob_index_to_xfd (db, fx, f, k, COB_EQ);/* Put new data into Index */
-						num = odbcCountIndex (db, f, fx, k);
+						cob_index_to_xfd (ctx, db, fx, f, k, COB_EQ);/* Put new data into Index */
+						num = odbcCountIndex (ctx, db, f, fx, k);
 						if (num > 0) {
 							ret = COB_STATUS_02_SUCCESS_DUPLICATE;
 						}
 						DEBUG_LOG("db",("REWRITE: %s, found %d ret %02d, restore data\n",
 												f->select_name,num,ret));
 						cob_xfd_swap_data ((char*)p->saverec, (char*)f->record->data, f->record_max);
-						cob_index_to_xfd (db, fx, f, k, COB_EQ);/* Put old data back into Index */
+						cob_index_to_xfd (ctx, db, fx, f, k, COB_EQ);/* Put old data back into Index */
 					} else {
 						DEBUG_LOG("db",("REWRITE: %s, index %d no change\n",f->select_name,k));
 					}
@@ -2375,7 +2375,7 @@ odbc_rewrite (cob_file_api *a, cob_file *f, const int opt)
 		memcpy (f->record->data, p->saverec, f->record_max);
 	}
 
-	cob_file_to_xfd (db, fx, f);
+	cob_file_to_xfd (ctx, db, fx, f);
 
 	odbc_set_nulls (db, fx);
 	db->dbStatus = 0;
@@ -2411,14 +2411,14 @@ odbc_rewrite (cob_file_api *a, cob_file *f, const int opt)
 	DEBUG_LOG("db",("REWRITE: %s, status %d; %d updated, return %02d!\n",f->select_name,
 						db->dbStatus,k,ret));
 	if (!db->autocommit)
-		odbc_commit (a, f);
+		odbc_commit (ctx, a, f);
 
 	return ret;
 }
 
 
 static int
-odbc_file_unlock (cob_file_api *a, cob_file *f)
+odbc_file_unlock (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	COB_UNUSED (f);
@@ -2427,20 +2427,20 @@ odbc_file_unlock (cob_file_api *a, cob_file *f)
 
 /* Call this routine when a new process has been forked */
 static int
-odbc_fork (cob_file_api *a)
+odbc_fork (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 	return 0;
 }
 
 static void
-odbc_exit_fileio (cob_file_api *a)
+odbc_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
 }
 
 void
-cob_odbc_init_fileio (cob_file_api *a)
+cob_odbc_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	a->io_funcs[COB_IO_ODBC] = (void*)&odbc_indexed_funcs;
 }
