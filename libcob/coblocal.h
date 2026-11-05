@@ -273,6 +273,9 @@
 struct cob_runtime {
 	unsigned int	last_unit_slot;	/* slots of the compilation units,
 					   set under unit_slot_lock */
+	unsigned int	other_contexts;	/* number of contexts created by
+					   cob_context_create and not yet
+					   destroyed, set under contexts_lock */
 };
 
 /* Global settings structure */
