@@ -397,7 +397,8 @@ static struct cob_fileio_funcs	*fileio_funcs[COB_IO_MAX] = {
 #endif
 
 static struct {
-	int		loaded;			/* Module is loaded and ready */
+	unsigned int	loaded;			/* Module is loaded and ready,
+						   set under io_load_lock */
 	int		config;			/* Module was configured into compiler */
 	int		dbase;			/* Handled by database */
 	const char * name;
@@ -1371,20 +1372,47 @@ cob_put_qbl (cob_context *ctx, cob_file *f, const char *type)
 	}
 }
 
-static char	module_errmsg[256];
+static char	module_errmsg[256];	/* under io_load_lock */
 static char	module_msg[256];
+
+/* the I/O routines are loaded once for the process, on the first OPEN
+   in any context */
+COB_LOCK_DEFINE (io_load_lock);
+
+static int
+io_rtn_loaded (const int iortn)
+{
+	return cob_atomic_load_uint (&io_rtns[iortn].loaded) != 0;
+}
+
+static int cob_load_module_locked (cob_context *, int);
+
 /*
  * Dynamically Load the given I/O routine
  */
 static int
 cob_load_module (cob_context *ctx, int iortn)
 {
-	void (*ioinit)(cob_context *, cob_file_api *);
+	int	ret;
 
 	if (iortn > COB_IO_MAX) {
 		/* possibly cob_runtime_error here */
 		return -1;
 	}
+	if (io_rtn_loaded (iortn)) {
+		return 0;
+	}
+	cob_lock_acquire (&io_load_lock);
+	ret = cob_load_module_locked (ctx, iortn);
+	cob_lock_release (&io_load_lock);
+	return ret;
+}
+
+static int
+cob_load_module_locked (cob_context *ctx, int iortn)
+{
+	void (*ioinit)(cob_context *, cob_file_api *);
+
 	if (io_rtns[iortn].loaded
 	 || io_rtns[iortn].module == NULL) {
 		return 0;
@@ -1406,7 +1434,7 @@ cob_load_module (cob_context *ctx, int iortn)
 	}
 
 	ioinit (ctx, &file_api);
-	io_rtns[iortn].loaded = 1;
+	cob_atomic_store_uint (&io_rtns[iortn].loaded, 1);
 	return 0;
 }
 
@@ -1414,10 +1442,14 @@ static void
 output_io_module_error (cob_context *ctx, int iortn)
 {
 	const char* desc = io_rtns[iortn].desc ? io_rtns[iortn].desc : io_rtns[iortn].name;
+	char	errmsg[sizeof (module_errmsg)];
 
+	cob_lock_acquire (&io_load_lock);
+	memcpy (errmsg, module_errmsg, sizeof (errmsg));
+	cob_lock_release (&io_load_lock);
 	/* note: module_errmsg includes both the module name and error */
 	cob_runtime_error_ctx (ctx, _("I/O routine %s cannot be loaded: %s"),
-		desc, module_errmsg);
+		desc, errmsg);
 }
 
 /*
@@ -7432,7 +7464,7 @@ cob_open_ctx (cob_context *ctx, cob_file *f, const enum cob_open_mode mode, cons
 		return;
 	}
 
-	if (!io_rtns[f->io_routine].loaded) {
+	if (!io_rtn_loaded (f->io_routine)) {
 		int ret = cob_load_module (ctx, f->io_routine);
 		if (ret) {
 			output_io_module_error (ctx, f->io_routine);
@@ -8490,7 +8522,7 @@ cob_delete_file_ctx (cob_context *ctx, cob_file *f, cob_field *fnstatus, const i
 		return;
 	}
 
-	if (!io_rtns[f->io_routine].loaded) {
+	if (!io_rtn_loaded (f->io_routine)) {
 		int ret = cob_load_module (ctx, f->io_routine);
 		if (ret) {
 			output_io_module_error (ctx, f->io_routine);
@@ -10428,7 +10460,8 @@ cob_exit_fileio_backends_context (cob_context *ctx)
 	int		k;
 
 	for (k=0; k < COB_IO_MAX; k++) {
-		if (fileio_funcs[k] != NULL
+		if (io_rtn_loaded (k)
+		 && fileio_funcs[k] != NULL
 		 && fileio_funcs[k]->ioexit_context != NULL) {
 			fileio_funcs[k]->ioexit_context (ctx, &file_api);
 		}
