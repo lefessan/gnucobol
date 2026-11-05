@@ -475,6 +475,79 @@ main: 0002
 AT_CLEANUP
 
 
+AT_SETUP([physical CANCEL with several execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create cob_cancel CANCEL COB_PHYSICAL_CANCEL])
+
+# the module of a program is not unloaded by a physical CANCEL while
+# other contexts exist: they may have an instance of it; the CANCEL is
+# then only logical, the other contexts keep their WORKING-STORAGE
+
+AT_DATA([counter.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      counter.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       01 TXT           PIC X(8) VALUE "counter".
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG ": " TXT " " CNT
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_counter (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("counter", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx2 = cob_context_create ();
+
+   call_counter (ctx2, "ctx2");
+   call_counter (main_ctx, "main");
+   cob_cancel ("counter");
+   call_counter (main_ctx, "main");
+   call_counter (ctx2, "ctx2");
+
+   /* the last other context is destroyed: CANCEL is physical again */
+   cob_context_destroy (ctx2);
+   call_counter (main_ctx, "main");
+   cob_cancel ("counter");
+   call_counter (main_ctx, "main");
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE counter.cob], [0], [], [])
+AT_CHECK([COB_PHYSICAL_CANCEL=1 $COBCRUN_DIRECT ./host], [0],
+[ctx2: counter  0001
+main: counter  0001
+main: counter  0001
+ctx2: counter  0002
+main: counter  0002
+main: counter  0001
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([record locks of INDEXED files between execution contexts])
 AT_KEYWORDS([runreentrant cob_context_create INDEXED LOCK])
 

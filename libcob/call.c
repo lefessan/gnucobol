@@ -508,8 +508,12 @@ do_cancel_module (cob_context *ctx, const char *name)
 		return;
 	}
 
-	/* physical cancel; TODO (T1.4): not possible while the module has
-	   instances in other contexts */
+	/* physical cancel: not while other contexts exist, they may have an
+	   instance of the module (data, and pointers to its code and
+	   constants); the CANCEL is then only logical */
+	if (cob_atomic_load_uint (&ctx->rt->other_contexts) != 0) {
+		return;
+	}
 	call_lock_acquire ();
 	base_hash = &call_table[hash ((const unsigned char *)name)];
 	prev = NULL;

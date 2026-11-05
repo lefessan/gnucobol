@@ -3938,6 +3938,9 @@ cob_init_switches (cob_context *ctx)
    settings, with the main context, but has its own instances of the
    programs, run unit (EXTERNAL items, files...) and working states;
    it is used by entering it with cob_context_enter */
+/* lock for the number of contexts of the runtime */
+COB_LOCK_DEFINE (contexts_lock);
+
 cob_context *
 cob_context_create (void)
 {
@@ -3951,6 +3954,10 @@ cob_context_create (void)
 
 	ctx = cob_malloc (sizeof (cob_context));
 	ctx->rt = cob_main_runtime;
+	cob_lock_acquire (&contexts_lock);
+	cob_atomic_store_uint (&ctx->rt->other_contexts,
+		ctx->rt->other_contexts + 1);
+	cob_lock_release (&contexts_lock);
 	/* TODO (T1.4): per-context copy of the settings */
 	ctx->settings = cobsetptr;
 	ctx->common = cob_malloc (sizeof (struct cob_common_state));
@@ -4002,6 +4009,10 @@ cob_context_destroy (cob_context *ctx)
 	cob_exit_common_state (ctx);
 
 	cob_context_leave (prev == ctx ? NULL : prev);
+	cob_lock_acquire (&contexts_lock);
+	cob_atomic_store_uint (&ctx->rt->other_contexts,
+		ctx->rt->other_contexts - 1);
+	cob_lock_release (&contexts_lock);
 	cob_context_free (ctx);
 }
 

@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (do_cancel_module), coblocal.h, common.c (cob_init_switches,
+	  cob_context_create, cob_context_destroy): no physical CANCEL while
+	  other contexts exist
 	* fileio.c (cob_put_qbl, cob_load_module, output_io_module_error,
 	  cob_open_ctx, cob_delete_file_ctx, cob_exit_fileio_backends_context):
 	  loading of the I/O routines under a lock
