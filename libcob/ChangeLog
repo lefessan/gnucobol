@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* flmdb.c (local_file, lmdb_open, cob_lmdb_exit_fileio,
+	  cob_lmdb_init_fileio): LMDB in several threads
 	* call.c (do_cancel_module), coblocal.h, common.c (cob_init_switches,
 	  cob_context_create, cob_context_destroy): no physical CANCEL while
 	  other contexts exist

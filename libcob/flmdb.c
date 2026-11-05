@@ -68,8 +68,6 @@ static const struct cob_fileio_funcs lmdb_funcs = {
 	lmdb_version
 };
 
-static char		*db_buff = NULL;
-static const char	**db_data_dir = NULL;
 
 #define INTTYPES_H_MISSING
 #include <lmdb.h>
@@ -359,12 +357,12 @@ db_nofile (const char *filename)
 
 /* check for local file, returns 1 if "yes" (unimplemented for WIN32) */
 static int
-local_file( dev_t device, char **pname /*output*/ )
+local_file( dev_t device )
 {
 	int n, maj, min, nblock;
 	char *s;
-	static char line[128];
-	static char devname[128];
+	char line[128];
+	char devname[128];
 	static const char filename[] = "/proc/partitions";
 	FILE *file;
 
@@ -391,7 +389,6 @@ local_file( dev_t device, char **pname /*output*/ )
 		}
 		if( n == 4 ) {
 			if( maj == major(device) && min == minor(device) ) {
-				*pname = devname;
 				fclose (file);
 				return 1;
 			}
@@ -871,6 +868,7 @@ indexed_file_free (struct indexed_file* p)
 static int
 lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
+	char		db_buff[COB_SMALL_BUFF];	/* path of the file */
 	/* Note filename points to file_open_name */
 	/* cob_chk_file_mapping manipulates file_open_name directly */
 
@@ -887,7 +885,6 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 	/* TODO: this variable should be moved to common.c as binary config */
 	if (getenv("MDB_NO_SHARED_FS_CHK") == NULL) {
 		struct stat sb;
-		char *devname;
 		char dir[ COB_FILE_MAX ];
 		int	is_local;
 
@@ -896,7 +893,7 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
 
-		is_local = local_file(sb.st_dev, &devname);
+		is_local = local_file (sb.st_dev);
 		if (!is_local) {
 			cob_runtime_warning_ctx(ctx, "file %s - shared filesystem detected!", filename);
 			return COB_STATUS_30_PERMANENT_ERROR;
@@ -1563,19 +1560,14 @@ lmdb_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 static void
 cob_lmdb_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
+	COB_UNUSED (ctx);
 	COB_UNUSED (a);
-	if(db_buff)
-		cob_free (db_buff);
-	db_buff = NULL;
-	return;
 }
 
 void
 cob_lmdb_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	a->io_funcs[COB_IO_LMDB] = (void*)&lmdb_funcs;
-	db_data_dir = NULL;
-	db_buff = cob_malloc (COB_SMALL_BUFF);
 	if (ctx->settings->lmdb_home == NULL) {
 		ctx->settings->lmdb_home = cob_strdup(".");
 	}
