@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: resolved CALL entries and reference
+	  count in the instance
 	* testsuite.src/run_reentrant.at: no physical CANCEL while other
 	  contexts exist
 	* testsuite.src/run_reentrant.at: INDEXED files in several threads

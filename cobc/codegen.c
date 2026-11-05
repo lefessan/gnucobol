@@ -2477,15 +2477,19 @@ output_call_cache (void)
 		   which makes the whole purpose of the fence useless */
 		output_prog_member ("call_fence_pre", "char\tcall_fence_pre[8];");
 	}
+	/* the resolved entries are in the instance: each context resolves
+	   its CALLs, a CANCEL only resets the entry of its context */
 	call_cache = call_list_reverse (call_cache);
 	for (call = call_cache; call; call = call->next) {
-		output_local ("static cob_call_union\tcall_%s;\n",
-			      call->call_name);
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "call_%s", call->call_name);
+		output_prog_member (name, "cob_call_union\t%s;", name);
 	}
 	func_call_cache = call_list_reverse (func_call_cache);
 	for (call = func_call_cache; call; call = call->next) {
-		output_local ("static cob_call_union\tfunc_%s;\n",
-			      call->call_name);
+		char	name[COB_MINI_BUFF];
+		snprintf (name, sizeof (name), "func_%s", call->call_name);
+		output_prog_member (name, "cob_call_union\t%s;", name);
 	}
 	if ((call_cache || func_call_cache)
 	 && (cb_flag_memory_check & CB_MEMCHK_POINTER)) {
@@ -13593,11 +13597,7 @@ output_module_init_function (struct cb_program *prog)
 		output_line ("module__->module_cancel.funcvoid = NULL;");
 	}
 
-	if (!cobc_flag_main && non_nested_count > 1) {
-		output_line ("module__->module_ref_count = &cob_reference_count;");
-	} else {
-		output_line ("module__->module_ref_count = NULL;");
-	}
+	/* module_ref_count: set by output_module_init_non_static (instance) */
 	output_line ("module__->module_path = &cob_module_path;");
 	output_line ("module__->module_active = 0;");
 	output_line ("module__->module_date = COB_MODULE_DATE;");
@@ -13663,6 +13663,11 @@ output_module_init_function (struct cb_program *prog)
 static void
 output_module_init_non_static (struct cb_program *prog)
 {
+	if (!cobc_flag_main && non_nested_count > 1) {
+		output_line ("module->module_ref_count = &cob_reference_count;");
+	} else {
+		output_line ("module->module_ref_count = NULL;");
+	}
 	output_module_register_init (prog->collating_sequence, "collating_sequence");
 	if (prog->crt_status && cb_code_field (prog->crt_status)->count) {
 		output_prefix ();
@@ -16401,8 +16406,9 @@ codegen_finalize (void)
 	/* Finalize the main include file */
 
 	if (!cobc_flag_main && non_nested_count > 1) {
-		output_storage ("\n/* Module reference count */\n");
-		output_storage ("static unsigned int\t\tcob_reference_count = 0;\n");
+		/* number of active programs of the unit, in the instance */
+		output_unit_member ("cob_reference_count",
+			"unsigned int\tcob_reference_count;");
 	}
 
 	output_storage ("\n/* Module path */\n");

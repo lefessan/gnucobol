@@ -668,9 +668,7 @@ AT_KEYWORDS([runreentrant static])
 # compilation unit, allocated in each context; the only static data
 # left are shared by the contexts:
 # - cob_unit_slot: slot of the compilation unit, set once
-# - cob_module_path, cob_reference_count: process-level data of the
-#   module (dlclose)
-# - call_X / func_X: caches of the resolution of dynamic CALLs
+# - cob_module_path: path of the module, set once
 
 AT_CHECK([objdump --version >/dev/null 2>&1 || exit 77])
 
@@ -722,12 +720,19 @@ AT_DATA([prog.cob], [
            GOBACK.
        END PROGRAM nested.
        END PROGRAM prog.
+
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      other.
+       PROCEDURE        DIVISION.
+           CALL "sub2"
+           GOBACK.
+       END PROGRAM other.
 ])
 
 AT_CHECK([$COBC -c ${FLAGS} prog.cob], [0], [], [])
 AT_CHECK([$SHELL "$abs_top_srcdir/build_aux/list-mutable-globals.sh" prog.o \
           | cut -f5 | sed -e 's/\.[[0-9]]*$//' \
-          | $GREP -v -E '^(cob_unit_slot|cob_module_path|cob_reference_count|call_.*|func_.*)$'],
+          | $GREP -v -E '^(cob_unit_slot|cob_module_path)$'],
          [1], [], [])
 
 AT_CLEANUP
