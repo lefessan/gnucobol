@@ -414,8 +414,6 @@ get_dupno (cob_file *f, const cob_u32_t i)
 	/* Using a nested transaction so we don't mess up the write transacion in lmdb_write */
 	MDB_txn    *txn;
 	MDB_cursor *cursor;
-	txn    = cob_malloc(sizeof(MDB_txn *));
-	cursor = cob_malloc(sizeof(MDB_cursor *));
 
 	db_setkey(f, i);
 	memcpy (p->temp_key, p->key.mv_data, (size_t)p->maxkeylen);

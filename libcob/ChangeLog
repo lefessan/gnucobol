@@ -1,4 +1,10 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* flmdb.c (get_dupno): fix memory leak, the transaction and the
+	  cursor were allocated, then replaced by mdb_txn_begin and
+	  mdb_cursor_open
+
 2026-09-04  David Declerck <david.declerck@ocamlpro.com>
 
 	* fileio.c (cob_file_open, cob_file_close) [_WIN32]:
