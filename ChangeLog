@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* HOWTO-TSAN.md: BDB in several threads
 	* HOWTO-TSAN.md: new file, finding and fixing data races with
 	  ThreadSanitizer
 	* configure.ac: reentrant localtime and gmtime

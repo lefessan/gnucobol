@@ -235,6 +235,17 @@ Règles du projet à respecter (voir TXSERIES-T1-DESIGN.md) :
 
 ## 7. Pièges rencontrés
 
+- Fichiers INDEXED en BDB (test « INDEXED files in several threads ») :
+  TSan affiche des milliers de `lock-order-inversion (potential
+  deadlock)` **à l'intérieur de `libdb-5.3.so`** (mutex propres à BDB,
+  qui a son propre détecteur d'interblocages). Ce ne sont pas des bugs
+  de libcob : les filtrer avec un fichier de suppressions qui ne
+  contient **que** `deadlock:libdb-5.3.so`,
+  `TSAN_OPTIONS="suppressions=$PWD/tsan.supp"`. Ne pas y ajouter
+  `race:libdb-5.3.so` : une suppression s'applique dès qu'une ligne de
+  la pile correspond, elle cacherait aussi une course de libcob dont la
+  pile passe par libdb. Supprimer les fichiers `__db.*` et `i*.dat*`
+  entre deux exécutions si l'une s'est mal terminée.
 - `unexpected memory mapping` : oubli de `setarch -R`.
 - Rapports dans du code non instrumenté absents : un module COBOL
   compilé sans `-A -fsanitize=thread`, ou avec le `cobc` du build
