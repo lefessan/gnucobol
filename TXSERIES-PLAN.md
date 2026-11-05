@@ -354,10 +354,19 @@ Conséquences pour `cobc/codegen.c` :
       inopérant dans un second contexte) ; slot des unités de
       compilation (lecture atomique, écriture sous verrou) ;
       `cob_localtime` / `cob_gmtime` réentrants partout ; cache de
-      l'heure sous verrou. Restent : CANCEL physique alors que d'autres
-      contextes ont une instance du module ; `flmdb.c` ; backends
-      indexés en multi-thread (BDB `DB_THREAD`…) — le banc n'utilise
-      plus que LINE SEQUENTIAL ;
+      l'heure sous verrou. Puis BDB (2026-11-05) : état de `fbdb.c` dans
+      le contexte, nouveau point d'entrée `ioexit_context` des
+      gestionnaires de fichiers ; un handle d'environnement BDB et un
+      locker par contexte (comme un processus ; `DB_THREAD` écarté car il
+      impose d'allouer la mémoire de chaque DBT) : corrige les plantages
+      à la première ouverture concurrente, et les verrous
+      d'enregistrements sont maintenant exclusifs entre contextes ;
+      chargement des routines d'E/S sous verrou ; tests « record locks
+      of INDEXED files between execution contexts » et « INDEXED files
+      in several threads » (BDB seulement). Restent : CANCEL physique
+      alors que d'autres contextes ont une instance du module ;
+      `flmdb.c` et les autres gestionnaires indexés (LMDB, V-ISAM,
+      ODBC) en multi-thread ;
   - code généré : caches `call_X` / `func_X` (écriture concurrente
     d'un pointeur, même valeur ; CANCEL les remet à NULL) et
     `cob_reference_count` (incréments atomiques) ;
