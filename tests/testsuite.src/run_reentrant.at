@@ -252,6 +252,132 @@ AT_CHECK([for i in 01 02 03 04 05 06 07; do cmp f00.txt f$i.txt || exit 1; done]
 AT_CLEANUP
 
 
+AT_SETUP([INDEXED files in several threads])
+AT_KEYWORDS([runreentrant cob_context_create INDEXED thread])
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+
+# each thread creates its own execution context and writes then reads
+# its own INDEXED file (with an alternate key); the first OPEN of the
+# threads loads the I/O routine and joins the environment of the
+# backend concurrently
+
+AT_DATA([calc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      calc.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT I ASSIGN TO INAME ORGANIZATION INDEXED
+                  ACCESS DYNAMIC RECORD KEY IK
+                  ALTERNATE RECORD KEY IA WITH DUPLICATES.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD I.
+       01 IR.
+          05 IK         PIC 9(8).
+          05 IA         PIC 9(2).
+          05 IDT        PIC X(20).
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(8) VALUE 0.
+       01 INAME         PIC X(30).
+       LINKAGE          SECTION.
+       01 RES           PIC 9(8).
+       01 TID           PIC 9(2).
+       PROCEDURE        DIVISION USING RES TID.
+           IF CNT = 0
+              STRING "i" TID ".dat" DELIMITED SIZE INTO INAME
+              OPEN OUTPUT I
+              CLOSE I
+              OPEN I-O I
+           END-IF
+           ADD 1 TO CNT
+           MOVE CNT TO IK
+           MOVE FUNCTION MOD (CNT 7) TO IA
+           MOVE "data" TO IDT
+           WRITE IR
+           MOVE CNT TO IK
+           READ I KEY IS IK
+           IF IK NOT = CNT
+              MOVE 0 TO CNT
+           END-IF
+           MOVE CNT TO RES
+           GOBACK.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <libcob.h>
+
+#define NTHREADS 8
+#define NCALLS 1000
+
+static int bads[NTHREADS];
+
+static void *
+task (void *arg)
+{
+   int *bad = (int *)arg;
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char res[9] = "00000000";
+   char tid[3];
+   void *argv[2];
+   int i;
+
+   snprintf (tid, sizeof tid, "%02d", (int)(bad - bads));
+   argv[0] = res;
+   argv[1] = tid;
+   for (i = 1; i <= NCALLS; i++) {
+      char expected[9];
+      (void)cob_call ("calc", 2, argv);
+      snprintf (expected, sizeof expected, "%08d", i);
+      if (memcmp (res, expected, 8)) {
+         (*bad)++;
+      }
+   }
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+
+int
+main (int argc, char **argv)
+{
+   pthread_t th[NTHREADS];
+   int i;
+
+   cob_init (argc, argv);
+   /* the module is loaded by the first CALL, in one of the threads */
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_create (&th[i], NULL, task, &bads[i]);
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_join (th[i], NULL);
+      printf ("thread %d: %d bad\n", i, bads[i]);
+   }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([$COMPILE_MODULE calc.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([CANCEL in one execution context])
 AT_KEYWORDS([runreentrant cob_context_create cob_cancel CANCEL])
 

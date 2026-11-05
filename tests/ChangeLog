@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: INDEXED files in several threads
 	* testsuite.src/run_reentrant.at: one BDB environment handle and locker
 	  per context
 	* testsuite.src/run_reentrant.at: lock of the table of the resolved
