@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fbdb.c (fbdb_state, bdb_err_event, join_environment, bdb_lock_file,
+	  bdb_lock_record, bdb_test_record_lock, ...): one BDB environment
+	  handle and locker per context
 	* common.h, fbdb.c (ix_bdb_fork, bdb_lock_record, bdb_test_record_lock,
 	  bdb_nofile, ix_bdb_exit_fileio, cob_bdb_init_fileio), fileio.c
 	  (cob_exit_fileio_msg_only, cob_exit_fileio_closeall,

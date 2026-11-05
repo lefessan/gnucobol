@@ -349,6 +349,119 @@ main: 0002
 AT_CLEANUP
 
 
+AT_SETUP([record locks of INDEXED files between execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create INDEXED LOCK])
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+
+# each context has its own record locks: a record locked in a context
+# cannot be locked in another one until it is released
+
+AT_DATA([lk.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      lk.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT IX ASSIGN TO "ixfile"
+                  ORGANIZATION INDEXED ACCESS DYNAMIC
+                  RECORD KEY IK
+                  LOCK MODE MANUAL
+                  SHARING WITH ALL OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD IX.
+       01 IR.
+          05 IK         PIC X(4).
+          05 IDATA      PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           EVALUATE OP
+           WHEN "W"
+              OPEN OUTPUT IX
+              MOVE "K001" TO IK
+              MOVE "data" TO IDATA
+              WRITE IR
+              CLOSE IX
+           WHEN "O"
+              OPEN I-O IX
+           WHEN "R"
+              MOVE "K001" TO IK
+              READ IX WITH LOCK
+           WHEN "U"
+              UNLOCK IX
+           WHEN "C"
+              CLOSE IX
+           END-EVALUATE
+           DISPLAY TAG " " OP ": " FS
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+lk (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("lk", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   lk (ctx1, "ctx1", "W");
+   lk (ctx1, "ctx1", "O");
+   lk (ctx2, "ctx2", "O");
+   lk (ctx1, "ctx1", "R");
+   lk (ctx2, "ctx2", "R");   /* locked by ctx1 */
+   lk (ctx1, "ctx1", "U");
+   lk (ctx2, "ctx2", "R");
+   lk (ctx1, "ctx1", "R");   /* locked by ctx2 */
+   lk (ctx2, "ctx2", "C");
+   lk (ctx1, "ctx1", "R");
+   lk (ctx1, "ctx1", "C");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE lk.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 W: 00
+ctx1 O: 00
+ctx2 O: 00
+ctx1 R: 00
+ctx2 R: 51
+ctx1 U: 00
+ctx2 R: 00
+ctx1 R: 51
+ctx2 C: 00
+ctx1 R: 00
+ctx1 C: 00
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

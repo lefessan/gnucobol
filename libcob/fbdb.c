@@ -70,17 +70,26 @@ static const struct cob_fileio_funcs ext_indexed_funcs = {
 	ix_bdb_exit_context
 };
 
-static DB_ENV	*bdb_env = NULL;
-static char		*bdb_home_dir = NULL;
-static const char	**bdb_data_dir = NULL;
-static unsigned int	bdb_lock_id = 0;
-static int		bdb_join = 1;
+/* Each context has its own handle on the BDB environment, as a
+   process would: the handles of the contexts are not free-threaded,
+   they join the same environment (bdb_home) and its lock region, and
+   each context has its own locker, so that the record and file locks
+   of two contexts exclude each other */
+
+static char		*bdb_home_dir = NULL;	/* process level, to remove the
+						   environment at the end */
+/* joining the environment (first OPEN of a context) is done under a lock */
+COB_LOCK_DEFINE (bdb_join_lock);
 
 /* State of a context */
 struct cob_fbdb_state {
 	char		bdb_buff[COB_SMALL_BUFF];	/* path of the file being opened */
 	void		*record_lock_object;	/* name of a record lock */
 	size_t		rlo_size;
+	DB_ENV		*env;		/* handle on the environment */
+	const char	**data_dir;	/* data directories of the environment */
+	unsigned int	locker;		/* locker of the context */
+	int		join;		/* environment still to be joined */
 };
 
 static struct cob_fbdb_state *
@@ -90,6 +99,7 @@ fbdb_state (cob_context *ctx)
 		ctx->fbdb = cob_malloc (sizeof (struct cob_fbdb_state));
 		ctx->fbdb->rlo_size = COB_SMALL_BUFF;
 		ctx->fbdb->record_lock_object = cob_malloc (COB_SMALL_BUFF);
+		ctx->fbdb->join = 1;
 	}
 	return ctx->fbdb;
 }
@@ -97,6 +107,10 @@ fbdb_state (cob_context *ctx)
 #define bdb_buff		(fbdb_state (ctx)->bdb_buff)
 #define record_lock_object	(fbdb_state (ctx)->record_lock_object)
 #define rlo_size		(fbdb_state (ctx)->rlo_size)
+#define bdb_env			(fbdb_state (ctx)->env)
+#define bdb_data_dir		(fbdb_state (ctx)->data_dir)
+#define bdb_locker		(fbdb_state (ctx)->locker)
+#define bdb_join		(fbdb_state (ctx)->join)
 
 #define DB_PUT(db,key,data,flags)	db->put (db, NULL, key, data, flags)
 #define DB_GET(db,key,data,flags)	db->get (db, NULL, key, data, flags)
@@ -219,7 +233,7 @@ bdb_suppresskey (cob_file *f, int idx)
 
 /* Open the 'write cursor' if needed and return 0 is already open */
 static int
-bdb_open_cursor (cob_file *f, int for_write)
+bdb_open_cursor (cob_context *ctx, cob_file *f, int for_write)
 {
 	struct indexed_file	*p = f->file;
 	int		flags;
@@ -370,7 +384,9 @@ bdb_err_event (DB_ENV *env, u_int32_t event, void *info)
 	case DB_EVENT_PANIC:
 		if (msg != NULL) msg = "Panic";
 		/* unset BDB environment as we cannot do anything with it any more */
-		bdb_env = NULL;
+		if (ctx->fbdb) {
+			ctx->fbdb->env = NULL;
+		}
 		bdb_err_tear_down = 1;
 		break;
 #endif
@@ -406,7 +422,8 @@ join_environment (cob_context *ctx, cob_file_api *a)
 		/* But prevents the BDB control files from being created */
 		return 0;
 	}
-	if (ctx->settings->bdb_home) {
+	if (ctx->settings->bdb_home
+	 && bdb_home_dir == NULL) {
 		bdb_home_dir = cob_strdup(ctx->settings->bdb_home);
 	}
 	ret = db_env_create (&bdb_env, 0);
@@ -438,7 +455,7 @@ join_environment (cob_context *ctx, cob_file_api *a)
 #if (DB_VERSION_MAJOR > 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR > 1))
 	bdb_env->get_data_dirs (bdb_env, &bdb_data_dir);
 #endif
-	bdb_env->lock_id (bdb_env, &bdb_lock_id);
+	bdb_env->lock_id (bdb_env, &bdb_locker);
 	bdb_env->set_lk_detect (bdb_env, DB_LOCK_DEFAULT);
 #if (DB_VERSION_MAJOR > 4)
 	bdb_env->set_event_notify(bdb_env, (void*)bdb_err_event);
@@ -482,7 +499,7 @@ bdb_lock_file (cob_context *ctx, cob_file *f, char *filename, int lock_mode)
 		interval = 1000 / COB_RETRY_PER_SECOND ;
 	}
 	do {
-		ret = bdb_env->lock_get (bdb_env, bdb_lock_id, DB_LOCK_NOWAIT,
+		ret = bdb_env->lock_get (bdb_env, bdb_locker, DB_LOCK_NOWAIT,
 					 &dbt, lock_mode, &p->bdb_file_lock);
 		if (ret == 0) {
 			p->file_lock_set = 1;
@@ -560,7 +577,7 @@ bdb_lock_record (cob_context *ctx, cob_file *f, const char *key, const unsigned 
 	}
 
 	do {
-		ret = bdb_env->lock_get (bdb_env, bdb_lock_id, retry==-1?0:DB_LOCK_NOWAIT,
+		ret = bdb_env->lock_get (bdb_env, bdb_locker, retry==-1?0:DB_LOCK_NOWAIT,
 					&dbt, DB_LOCK_WRITE, &p->bdb_record_lock);
 		if (ret == 0)
 			break;
@@ -646,7 +663,7 @@ bdb_test_record_lock (cob_context *ctx, cob_file *f, const char *key, const unsi
 		interval = 1000 / COB_RETRY_PER_SECOND ;
 	}
 	do {
-		ret = bdb_env->lock_get (bdb_env, bdb_lock_id, DB_LOCK_NOWAIT,
+		ret = bdb_env->lock_get (bdb_env, bdb_locker, DB_LOCK_NOWAIT,
 					&dbt, DB_LOCK_WRITE, &test_lock);
 		if (ret == 0)
 			break;
@@ -839,7 +856,7 @@ static int
 ix_bdb_write_internal (cob_context *ctx, cob_file *f, const int rewrite, const int opt)
 {
 	struct indexed_file	*p = f->file;
-	const int		close_cursor = bdb_open_cursor (f, 1);
+	const int		close_cursor = bdb_open_cursor (ctx, f, 1);
 	cob_u32_t		i;
 	unsigned int            dupcnt = 0;
 
@@ -1113,7 +1130,7 @@ ix_bdb_delete_internal (cob_context *ctx, cob_file *f, const int rewrite, int bd
 	} else {
 		flags = 0;
 	}
-	close_cursor = bdb_open_cursor (f, 1);
+	close_cursor = bdb_open_cursor (ctx, f, 1);
 	if (DB_SEQ (p->cursor[0], &p->key, &p->data, DB_SET) != 0
 	 && f->access_mode != COB_ACCESS_SEQUENTIAL) {
 		if (close_cursor) {
@@ -1272,7 +1289,10 @@ ix_bdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, con
 	COB_UNUSED (sharing);
 
 	if (bdb_join) {			/* Join BDB, on first OPEN of INDEXED file */
-		if (join_environment (ctx, a)) {
+		cob_lock_acquire (&bdb_join_lock);
+		ret = join_environment (ctx, a);
+		cob_lock_release (&bdb_join_lock);
+		if (ret) {
 #if 0	/* better return a permanent or sharing error */
 			cob_hard_failure ();
 #else
@@ -2139,9 +2159,9 @@ static int
 ix_bdb_fork (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
-	bdb_lock_id = 0;
-	if (bdb_env) {
-		bdb_env->lock_id (bdb_env, &bdb_lock_id);
+	if (ctx->fbdb && bdb_env) {
+		bdb_locker = 0;
+		bdb_env->lock_id (bdb_env, &bdb_locker);
 		bdb_env->set_lk_detect (bdb_env, DB_LOCK_DEFAULT);
 	}
 	return 0;
@@ -2150,22 +2170,17 @@ ix_bdb_fork (cob_context *ctx, cob_file_api *a)
 static void
 ix_bdb_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
+	DB_ENV	*env;
+	COB_UNUSED (ctx);
 	COB_UNUSED (a);
-	if (bdb_env) {
-		DB_LOCKREQ	lckreq[1];
-		memset (lckreq, 0, sizeof (DB_LOCKREQ));
-		lckreq[0].op = DB_LOCK_PUT_ALL;
-		bdb_env->lock_vec (bdb_env, bdb_lock_id, 0, lckreq, 1, NULL);
-		bdb_env->lock_id_free (bdb_env, bdb_lock_id);
-		bdb_env->close (bdb_env, 0);
-		if (bdb_home_dir != NULL
-		 && db_env_create (&bdb_env, 0) == 0) {
-			bdb_env->remove (bdb_env, bdb_home_dir, 0);
+	/* the handle of each context on the environment is closed at its
+	   end (ix_bdb_exit_context, called before for the main context) */
+	if (bdb_home_dir != NULL) {
+		if (db_env_create (&env, 0) == 0) {
+			env->remove (env, bdb_home_dir, 0);
 		}
-		if (bdb_home_dir)
-			cob_free(bdb_home_dir);
+		cob_free (bdb_home_dir);
 		bdb_home_dir = NULL;
-		bdb_env = NULL;
 	}
 }
 
@@ -2177,6 +2192,15 @@ ix_bdb_exit_context (cob_context *ctx, cob_file_api *a)
 	if (ctx->fbdb == NULL) {
 		return;
 	}
+	if (bdb_env) {
+		DB_LOCKREQ	lckreq[1];
+		memset (lckreq, 0, sizeof (DB_LOCKREQ));
+		lckreq[0].op = DB_LOCK_PUT_ALL;
+		bdb_env->lock_vec (bdb_env, bdb_locker, 0, lckreq, 1, NULL);
+		bdb_env->lock_id_free (bdb_env, bdb_locker);
+		bdb_env->close (bdb_env, 0);
+		bdb_env = NULL;
+	}
 	cob_free (record_lock_object);
 	cob_free (ctx->fbdb);
 	ctx->fbdb = NULL;
@@ -2186,8 +2210,6 @@ void
 cob_bdb_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	a->io_funcs[COB_IO_BDB] = (void*)&ext_indexed_funcs;
-	bdb_env = NULL;
-	bdb_data_dir = NULL;
 }
 
 #endif
