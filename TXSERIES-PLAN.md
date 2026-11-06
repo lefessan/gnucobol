@@ -363,10 +363,27 @@ Conséquences pour `cobc/codegen.c` :
       d'enregistrements sont maintenant exclusifs entre contextes ;
       chargement des routines d'E/S sous verrou ; tests « record locks
       of INDEXED files between execution contexts » et « INDEXED files
-      in several threads » (BDB seulement). Restent : CANCEL physique
-      alors que d'autres contextes ont une instance du module ;
-      `flmdb.c` et les autres gestionnaires indexés (LMDB, V-ISAM,
-      ODBC) en multi-thread ;
+      in several threads » (BDB seulement). Puis (2026-11-05/06) :
+      CANCEL physique seulement s'il n'existe qu'un contexte (compteur
+      de contextes dans `cob_runtime`) ; caches `call_X` / `func_X` et
+      `cob_reference_count` dans l'instance de l'unité (le code généré
+      n'a plus que `cob_unit_slot` et `cob_module_path` en statique) ;
+      LMDB sans état statique (tampons de `local_file`, qui ne fermait
+      pas `/proc/partitions`) ; tests « physical CANCEL with several
+      execution contexts », « dynamic CALL and CANCEL in several
+      threads ». Restent :
+      - verrous `fcntl` de `fileio.c` (fichiers séquentiels et relatifs)
+        et de LMDB (verrou de fichier à l'OPEN) : propres au processus,
+        ils ne séparent pas les contextes ; choix à faire entre verrous
+        OFD (`F_OFD_SETLK`, Linux) et table de verrous interne au
+        runtime ; l'attente avec `SIGALRM` / `alarm` (RETRY) est aussi
+        de niveau processus ;
+      - LMDB : pas de verrous d'enregistrements (déjà le cas en amont) ;
+        `MDB_NOTLS` si un contexte peut passer d'un thread à l'autre avec
+        une transaction de lecture ouverte ;
+      - V-ISAM et ODBC en multi-thread : non étudiés ;
+      - `cob_module_path` : écrit une fois sous le verrou de `call.c`,
+        lu sans verrou ;
   - code généré : caches `call_X` / `func_X` (écriture concurrente
     d'un pointeur, même valeur ; CANCEL les remet à NULL) et
     `cob_reference_count` (incréments atomiques) ;
