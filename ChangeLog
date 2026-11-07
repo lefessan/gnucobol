@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* HOWTO-TSAN.md: ODBC per context
 	* configure.ac: current directory of the execution contexts
 	* configure.ac: CALL "SYSTEM" with the environment of the context
 	* configure.ac: locale functions without changing the locale of the

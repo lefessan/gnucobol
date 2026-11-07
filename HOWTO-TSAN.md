@@ -235,6 +235,14 @@ Règles du projet à respecter (voir TXSERIES-T1-DESIGN.md) :
 
 ## 7. Pièges rencontrés
 
+- ODBC avec le pilote SQLite (2026-11-07) : sous TSan, le banc
+  multi-thread se bloque ou plante, avec des rapports à l'intérieur de
+  `libsqlite3` / `libodbc` (non instrumentées), alors que le build
+  normal passe 30 fois sur 30. Les courses de libcob (relecture des
+  réglages, connexion simultanée au gestionnaire unixODBC) ont été
+  trouvées avant ; ce qui reste est attribué à l'interaction de TSan
+  avec ces bibliothèques. Un rapport dont toutes les lignes de pile
+  sont dans une bibliothèque non instrumentée n'est pas une preuve.
 - Fichiers INDEXED en BDB (test « INDEXED files in several threads ») :
   TSan affiche des milliers de `lock-order-inversion (potential
   deadlock)` **à l'intérieur de `libdb-5.3.so`** (mutex propres à BDB,
