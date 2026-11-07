@@ -2012,6 +2012,8 @@ COB_EXPIMP cob_context	*cob_context_create	(void);
 COB_EXPIMP void		cob_context_destroy	(cob_context *);
 COB_EXPIMP void		cob_context_set_end_handler	(cob_context *,
 	void (*) (cob_context *, int, int, const char *, void *), void *);
+COB_EXPIMP void		cob_context_set_display_handler	(cob_context *,
+	void (*) (cob_context *, int, const char *, size_t, void *), void *);
 
 COB_EXPIMP int		cob_unit_enter		(cob_context **, unsigned int *,
 						 const size_t,

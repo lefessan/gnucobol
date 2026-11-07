@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: DISPLAY handler of the host
 	* testsuite.src/run_reentrant.at: storage of the run unit freed at the
 	  end of a task
 	* testsuite.src/run_reentrant.at: location of the warning in the

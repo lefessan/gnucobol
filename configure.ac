@@ -747,7 +747,7 @@ AC_CHECK_FUNCS([memmove memset setlocale fcntl strerror strcasecmp
 	getexecname canonicalize_file_name popen raise readlink realpath
 	setenv strcoll flockfile localtime_r gmtime_r \
 	newlocale duplocale freelocale uselocale nl_langinfo_l strcoll_l isprint_l \
-	posix_spawn posix_spawn_file_actions_addchdir_np])
+	posix_spawn posix_spawn_file_actions_addchdir_np open_memstream])
 
 # more things to save...
 AC_CACHE_SAVE

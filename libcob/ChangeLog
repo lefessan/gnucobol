@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_ctx_cwd), common.c (cob_context_set_end_handler),
+	  common.h (cob_context_set_end_handler), termio.c
+	  (cob_display_va_ctx): DISPLAY handler of the host
 	* common.c (cob_context_free, cob_exit_common_state,
 	  end_context_run_unit): storage of the run unit freed at the end of a
 	  task

@@ -512,6 +512,8 @@ COB_HIDDEN void		cob_print_field		(cob_context *, FILE *, cob_field *, int, int)
 COB_HIDDEN cob_module	*cob_find_module_ctx	(cob_context *, const char *);
 /* current directory of the context, common.c */
 COB_HIDDEN const char	*cob_ctx_cwd		(cob_context *);
+COB_HIDDEN void		(*cob_ctx_display_handler (cob_context *, void **))
+	(cob_context *, int, const char *, size_t, void *);
 /* settings of the process (open files of trace, dump, printer...),
    ctx->settings may be a copy of the context, common.c */
 COB_EXPIMP cob_settings	*cob_process_settings	(void);

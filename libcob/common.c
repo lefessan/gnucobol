@@ -390,6 +390,10 @@ struct cob_common_state {
 	   fatal error), see cob_context_set_end_handler */
 	void		(*end_handler) (cob_context *, int, int, const char *, void *);
 	void			*end_handler_data;
+	/* function of the host receiving the DISPLAY upon SYSOUT / SYSERR,
+	   see cob_context_set_display_handler */
+	void		(*display_handler) (cob_context *, int, const char *, size_t, void *);
+	void			*display_handler_data;
 
 	/* procedures of the run unit (CBL_EXIT_PROC, CBL_ERROR_PROC) */
 	struct exit_handlerlist	*exit_hdlrs;
@@ -3837,6 +3841,32 @@ cob_context_set_end_handler (cob_context *ctx,
 {
 	ctx->common->end_handler = handler;
 	ctx->common->end_handler_data = data;
+}
+
+/* register the function of the host receiving the output of DISPLAY
+   upon SYSOUT (device 0) and SYSERR (1) in the context, instead of the
+   standard output and error (for example to send it to the log of a
+   transaction monitor); each call receives one DISPLAY statement, with
+   its newline; NULL: the standard output and error again */
+void
+cob_context_set_display_handler (cob_context *ctx,
+	void (*handler) (cob_context *, int, const char *, size_t, void *),
+	void *data)
+{
+	ctx->common->display_handler = handler;
+	ctx->common->display_handler_data = data;
+}
+
+/* the display handler of the context, NULL if none */
+void
+(*cob_ctx_display_handler (cob_context *ctx, void **data))
+	(cob_context *, int, const char *, size_t, void *)
+{
+	if (ctx == NULL || ctx->common == NULL) {
+		return NULL;
+	}
+	*data = ctx->common->display_handler_data;
+	return ctx->common->display_handler;
 }
 
 /* call the function of the host at the end of the run unit, once */

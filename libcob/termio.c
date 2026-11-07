@@ -444,6 +444,38 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 	}
 	/* LCOV_EXCL_STOP */
 
+#ifdef	HAVE_OPEN_MEMSTREAM
+	/* SYSOUT / SYSERR to the display handler of the host */
+	{
+		void	*hdata;
+		void	(*handler) (cob_context *, int, const char *, size_t, void *)
+			= cob_ctx_display_handler (ctx, &hdata);
+		if (handler != NULL
+		 && (to_device == 0 || to_device == 1)
+		 && !disp_redirect) {
+			char	*buf = NULL;
+			size_t	len = 0;
+			FILE	*mem = open_memstream (&buf, &len);
+			if (mem != NULL) {
+				int		i;
+				va_copy (args, cob_va_args);
+				for (i = 0; i < varcnt; ++i) {
+					cob_field	*f = va_arg (args, cob_field *);
+					cob_display_common (ctx, f, mem);
+				}
+				va_end (args);
+				if (newline) {
+					putc ('\n', mem);
+				}
+				fclose (mem);
+				handler (ctx, to_device, buf, len, hdata);
+				free (buf);
+				return;
+			}
+		}
+	}
+#endif
+
 	va_copy (args, cob_va_args);
 	if (disp_redirect) {
 		const int nlattr = newline ? COB_SCREEN_EMULATE_NL : 0;

@@ -2803,6 +2803,85 @@ AT_CHECK([$COBCRUN_DIRECT ./host], [0],
 AT_CLEANUP
 
 
+AT_SETUP([DISPLAY handler of the host])
+AT_KEYWORDS([runreentrant cob_context_set_display_handler DISPLAY])
+
+# a host can receive the DISPLAY upon SYSOUT / SYSERR of a context
+# (for example to send them to its log) instead of the standard output
+
+AT_DATA([dp.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      dp.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           DISPLAY TAG ": to sysout"
+           DISPLAY TAG ": to syserr" UPON SYSERR
+           DISPLAY TAG ": no advancing" WITH NO ADVANCING
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static void
+log_display (cob_context *ctx, int device, const char *text, size_t len,
+             void *data)
+{
+   printf ("[%s, device %d, %d chars] %.*s", (const char *)data, device,
+           (int)len, (int)len, text);
+   if (len == 0 || text[len - 1] != '\n') {
+      printf ("\n");
+   }
+}
+
+static void
+dp (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("dp", 1, argv);
+   cob_context_leave (prev);
+   fflush (stdout);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+   cob_context_set_display_handler (ctx1, log_display, "log");
+
+   dp (ctx1, "ctx1");
+   dp (ctx2, "ctx2");
+   printf ("\n");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE dp.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[[[log, device 0, 16 chars] ctx1: to sysout
+[log, device 1, 16 chars] ctx1: to syserr
+[log, device 0, 18 chars] ctx1: no advancing
+ctx2: to sysout
+ctx2: no advancing
+]], [ctx2: to syserr
+])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
