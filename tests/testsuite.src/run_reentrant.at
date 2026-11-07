@@ -2792,7 +2792,7 @@ AT_CHECK([$COMPILE host.c], [0], [], [])
 AT_CHECK([$COMPILE_MODULE fk.cob], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./host], [0],
 [fork: -000000001
-], [libcob: warning: 'CBL_GC_FORK' is not supported in a hosted runtime
+], [libcob: fk.cob:8: warning: 'CBL_GC_FORK' is not supported in a hosted runtime
 ])
 
 AT_CLEANUP
