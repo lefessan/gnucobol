@@ -520,6 +520,23 @@ Conséquences pour `cobc/codegen.c` :
    `IS INITIAL` par contexte, `CALL` dynamique concurrent (après le
    verrou de T1.4).
 5. **J5** : T1.7 — mesures et optimisations.
+   **Mesures du 2026-11-07** (`tests/reentrant-bench/`, builds `-O2`
+   sans debug ; référence : `587dc493^`, juste avant le travail
+   réentrant ; i7-1260P) :
+   | banc | rapport réentrant / référence |
+   |------|------|
+   | arith (DISPLAY, COMP-3, COMP-5) | 1,02 (bruit) |
+   | strs (MOVE, STRING, INSPECT) | 0,63 (les anciens `COB_TLS` de `strings.c` coûtaient `__tls_get_addr`) |
+   | calls (CALL dynamique, 20 M) | 1,035 (1,12 avant de ne lire le contexte courant qu'une fois à l'entrée) |
+   | seqf, idxf (fichiers) | 1,00 à 1,03 |
+   Montée en charge (`scale.sh`, même travail par thread, un contexte
+   par thread) : sur les cœurs E, 1 → 8 threads, temps écoulé 1,10 →
+   1,21 s (+10 %) ; sur les cœurs P, +23 % à 4 threads (baisse de la
+   fréquence turbo). Pas de contention notable sur les verrous de
+   libcob (`pthread_mutex_lock` 1,9 % du profil, table des programmes
+   lors des `cob_call` depuis C). Pistes si besoin : modèle TLS
+   `initial-exec` pour le contexte courant (risque si libcob est chargé
+   par `dlopen`), recherche sans verrou dans la table des programmes.
 
 ### Risques
 

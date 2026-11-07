@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md: status with "tests/reentrant-bench: benchmarks of
+	  the reentrant runtime (T1.7)"
 	* TXSERIES-PLAN.md: T1.4 progress (LMDB lock, intrinsic constants,
 	  common.c state)
 	* TXSERIES-PLAN.md: T1.4 locks of the files between contexts
