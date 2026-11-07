@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_putenv_ctx, cob_display_env_value_ctx): no rescan of
+	  the shared settings from a context's environment
 	* common.h, fodbc.c (odbc_version, odbc_commit, odbc_rollback,
 	  odbc_sync, odbcCheckDups, join_environment, ...): one ODBC connection
 	  per execution context

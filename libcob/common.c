@@ -7290,7 +7290,9 @@ cob_putenv_ctx (cob_context *ctx, char *name)
 		*v++ = 0;
 		ret = env_set (ctx, n, v);
 		cob_free (n);
-		if (!ret) {
+		/* the runtime settings are shared by the contexts: only a
+		   change of the environment of the process rescans them */
+		if (!ret && env_of_process (ctx)) {
 			cob_rescan_env_vals (ctx);
 		}
 		return ret;
@@ -7364,8 +7366,12 @@ cob_display_env_value_ctx (cob_context *ctx, const cob_field *f)
 		cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);
 		return;
 	}
-	/* Rescan term/screen variables */
-	cob_rescan_env_vals (ctx);
+	/* Rescan term/screen variables; the runtime settings are shared by
+	   the contexts: only a change of the environment of the process
+	   rescans them (TODO: settings of the context) */
+	if (env_of_process (ctx)) {
+		cob_rescan_env_vals (ctx);
+	}
 }
 
 /* compatibility: cob_display_env_value without context */
