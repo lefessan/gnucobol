@@ -6869,6 +6869,14 @@ env_get (cob_context *ctx, const char *name)
 
 static int	cob_unsetenv_process (const char *);
 
+/* value of the variable 'name' for the context: its overlay, else the
+   environment of the process (exported for the file backends) */
+char *
+cob_ctx_getenv (cob_context *ctx, const char *name)
+{
+	return env_get (ctx, name);
+}
+
 /* whether the context writes in the environment of the process */
 static int
 env_of_process (cob_context *ctx)

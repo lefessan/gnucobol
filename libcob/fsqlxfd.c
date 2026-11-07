@@ -1042,7 +1042,7 @@ cob_load_xfd (cob_context *ctx, struct db_state *db, cob_file *fl, char *alt_nam
 		indsize = sizeof(long);
 	if (fl->xfdschema != NULL)
 		sdir = (char*)fl->xfdschema;
-	else if ((sdir = getenv("COB_SCHEMA_DIR")) == NULL)
+	else if ((sdir = cob_ctx_getenv (ctx, "COB_SCHEMA_DIR")) == NULL)
 		sdir = (char*)COB_SCHEMA_DIR;
 	if (alt_name != NULL) {
 		fname = alt_name;
@@ -1386,7 +1386,7 @@ cob_load_ddl (cob_context *ctx, struct db_state  *db, struct file_xfd *fx)
 	if (fx->create_table)
 		cob_free (fx->create_table);
 	fx->create_table = NULL;
-	if ((sdir = getenv("COB_SCHEMA_DIR")) == NULL)
+	if ((sdir = cob_ctx_getenv (ctx, "COB_SCHEMA_DIR")) == NULL)
 		sdir = (char*)COB_SCHEMA_DIR;
 	k = sprintf (xfdbuf, "%s%s%s.ddl",sdir,SLASH_STR,fx->tablename);
 	fi = fopen (xfdbuf,"r");
@@ -1844,7 +1844,7 @@ getSchemaEnvName(cob_context *ctx,
 	}
 
 	if (db->dbSchema[0] <= ' ') {
-		if( (env = getenv("COB_SCHEMA_NAME")) != NULL)
+		if( (env = cob_ctx_getenv (ctx, "COB_SCHEMA_NAME")) != NULL)
 			snprintf(db->dbSchema,sizeof(db->dbSchema),"%s",env);
 	}
 	env = NULL;
@@ -1852,7 +1852,7 @@ getSchemaEnvName(cob_context *ctx,
 		*out = 0;
 	if (db->dbSchema[0] > ' ') {
 		sprintf(envname,"%s%s",db->dbSchema,suffix);
-		if( (env = getenv(envname)) != NULL) 
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL) 
 			goto gotit;
 
 		for(k=0; db->dbSchema[k] != 0; k++) {
@@ -1863,17 +1863,17 @@ getSchemaEnvName(cob_context *ctx,
 		sch[k] = 0;
 
 		sprintf(envname,"%s%s",sch,suffix);
-		if( (env = getenv(envname)) != NULL)
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL)
 			goto gotit;
 	}
 
 	sprintf(envname,"%s%s","COB_SCHEMA",suffix);
-	if( (env = getenv(envname)) != NULL)
+	if( (env = cob_ctx_getenv (ctx, envname)) != NULL)
 		goto gotit;
 
 	if (db->mysql) {
 		sprintf(envname,"%s%s","MYSQL",suffix);
-		if( (env = getenv(envname)) != NULL) {
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL) {
 			if (out)
 				strcpy(out,env);
 			goto gotit;
@@ -1881,22 +1881,22 @@ getSchemaEnvName(cob_context *ctx,
 	}
 	if (db->oracle || db->isoci) {
 		sprintf(envname,"%s%s","ORACLE",suffix);
-		if( (env = getenv(envname)) != NULL) 
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL) 
 			goto gotit;
 	}
 	sprintf(envname,"%s%s","SQL",suffix);
-	if( (env = getenv(envname)) != NULL)
+	if( (env = cob_ctx_getenv (ctx, envname)) != NULL)
 		goto gotit;
 
 	if (db->db2) {
 		sprintf(envname,"%s%s","DB2",suffix);
-		if( (env = getenv(envname)) != NULL)
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL)
 			goto gotit;
 	}
 
 	if (db->isodbc) {
 		sprintf(envname,"%s%s","ODBC",suffix);
-		env = getenv(envname);
+		env = cob_ctx_getenv (ctx, envname);
 	}
 
 gotit:

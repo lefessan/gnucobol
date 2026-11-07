@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_ctx_lock_close), common.c (cob_unsetenv_process),
+	  fsqlxfd.c (cob_load_xfd, cob_load_ddl, getSchemaEnvName): SQL
+	  backends read the environment of the context
 	* coblocal.h (cob_ctx_chdir), common.c (env_child_free,
 	  cob_ctx_system), common.h, fileio.c (cob_chk_file_mapping,
 	  cob_file_open, cob_file_close): pipes with the environment and

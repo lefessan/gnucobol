@@ -527,6 +527,8 @@ COB_EXPIMP int		cob_ctx_lock_try	(cob_context *, const void *, int,
 COB_EXPIMP void		cob_ctx_lock_close	(const void *, int,
 						 void (*) (void *), void *);
 #endif
+/* environment of the context, common.c; exported for the backends */
+COB_EXPIMP char		*cob_ctx_getenv		(cob_context *, const char *);
 
 COB_HIDDEN void		cob_check_trace_file (void);
 
