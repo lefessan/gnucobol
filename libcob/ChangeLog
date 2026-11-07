@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_dump_symbols): state of the dump of the symbols in the
+	  context
 	* common.c (check_valid_env_tmpdir, cob_gettmpdir, cob_get_dump_file):
 	  temporary directory checked once under a lock
 	* common.c (cob_set_exception_ctx): location of the last exception in

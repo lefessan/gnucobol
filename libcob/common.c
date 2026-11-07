@@ -359,6 +359,14 @@ struct cob_common_state {
 	char			excp_sec[COB_MAX_WORDLEN + 1];	/* pointed to by */
 	char			excp_para[COB_MAX_WORDLEN + 1];	/* ctx->glob */
 	unsigned int		last_runtime_error_line;
+
+	/* dump of the symbols (cob_dump_symbols) */
+#define SYM_MAX_IDX 8
+	int			dump_sym_idx;
+	int			dump_sym_sub[SYM_MAX_IDX];
+	int			dump_sym_size[SYM_MAX_IDX];
+	int			dump_skipgrp;
+	cob_symbol		*dump_skpsym;
 	const char		*last_runtime_error_file;
 };
 
@@ -12341,10 +12349,11 @@ static const char *const sectname[] = {
 static const unsigned char sectdump[] = {
 	0, COB_DUMP_FD, COB_DUMP_WS, COB_DUMP_LO, COB_DUMP_LS,
 	COB_DUMP_SC, COB_DUMP_RD, COB_DUMP_RD};
-#define SYM_MAX_IDX 8
-static int	sym_idx = 0;
-static int	sym_sub [SYM_MAX_IDX];
-static int	sym_size[SYM_MAX_IDX];
+#define sym_idx		(common_state (ctx)->dump_sym_idx)
+#define sym_sub		(common_state (ctx)->dump_sym_sub)
+#define sym_size	(common_state (ctx)->dump_sym_size)
+#define skipgrp		(common_state (ctx)->dump_skipgrp)
+#define skpsym		(common_state (ctx)->dump_skpsym)
 
 static jmp_buf save_sig_env;
 static void 
@@ -12464,8 +12473,6 @@ cob_dump_table (cob_context *ctx,  cob_symbol *sym, int k)
 static void
 cob_dump_symbols (cob_context *ctx, cob_module *mod)
 {
-	static int skipgrp;
-	static cob_symbol *skpsym; 
 	int			j, k, sect;
 	cob_symbol *sym;
 	cob_field	f0;
