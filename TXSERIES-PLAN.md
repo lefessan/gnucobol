@@ -393,6 +393,15 @@ Conséquences pour `cobc/codegen.c` :
         variable d'environnement posée par un contexte ne relit plus
         les réglages partagés (course avec les autres threads) : il
         faudra des réglages par contexte. OCI (`foci.c`) non traité ;
+      - **réglages par contexte faits le 2026-11-07** : copie à
+        l'écriture des réglages quand une variable de l'environnement du
+        contexte change un réglage (`set_config_val_in`,
+        `rescan_context_setting`) ; les membres de niveau processus
+        (fichiers de trace, dump, impression, SYSPUNCH) lus par
+        `cob_process_settings ()`. Reste : `common.c` lit encore
+        `cobsetptr` directement (~240 endroits, surtout init / config /
+        sortie) ; les lectures à l'exécution (avertissements, mangling
+        des noms…) ignorent la copie du contexte ;
       - **faits le 2026-11-07** : verrou de fichier à l'OPEN de LMDB par
         la table des contextes (fonctions `cob_ctx_lock_try` /
         `cob_ctx_lock_close` exportées pour les gestionnaires) ;
