@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_stop_run_ctx): STOP RUN without current context ends
+	  the main run unit
 	* common.c (call_end_handler, context_returns, end_context_run_unit,
 	  cob_stop_run_ctx, cob_hard_failure, cob_hard_failure_internal, ...):
 	  STOP RUN of a hosted runtime ends the run unit of the context

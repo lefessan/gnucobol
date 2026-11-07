@@ -3926,6 +3926,11 @@ cob_stop_run_ctx (cob_context *ctx, const int status)
 	if (!cob_initialized) {
 		cob_hard_failure ();
 	}
+	/* without context (for example after the host destroyed the current
+	   one): the run unit of the main context */
+	if (ctx == NULL) {
+		ctx = cob_main_context;
+	}
 #ifndef COB_WITHOUT_JMP
 	if (context_returns (ctx)) {
 		common_state (ctx)->exit_code = status;
