@@ -1924,10 +1924,12 @@ AT_KEYWORDS([runreentrant cob_context_create ODBC COMMIT ROLLBACK])
 # driver, else the usual place)
 
 AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
-AT_CHECK([test -f "${COB_TEST_SQLITE_ODBC:=/usr/lib/x86_64-linux-gnu/odbc/libsqlite3odbc.so}" || exit 77])
-AT_CHECK([mkdir schema && cat > odbcinst.ini <<EOF
+# (each check runs in its own shell: the path is computed where used)
+AT_CHECK([drv="${COB_TEST_SQLITE_ODBC:-/usr/lib/x86_64-linux-gnu/odbc/libsqlite3odbc.so}"
+test -f "$drv" || exit 77
+mkdir schema && cat > odbcinst.ini <<EOF
 @<:@SQLite3@:>@
-Driver=$COB_TEST_SQLITE_ODBC
+Driver=$drv
 EOF
 cat > odbc.ini <<EOF
 @<:@cobtest1@:>@

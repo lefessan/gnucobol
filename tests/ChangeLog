@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: path of the SQLite ODBC driver in the
+	  ODBC test
 	* testsuite.src/run_reentrant.at: one ODBC connection per execution
 	  context
 	* testsuite.src/run_reentrant.at: pipes with the environment and
