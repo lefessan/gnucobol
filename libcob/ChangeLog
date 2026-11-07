@@ -1,6 +1,11 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fileio.c (cob_file_open): the child process of a bidirectional
+	  pipe only writes its message and calls _exit when dup2 or execv
+	  fail, instead of cob_runtime_error, cob_stop_run and exit, which
+	  flushed in the child the stdio buffers of the parent (records
+	  written twice) and ran the end of its run unit
 	* cobcapi.c (cob_get_s64_param, cob_get_u64_param, cob_put_s64_param,
 	  cob_put_u64_param): do not write the scale into the shared static
 	  attributes const_binll_attr / const_binull_attr (data race between

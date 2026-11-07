@@ -9902,6 +9902,56 @@ Country: FRANCE
 AT_CLEANUP
 
 
+AT_SETUP([bidirectional pipe to a missing command])
+AT_KEYWORDS([runfile pipe])
+
+# the child process of the pipe must not flush the stdio buffers
+# inherited from the program: the record of OUTF, not written yet
+# into the file, was written twice
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT PIPEIO ASSIGN TO PIPE-CMD
+                  ORGANIZATION LINE SEQUENTIAL
+                  FILE STATUS IS PIPE-STATUS.
+           SELECT OUTF ASSIGN TO "out.txt"
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD  PIPEIO.
+       01  PIPE-REC     PIC X(10).
+       FD  OUTF.
+       01  OUT-REC      PIC X(20).
+       WORKING-STORAGE  SECTION.
+       01  PIPE-CMD     PIC X(40) VALUE "|./missing-command".
+       01  PIPE-STATUS  PIC XX.
+       PROCEDURE        DIVISION.
+           OPEN OUTPUT OUTF
+           MOVE "written once" TO OUT-REC
+           WRITE OUT-REC
+           OPEN I-O PIPEIO
+           IF PIPE-STATUS = "00"
+              CLOSE PIPEIO
+           END-IF
+           CLOSE OUTF
+           STOP RUN.
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [],
+[./missing-command: Command not found.
+])
+AT_CHECK([cat out.txt], [0],
+[written once
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([EXTFH: using ISAM callback])
 AT_KEYWORDS([runfile EXTFH indexed])
 

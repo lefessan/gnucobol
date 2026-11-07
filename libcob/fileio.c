@@ -4581,26 +4581,30 @@ cob_file_open (cob_file_api *a, cob_file *f, char *filename,
 			signal (SIGPIPE, SIG_IGN);
 			return COB_STATUS_00_SUCCESS;
 		} else {			/* Child process */
+			/* only async-signal-safe calls until execv: the parent
+			   may have other threads, and must not be run again
+			   (no STOP RUN, no exit flushing its stdio buffers) */
+			static const char	dup_err[] = "libcob: error: cannot set up the pipe\n";
 			close (p_fds[1]);
 			close (c_fds[0]);
 			if (p_fds[0] != STDIN_FILENO) {
 				if (dup2(p_fds[0], STDIN_FILENO) != STDIN_FILENO) {
-					cob_runtime_error (_("ERROR FILE %s opening pipe"), f->select_name);
-					cob_stop_run (-1);
+					(void)!write (STDERR_FILENO, dup_err, sizeof (dup_err) - 1);
+					_exit (127);
 				}
 				close (p_fds[0]);
 			}
 			if (c_fds[1] != STDOUT_FILENO) {
 				if (dup2(c_fds[1], STDOUT_FILENO) != STDOUT_FILENO) {
-					cob_runtime_error (_("ERROR FILE %s opening pipe"), f->select_name);
-					cob_stop_run (-1);
+					(void)!write (STDERR_FILENO, dup_err, sizeof (dup_err) - 1);
+					_exit (127);
 				}
 				close (c_fds[1]);
 			}
 			execv (filename, args);
-			fprintf(stderr,"%s: Command not found.\n",filename);
-			fflush(stderr);
-			exit(-1);
+			(void)!write (STDERR_FILENO, filename, strlen (filename));
+			(void)!write (STDERR_FILENO, ": Command not found.\n", 21);
+			_exit (127);
 		}
 #else
 		return COB_STATUS_48_OUTPUT_DENIED;
