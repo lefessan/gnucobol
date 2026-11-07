@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: file and record locks between
+	  contexts
 	* testsuite.src/run_reentrant.at: dynamic CALL and CANCEL in several
 	  threads
 	* testsuite.src/run_reentrant.at: resolved CALL entries and reference

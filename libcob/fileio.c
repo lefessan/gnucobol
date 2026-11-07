@@ -3033,9 +3033,223 @@ cob_set_file_format (cob_context *ctx, cob_file *f, char *defstr, int updt)
 }
 
 #ifdef	HAVE_FCNTL
-#if defined(HAVE_SIGACTION) && defined(SIGALRM)
-static void catch_alarm(int sig) { }
-#endif
+
+/* Locks of the contexts of the process on the files (T1.4)
+
+   fcntl locks belong to the process: they exclude the other processes,
+   but not the other contexts of this process. This table records the
+   locks taken by each context; it is checked before fcntl, both under
+   ctx_locks_lock, so that a context cannot get a lock held by another
+   context of the process. When the process loses its fcntl locks on a
+   range (unlock), or on the whole file (any close of the file), the
+   locks of the other contexts on that file are set again with their
+   own descriptors. */
+
+struct ctx_lock {
+	struct ctx_lock	*next;
+	dev_t		dev;		/* file */
+	ino_t		ino;
+	off_t		start;		/* range, len 0: up to the end */
+	off_t		len;
+	short		type;		/* F_RDLCK or F_WRLCK */
+	cob_context	*owner;
+	cob_file	*f;		/* holder, its fd sets the lock again */
+};
+
+static struct ctx_lock	*ctx_locks = NULL;
+COB_LOCK_DEFINE (ctx_locks_lock);
+
+static int
+ranges_overlap (off_t s1, off_t l1, off_t s2, off_t l2)
+{
+	if (l1 != 0 && s2 >= s1 + l1) {
+		return 0;
+	}
+	if (l2 != 0 && s1 >= s2 + l2) {
+		return 0;
+	}
+	return 1;
+}
+
+/* whether another context holds a conflicting lock;
+   called with ctx_locks_lock */
+static int
+ctx_lock_conflict (cob_context *ctx, const struct stat *st,
+		   off_t start, off_t len, short type)
+{
+	struct ctx_lock	*l;
+
+	for (l = ctx_locks; l; l = l->next) {
+		if (l->owner != ctx
+		 && l->dev == st->st_dev && l->ino == st->st_ino
+		 && (type == F_WRLCK || l->type == F_WRLCK)
+		 && ranges_overlap (l->start, l->len, start, len)) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* record a lock of the context; called with ctx_locks_lock */
+static void
+ctx_lock_add (cob_context *ctx, cob_file *f, const struct stat *st,
+	      off_t start, off_t len, short type)
+{
+	struct ctx_lock	*l;
+
+	for (l = ctx_locks; l; l = l->next) {
+		if (l->f == f && l->start == start && l->len == len) {
+			l->type = type;
+			return;
+		}
+	}
+	l = cob_malloc (sizeof (struct ctx_lock));
+	l->dev = st->st_dev;
+	l->ino = st->st_ino;
+	l->start = start;
+	l->len = len;
+	l->type = type;
+	l->owner = ctx;
+	l->f = f;
+	l->next = ctx_locks;
+	ctx_locks = l;
+}
+
+/* forget the locks of 'f' in the range (all of them if 'all');
+   called with ctx_locks_lock */
+static void
+ctx_lock_remove (cob_file *f, off_t start, off_t len, int all)
+{
+	struct ctx_lock	**pl = &ctx_locks;
+	struct ctx_lock	*l;
+
+	while ((l = *pl) != NULL) {
+		if (l->f == f
+		 && (all || ranges_overlap (l->start, l->len, start, len))) {
+			*pl = l->next;
+			cob_free (l);
+		} else {
+			pl = &l->next;
+		}
+	}
+}
+
+/* set again the fcntl locks of the table on the range of the file,
+   after the process lost them; called with ctx_locks_lock */
+static void
+ctx_lock_reapply (dev_t dev, ino_t ino, off_t start, off_t len)
+{
+	struct ctx_lock	*l;
+	struct flock	lck;
+
+	for (l = ctx_locks; l; l = l->next) {
+		if (l->dev == dev && l->ino == ino
+		 && l->f->fd >= 0
+		 && ranges_overlap (l->start, l->len, start, len)) {
+			memset (&lck, 0, sizeof (struct flock));
+			lck.l_type = l->type;
+			lck.l_whence = SEEK_SET;
+			lck.l_start = l->start;
+			lck.l_len = l->len;
+			(void)fcntl (l->f->fd, F_SETLK, &lck);
+		}
+	}
+}
+
+/* release the fcntl locks of 'f' on the range, forget them, and set
+   again those of the other contexts */
+static int
+ctx_unlock_range (cob_file *f, off_t start, off_t len)
+{
+	struct stat	st;
+	struct flock	lck;
+	int		ret, has_st;
+
+	memset (&lck, 0, sizeof (struct flock));
+	lck.l_type = F_UNLCK;
+	lck.l_whence = SEEK_SET;
+	lck.l_start = start;
+	lck.l_len = len;
+	cob_lock_acquire (&ctx_locks_lock);
+	has_st = fstat (f->fd, &st) == 0;
+	errno = 0;
+	ret = fcntl (f->fd, F_SETLK, &lck);
+	ctx_lock_remove (f, start, len, 0);
+	if (has_st) {
+		ctx_lock_reapply (st.st_dev, st.st_ino, start, len);
+	}
+	cob_lock_release (&ctx_locks_lock);
+	return ret;
+}
+
+/* close the descriptor (or stream) of 'f': forget its locks, and set
+   again those of the other contexts on the file, lost by the close */
+static void
+ctx_lock_close (cob_file *f, int fd, FILE *fp)
+{
+	struct stat	st;
+	int		has_st;
+
+	cob_lock_acquire (&ctx_locks_lock);
+	has_st = fd >= 0 && fstat (fd, &st) == 0;
+	ctx_lock_remove (f, 0, 0, 1);
+	if (fp) {
+		fclose (fp);
+	} else if (fd >= 0) {
+		close (fd);
+	}
+	if (has_st) {
+		ctx_lock_reapply (st.st_dev, st.st_ino, 0, 0);
+	}
+	cob_lock_release (&ctx_locks_lock);
+}
+
+/* one attempt to lock without waiting: 1 if locked, else 0 with
+   errno (EAGAIN if held by another context or process) */
+static int
+try_lock_range (cob_context *ctx, cob_file *f, off_t start, off_t len,
+		short type)
+{
+	struct stat	st;
+	struct flock	lck;
+	int		has_st, ret;
+
+	memset (&lck, 0, sizeof (struct flock));
+	lck.l_type = type;
+	lck.l_whence = SEEK_SET;
+	lck.l_start = start;
+	lck.l_len = len;
+	cob_lock_acquire (&ctx_locks_lock);
+	has_st = fstat (f->fd, &st) == 0;
+	if (has_st
+	 && ctx_lock_conflict (ctx, &st, start, len, type)) {
+		cob_lock_release (&ctx_locks_lock);
+		f->blockpid = cob_sys_getpid ();
+		errno = EAGAIN;
+		return 0;
+	}
+	errno = 0;
+	ret = fcntl (f->fd, F_SETLK, &lck);
+	if (ret != -1 && has_st) {
+		ctx_lock_add (ctx, f, &st, start, len, type);
+	}
+	cob_lock_release (&ctx_locks_lock);
+	if (ret == -1) {
+		const int	err = errno;
+		/* another process: get its pid */
+		lck.l_type = type;
+		lck.l_whence = SEEK_SET;
+		lck.l_start = start;
+		lck.l_len = len;
+		if (fcntl (f->fd, F_GETLK, &lck) != -1
+		 && lck.l_type != F_UNLCK) {
+			f->blockpid = lck.l_pid;
+		}
+		errno = err;
+		return 0;
+	}
+	return 1;
+}
 
 /*
  * Issue File/Record lock
@@ -3043,14 +3257,9 @@ static void catch_alarm(int sig) { }
 static int
 lock_record (cob_context *ctx, cob_file *f, unsigned int recnum, int forwrite, int *errsts)
 {
-#if defined(HAVE_SIGACTION) && defined(SIGALRM)
-	struct sigaction sigact, prvact;
-	int		wait_time;
-#endif
 	int		lock_type, retry, interval;
 	unsigned long	pos;
 	unsigned int	rcsz;
-	struct flock	lck;
 
 	lock_type = forwrite ? F_WRLCK : F_RDLCK;
 	f->blockpid = 0;
@@ -3083,105 +3292,41 @@ lock_record (cob_context *ctx, cob_file *f, unsigned int recnum, int forwrite, i
 			f->record_slot = rcsz + 1;
 		pos = (unsigned long)(f->file_header+((recnum-1)*f->record_slot));
 	}
-	memset (&lck,0,sizeof(struct flock));
-	lck.l_type = lock_type;
-	lck.l_whence = SEEK_SET;
-	lck.l_start = pos;
-	lck.l_len = rcsz;
-	errno = 0;
-	if (fcntl (f->fd, F_SETLK, &lck) != -1) {
-		*errsts = 0;
-		if (recnum == 0
-		 && forwrite) 			/* File locked for Exclusive use */
-			f->flag_file_lock = 1;
-		return 1;			/* Got the lock so all is good */
-	}
-	*errsts = errno;
-	if (retry == 0)	{			/* No RETRY, so return with no lock */
-		if (errno == EAGAIN) {
-			lck.l_type = lock_type;
-			lck.l_whence = SEEK_SET;
-			lck.l_start = pos;
-			lck.l_len = rcsz;
-			if (fcntl (f->fd, F_GETLK, &lck) == -1) {
-				if (lck.l_pid == cob_sys_getpid()) {	/* Is locked by me */
-					return 1;
-				}
-			}
-		}
-		f->blockpid = lck.l_pid;
-		return 0;
-	}
-	if (interval <= 0)
-		interval = COB_RETRY_PER_SECOND ;
 
-#if defined(HAVE_SIGACTION) && defined(SIGALRM)
-	if (retry > 0) {				/* Negative means wait forever */
-		memset (&prvact,0,sizeof(sigact));
-		prvact.sa_handler = SIG_DFL;
-		memset (&sigact,0,sizeof(sigact));
-		sigact.sa_handler = catch_alarm;
-		sigaction(SIGALRM, &sigact, &prvact);
-		wait_time = retry * interval;
-		alarm(wait_time);
-	}
-	if (fcntl (f->fd, F_SETLKW, &lck) != -1) {
-		if (retry > 0) {
-			sigaction(SIGALRM, &prvact, NULL);
-			alarm(0);
+	/* the wait (RETRY) polls: a blocking fcntl cannot see the locks of
+	   the other contexts, and an alarm signal is process-wide */
+	if (retry > 0) {
+		if (interval <= 0) {
+			interval = 1;
 		}
-		*errsts = 0;
-		if (recnum == 0
-		 && forwrite) 			/* File locked for Exclusive use */
-			f->flag_file_lock = 1;
-		return 1;			/* Got the lock so all is good */
-	}
-	*errsts = errno;
-	if (retry > 0) {
-		sigaction(SIGALRM, &prvact, NULL);
-		alarm(0);
-		if (*errsts == EINTR)		/* Timed out, so return EAGAIN */
-			*errsts = EAGAIN;
-	}
-#else
-	if (retry > 0) {
 		retry = retry * 4;
 		interval = (interval * 1000) / 4;
-		while (retry-- > 0) {
-			lck.l_type = lock_type;
-			lck.l_whence = SEEK_SET;
-			lck.l_start = pos;
-			lck.l_len = rcsz;
-			*errsts = 0;
-			if (fcntl (f->fd, F_SETLK, &lck) != -1) {
-				if (recnum == 0
-				 && forwrite) 	/* File locked for Exclusive use */
-					f->flag_file_lock = 1;
-				return 1;	/* Got the lock so all is good */
-			}
-			*errsts = errno;
-			cob_sleep_msec(interval);
+	}
+	for (;;) {
+		*errsts = 0;
+		if (try_lock_range (ctx, f, (off_t)pos, (off_t)rcsz,
+				    (short)lock_type)) {
+			if (recnum == 0
+			 && forwrite) 		/* File locked for Exclusive use */
+				f->flag_file_lock = 1;
+			return 1;		/* Got the lock so all is good */
 		}
-	} else {
-		while (1) {
-			lck.l_type = lock_type;
-			lck.l_whence = SEEK_SET;
-			lck.l_start = pos;
-			lck.l_len = rcsz;
-			*errsts = 0;
-			if (fcntl (f->fd, F_SETLK, &lck) != -1) {
-				if (recnum == 0
-				 && forwrite) 	/* File locked for Exclusive use */
-					f->flag_file_lock = 1;
-				return 1;	/* Got the lock so all is good */
+		*errsts = errno;
+		if (*errsts != EAGAIN && *errsts != EACCES) {
+			return 0;
+		}
+		if (retry == 0) {		/* No RETRY, so return with no lock */
+			return 0;
+		}
+		if (retry > 0) {
+			if (--retry == 0) {
+				return 0;
 			}
-			*errsts = errno;
-			cob_sleep_msec(250);
+			cob_sleep_msec (interval);
+		} else {			/* RETRY FOREVER */
+			cob_sleep_msec (250);
 		}
 	}
-#endif
-	f->blockpid = lck.l_pid;
-	return 0;				/* Record is not locked! */
 }
 
 /*
@@ -3192,8 +3337,8 @@ unlock_record (cob_context *ctx, cob_file *f, unsigned int recnum)
 {
 	unsigned long pos;
 	unsigned int rcsz;
-	struct flock lck;
 
+	COB_UNUSED (ctx);
 	if (recnum == 0) {			/* Un-Lock entire file */
 		pos = 0;
 		rcsz = 0;
@@ -3206,12 +3351,7 @@ unlock_record (cob_context *ctx, cob_file *f, unsigned int recnum)
 			f->record_slot = rcsz + 1;
 		pos = (unsigned long)(f->file_header+((recnum-1)*f->record_slot));
 	}
-	lck.l_type = F_UNLCK;
-	lck.l_whence = SEEK_SET;
-	lck.l_start = pos;
-	lck.l_len = rcsz;
-	errno = 0;
-	if (fcntl (f->fd, F_SETLK, &lck) != -1) {
+	if (ctx_unlock_range (f, (off_t)pos, (off_t)rcsz) != -1) {
 		return 1;					/* Released the lock so all is good */
 	}
 	f->blockpid = 0;
@@ -3334,10 +3474,14 @@ set_file_lock (cob_context *ctx, cob_file *f, const char *filename, int open_mod
 	 && GetLastError () != ERROR_INVALID_FUNCTION
 #endif
 	) {
+#ifdef	HAVE_FCNTL
+		ctx_lock_close (f, f->fd, f->file);
+#else
 		if (f->file)
 			fclose (f->file);
 		else
 			close (f->fd);
+#endif
 		f->fd = -1;
 		f->file = NULL;
 		f->open_mode = COB_OPEN_CLOSED;
@@ -4910,14 +5054,7 @@ cob_file_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 		if (f->fd >= 0
 		 && !f->flag_is_pipe) {
 #ifdef	HAVE_FCNTL
-			struct flock lock;
-			memset ((void *)&lock, 0, sizeof (struct flock));
-			lock.l_type = F_UNLCK;
-			lock.l_whence = SEEK_SET;
-			lock.l_start = 0;
-			lock.l_len = 0;
-			errno = 0;
-			if (fcntl (f->fd, F_SETLK, &lock) == -1) {
+			if (ctx_unlock_range (f, 0, 0) == -1) {
 				cob_runtime_warning_ctx (ctx, "issue during unlock (%s), errno: %d", "cob_file_close", errno);
 			}
 #elif defined _WIN32
@@ -4996,12 +5133,20 @@ cob_file_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 		}
 		if (f->file != NULL) {
 			/* This also closes the underlying fd */
+#ifdef	HAVE_FCNTL
+			ctx_lock_close (f, f->fd, (FILE *)f->file);
+#else
 			fclose ((FILE *)f->file);
+#endif
 			f->file = NULL;
 			f->fd = -1;
 		} else
 		if (f->fd >= 0) {
+#ifdef	HAVE_FCNTL
+			ctx_lock_close (f, f->fd, NULL);
+#else
 			close (f->fd);
+#endif
 			f->fd = -1;
 		}
 		if (opt == COB_CLOSE_NO_REWIND) {
@@ -6678,13 +6823,7 @@ cob_file_unlock (cob_context *ctx, cob_file *f)
 			if (f->flag_file_lock) {
 				/* Unlock the file */
 				if (f->fd >= 0) {
-					struct flock	lock;
-					memset ((void *)&lock, 0, sizeof (struct flock));
-					lock.l_type = F_UNLCK;
-					lock.l_whence = SEEK_SET;
-					lock.l_start = 0;
-					lock.l_len = 0;
-					if (fcntl (f->fd, F_SETLK, &lock) == -1) {
+					if (ctx_unlock_range (f, 0, 0) == -1) {
 						cob_runtime_warning_ctx (ctx, "issue during unlock (%s), errno: %d",
 							"cob_file_unlock", errno);
 					}

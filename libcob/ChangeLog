@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fileio.c (cob_set_file_format, lock_record, unlock_record,
+	  set_file_lock, cob_file_close, cob_file_unlock): file and record
+	  locks between contexts
 	* flmdb.c (local_file, lmdb_open, cob_lmdb_exit_fileio,
 	  cob_lmdb_init_fileio): LMDB in several threads
 	* call.c (do_cancel_module), coblocal.h, common.c (cob_init_switches,

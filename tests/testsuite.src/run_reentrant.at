@@ -785,6 +785,181 @@ ctx1 C: 00
 AT_CLEANUP
 
 
+AT_SETUP([record and file locks of RELATIVE files between contexts])
+AT_KEYWORDS([runreentrant cob_context_create RELATIVE LOCK])
+
+# fcntl locks belong to the process: the locks of each context are kept
+# in a table of the runtime, so that the contexts exclude each other;
+# when a context closes the file (which releases all the fcntl locks of
+# the process on it), the locks of the other contexts are set again and
+# still exclude the other processes
+
+AT_DATA([rl.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      rl.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT RELF ASSIGN TO "relfile"
+                  ORGANIZATION RELATIVE ACCESS RANDOM
+                  RELATIVE KEY RK
+                  LOCK MODE MANUAL
+                  SHARING WITH ALL OTHER
+                  STATUS FS.
+           SELECT XF ASSIGN TO "relfile"
+                  ORGANIZATION RELATIVE ACCESS RANDOM
+                  RELATIVE KEY RK
+                  SHARING WITH NO OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD RELF.
+       01 RR            PIC X(10).
+       FD XF.
+       01 XR            PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       01 RK            PIC 9(4).
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           MOVE 1 TO RK
+           EVALUATE OP
+           WHEN "W"
+              OPEN OUTPUT RELF
+              MOVE "data" TO RR
+              WRITE RR
+              CLOSE RELF
+           WHEN "O"
+              OPEN I-O RELF
+           WHEN "R"
+              READ RELF WITH LOCK
+           WHEN "C"
+              CLOSE RELF
+           WHEN "X"
+              OPEN I-O XF
+           WHEN "Y"
+              CLOSE XF
+           END-EVALUATE
+           DISPLAY TAG " " OP ": " FS
+           GOBACK.
+])
+
+AT_DATA([other.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      other.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT RELF ASSIGN TO "relfile"
+                  ORGANIZATION RELATIVE ACCESS RANDOM
+                  RELATIVE KEY RK
+                  LOCK MODE MANUAL
+                  SHARING WITH ALL OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD RELF.
+       01 RR            PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       01 RK            PIC 9(4).
+       PROCEDURE        DIVISION.
+           MOVE 1 TO RK
+           OPEN I-O RELF
+           READ RELF WITH LOCK
+           DISPLAY "proc R: " FS
+           CLOSE RELF
+           STOP RUN.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <stdlib.h>
+#include <libcob.h>
+
+static void
+rl (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("rl", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   rl (ctx1, "ctx1", "W");
+   /* record locks */
+   rl (ctx1, "ctx1", "O");
+   rl (ctx2, "ctx2", "O");
+   rl (ctx1, "ctx1", "R");
+   rl (ctx2, "ctx2", "R");   /* locked by ctx1 */
+   rl (ctx1, "ctx1", "C");   /* releases the lock */
+   rl (ctx1, "ctx1", "O");
+   rl (ctx2, "ctx2", "R");
+   rl (ctx1, "ctx1", "R");   /* locked by ctx2 */
+   /* ctx1 closes the file: the lock of ctx2 still excludes a process */
+   rl (ctx1, "ctx1", "C");
+   fflush (stdout);
+   if (system ("./other") != 0) {
+      return 1;
+   }
+   rl (ctx2, "ctx2", "C");
+   fflush (stdout);
+   if (system ("./other") != 0) {
+      return 1;
+   }
+   /* file lock at OPEN */
+   rl (ctx1, "ctx1", "X");
+   rl (ctx2, "ctx2", "X");   /* locked by ctx1 */
+   rl (ctx1, "ctx1", "Y");
+   rl (ctx2, "ctx2", "X");
+   rl (ctx2, "ctx2", "Y");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE rl.cob], [0], [], [])
+AT_CHECK([$COMPILE other.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 W: 00
+ctx1 O: 00
+ctx2 O: 00
+ctx1 R: 00
+ctx2 R: 51
+ctx1 C: 00
+ctx1 O: 00
+ctx2 R: 00
+ctx1 R: 51
+ctx1 C: 00
+proc R: 51
+ctx2 C: 00
+proc R: 00
+ctx1 X: 00
+ctx2 X: 61
+ctx1 Y: 00
+ctx2 X: 00
+ctx2 Y: 00
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
