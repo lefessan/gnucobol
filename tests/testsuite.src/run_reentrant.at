@@ -1806,6 +1806,9 @@ AT_DATA([cd.cob], [
        IDENTIFICATION   DIVISION.
        PROGRAM-ID.      cd.
        ENVIRONMENT      DIVISION.
+       CONFIGURATION    SECTION.
+       SPECIAL-NAMES.
+           PRINTER IS PRT.
        INPUT-OUTPUT     SECTION.
        FILE-CONTROL.
            SELECT OUT-FILE ASSIGN TO "out.txt"
@@ -1840,6 +1843,7 @@ AT_DATA([cd.cob], [
            WRITE PIPE-REC
            CLOSE PIPE-OUT
            CALL "SYSTEM" USING "echo sys > where.txt"
+           DISPLAY TAG UPON PRT
            GOBACK.
 ])
 
@@ -1888,7 +1892,7 @@ main (int argc, char **argv)
 AT_CHECK([mkdir d1 d2], [0], [], [])
 AT_CHECK([$COMPILE host.c], [0], [], [])
 AT_CHECK([$COMPILE_MODULE cd.cob], [0], [], [])
-AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+AT_CHECK([COB_DISPLAY_PRINT_PIPE="cat >> printed.txt" $COBCRUN_DIRECT ./host], [0],
 [ctx1 CBL_CHANGE_DIR: +000000000
 ctx1 CBL_CREATE_DIR: +000000000
 ctx2 CBL_CHANGE_DIR: +000000000
@@ -1908,6 +1912,12 @@ sys
 ], [])
 AT_CHECK([cat d1/piped.txt d2/piped.txt piped.txt], [0],
 [ctx1
+ctx2
+main
+], [])
+AT_CHECK([cat d1/printed.txt d2/printed.txt printed.txt], [0],
+[ctx1
+ctx1
 ctx2
 main
 ], [])

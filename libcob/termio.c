@@ -31,6 +31,10 @@
 #include <unistd.h>
 #endif
 #include <time.h>
+#include <errno.h>
+#ifdef	HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
 
 #ifdef	HAVE_SIGNAL_H
 #include <signal.h>
@@ -330,6 +334,7 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 {
 	FILE		*fp;
 	int		close_fp = 0;
+	long		pipe_pid = 0;	/* child of the print pipe, see cob_ctx_popen */
 	cob_u32_t	disp_redirect = 0;
 	va_list		args;
 
@@ -376,7 +381,9 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 				/* Note: this doesn't seem to help with pipes :-( */
 				mode = "wb";
 			}
-			fp = popen (cob_process_settings ()->cob_display_print_pipe, mode);
+			/* in the environment and directory of the context */
+			fp = cob_ctx_popen (ctx, cob_process_settings ()->cob_display_print_pipe,
+					    mode, &pipe_pid);
 			if (fp == NULL) {
 				fp = stderr;
 			} else {
@@ -461,8 +468,17 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 
 	if (close_fp) {
 #ifdef HAVE_POPEN
-		if (close_fp == 2) {
+		if (close_fp == 2 && pipe_pid == 0) {
 			pclose (fp);
+#ifdef	HAVE_SYS_WAIT_H
+		} else if (close_fp == 2) {
+			int	sts;
+			fclose (fp);
+			while (waitpid ((pid_t)pipe_pid, &sts, 0) == -1
+			    && errno == EINTR) {
+				;
+			}
+#endif
 		} else {
 			fclose (fp);
 		}

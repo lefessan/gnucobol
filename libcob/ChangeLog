@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* termio.c (cob_display_va_ctx): printer pipe in the environment and
+	  directory of the context
 	* fisam.c (isam_dummy, isopen_retry, isread_retry): calls of the x-ISAM
 	  libraries under a lock
 	* common.c (free_context_settings, cob_accept_user_name_ctx,
