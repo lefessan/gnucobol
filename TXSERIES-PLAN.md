@@ -82,11 +82,19 @@ Proposition, par étapes :
    aucune fuite ; mémoire stable (~12 Mo) de 1 000 à 4 000 tâches.
    Trouvé en passant : lecture hors limites dans `get_field_name` (cobc,
    corrigé).
-Restent pour T2 : comportement des E/S console (DISPLAY / ACCEPT) dans
-un serveur ; STOP RUN dans le contexte principal d'un runtime hébergé
-(termine encore tout le runtime) ; `exit` des gestionnaires de signaux
-quand ils sont installés ; mémoire de LOCAL-STORAGE des programmes
-abandonnés par le retour à la frontière.
+Puis (2026-11-07) : LOCAL-STORAGE dans les allocations du contexte
+(libérée avec lui si le programme est abandonné) ; dans un runtime
+hébergé, le contexte principal est une tâche comme les autres (STOP RUN
+→ fin de sa run unit) ; fin de run unit d'une tâche : programmes remis à
+l'état initial (instances libérées) ; runtime hébergé : ACCEPT ne lit
+pas l'entrée standard (EC-IMP-ACCEPT), écran refusé proprement,
+CBL_GC_FORK refusé, SIGPIPE laissé à l'hôte ; enfant d'un tube
+bidirectionnel sûr après `fork` (`_exit`, bogue amont) ; STOP RUN sans
+contexte courant.
+Restent : DISPLAY reste sur la sortie standard (journal du serveur ;
+un crochet de l'hôte pour l'envoyer au journal CICS relève de T5) ; les
+gestionnaires de signaux de libcob (runtime non hébergé) font `exit` ;
+les éléments EXTERNAL survivent à la fin de run unit d'une tâche.
 
 ### T3 — Choix de version et étude de l'ABI TXSeries
 - Choisir version et plateforme (probablement Linux x86_64 ; 32 ou 64 bits ?).
