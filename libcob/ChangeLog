@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (call_exit_handlers_and_terminate, end_context_run_unit,
+	  cob_stop_run_ctx, cob_hard_failure, cob_hard_failure_internal),
+	  common.h (cob_context_destroy): end handler of the host for the run
+	  unit of a context
 	* common.c (cob_set_signal, cob_real_put_sign), common.h
 	  (cob_common_init): hosted runtime without signal handlers
 	* common.c (settings_of_context, cob_exit_common_state,

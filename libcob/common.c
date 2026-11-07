@@ -386,6 +386,10 @@ struct cob_common_state {
 	int			return_jmp_set;
 #endif
 	int			exit_code;	/* of the context */
+	/* function of the host called at the end of the run unit (STOP RUN,
+	   fatal error), see cob_context_set_end_handler */
+	void		(*end_handler) (cob_context *, int, int, const char *, void *);
+	void			*end_handler_data;
 
 	/* procedures of the run unit (CBL_EXIT_PROC, CBL_ERROR_PROC) */
 	struct exit_handlerlist	*exit_hdlrs;
@@ -3812,6 +3816,34 @@ call_exit_handlers_and_terminate (cob_context *ctx)
 	cob_terminate_routines (ctx);
 }
 
+/* register the function of the host called at the end of the run unit of
+   the context (STOP RUN: 'ret' 1, runtime error: -1, internal error: -2),
+   with its exit code and the error message ("" for STOP RUN), before
+   returning to cob_call_with_exception_check_ctx; for example to produce
+   an ABEND of a transaction monitor */
+void
+cob_context_set_end_handler (cob_context *ctx,
+	void (*handler) (cob_context *, int, int, const char *, void *),
+	void *data)
+{
+	ctx->common->end_handler = handler;
+	ctx->common->end_handler_data = data;
+}
+
+/* call the function of the host at the end of the run unit, once */
+static void
+call_end_handler (cob_context *ctx, const int ret)
+{
+	void	(*handler) (cob_context *, int, int, const char *, void *);
+	if (ctx == NULL || ctx->common == NULL
+	 || (handler = ctx->common->end_handler) == NULL) {
+		return;
+	}
+	ctx->common->end_handler = NULL;
+	handler (ctx, ret, ctx->common->exit_code,
+		 ret == 1 ? "" : runtime_err_str, ctx->common->end_handler_data);
+}
+
 /* run (once) the exit procedures (CBL_EXIT_PROC) of the run unit of a
    context other than the main one, at its end */
 static void
@@ -3861,6 +3893,7 @@ end_context_run_unit (cob_context *ctx, const int ret)
 	}
 	run_context_exit_procedures (ctx);
 	cob_exit_fileio_context (ctx);
+	call_end_handler (ctx, ret);
 	for (m = cob_module_list; m; m = m->next) {
 		if (m->cob_mod_ptr) {
 			m->cob_mod_ptr->module_active = 0;
@@ -3884,6 +3917,10 @@ cob_stop_run_ctx (cob_context *ctx, const int status)
 		end_context_run_unit (ctx, 1);
 	}
 #endif
+	if (ctx && ctx != cob_main_context && ctx->common) {
+		ctx->common->exit_code = status;
+		call_end_handler (ctx, 1);	/* may not return */
+	}
 	call_exit_handlers_and_terminate (ctx);
 	exit_code = status;
 #ifndef COB_WITHOUT_JMP
@@ -3953,6 +3990,10 @@ cob_hard_failure ()
 		end_context_run_unit (ctx, -1);
 	}
 #endif
+	if (ctx && ctx != cob_main_context && ctx->common) {
+		ctx->common->exit_code = -1;
+		call_end_handler (ctx, -1);	/* may not return */
+	}
 	core_on_error = handle_core_on_error ();
 	if (core_on_error != 4) {
 		if (core_on_error == 2 && cob_initialized) {
@@ -3999,6 +4040,10 @@ cob_hard_failure_internal (const char *prefix)
 		end_context_run_unit (ctx, -2);
 	}
 #endif
+	if (ctx && ctx != cob_main_context && ctx->common) {
+		ctx->common->exit_code = -2;
+		call_end_handler (ctx, -2);	/* may not return */
+	}
 	core_on_error = handle_core_on_error ();
 	if (core_on_error != 4) {
 		if (core_on_error == 2 && cob_initialized) {

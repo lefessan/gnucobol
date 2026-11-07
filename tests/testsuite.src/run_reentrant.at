@@ -2358,8 +2358,8 @@ AT_KEYWORDS([runreentrant cob_context_create cob_call_with_exception_check STOP]
 
 # called with cob_call_with_exception_check_ctx in a context other than
 # the main one, STOP RUN and fatal errors end the run unit of the context
-# (files closed) and return to the host; the process and the other
-# contexts go on
+# (files closed), call the end handler of the host and return to the
+# host; the process and the other contexts go on
 
 AT_DATA([sr.cob], [
        IDENTIFICATION   DIVISION.
@@ -2397,11 +2397,21 @@ AT_DATA([host.c], [[
 #include <libcob.h>
 
 static void
+end_handler (cob_context *ctx, int ret, int exit_code, const char *msg,
+             void *data)
+{
+   printf ("end handler %s: %d, exit code %d, \"%s\"\n",
+           (const char *)data, ret, exit_code, msg);
+   fflush (stdout);
+}
+
+static void
 sr (cob_context *ctx, const char *op)
 {
    void *argv[1];
    int ret;
    cob_context *prev = cob_context_enter (ctx);
+   cob_context_set_end_handler (ctx, end_handler, (void *)op);
    argv[0] = (void *)op;
    ret = cob_call_with_exception_check_ctx (ctx, "sr", 1, argv);
    cob_context_leave (prev);
@@ -2437,7 +2447,9 @@ main (int argc, char **argv)
 AT_CHECK([$COMPILE host.c], [0], [], [])
 AT_CHECK([$COMPILE_MODULE sr.cob], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./host], [0],
-[S: return 1, exit code 7
+[end handler S: 1, exit code 7, ""
+S: return 1, exit code 7
+end handler E: -1, exit code -1, "sr.cob:26: module 'nosuchprog' not found"
 E: return -1, exit code -1
 sr N: back
 N: return 0, exit code 0
