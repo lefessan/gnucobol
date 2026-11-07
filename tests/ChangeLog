@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: READY TRACE per context, trace file
+	  opened once
 	* reentrant-bench/README, reentrant-bench/arith.cob,
 	  reentrant-bench/calls.cob, reentrant-bench/compare.sh,
 	  reentrant-bench/csub.cob, reentrant-bench/idxf.cob,

@@ -360,6 +360,9 @@ struct cob_common_state {
 	char			excp_para[COB_MAX_WORDLEN + 1];	/* ctx->glob */
 	unsigned int		last_runtime_error_line;
 
+	/* READY TRACE / RESET TRACE, initialized from COB_SET_TRACE */
+	unsigned int		line_trace;
+
 	/* dump of the symbols (cob_dump_symbols) */
 #define SYM_MAX_IDX 8
 	int			dump_sym_idx;
@@ -2406,10 +2409,16 @@ cob_open_logfile (const char *filename)
 }
 
 /* ensure that cob_trace_file is available for writing */
+
+/* the trace file is opened once for the process, in any context */
+COB_LOCK_DEFINE (trace_file_lock);
+
 void
 cob_check_trace_file (void)
 {
+	cob_lock_acquire (&trace_file_lock);
 	if (cobsetptr->cob_trace_file) {
+		cob_lock_release (&trace_file_lock);
 		return;
 	}
 	if (cobsetptr->cob_trace_filename) {
@@ -2423,6 +2432,7 @@ cob_check_trace_file (void)
 	} else {
 		cobsetptr->cob_trace_file = stderr;
 	}
+	cob_lock_release (&trace_file_lock);
 }
 
 /* close current trace file (if open) and open/attach a new one */
@@ -2949,6 +2959,8 @@ cob_rescan_env_vals (cob_context *ctx)
 		}
 	}
 	common_state (ctx)->cob_source_file = save_source_file;
+	/* COB_SET_TRACE for the current context */
+	common_state (ctx)->line_trace = cobsetptr->cob_line_trace;
 
 	/* Extended ACCEPT status returns */
 	if (cobsetptr->cob_extended_status == 0) {
@@ -3509,7 +3521,7 @@ cob_trace_sect_ctx (cob_context *ctx, const char *name)
 	COB_MODULE_PTR->section_name = name;
 
 	/* actual tracing, if activated */
-	if (cobsetptr->cob_line_trace
+	if (common_state (ctx)->line_trace
 	 && (COB_MODULE_PTR->flag_debug_trace & COB_MODULE_TRACE)) {
 		char	val[60];
 		if (cob_trace_prep (ctx)
@@ -3535,7 +3547,7 @@ cob_trace_para_ctx (cob_context *ctx, const char *name)
 	COB_MODULE_PTR->paragraph_name = name;
 
 	/* actual tracing, if activated */
-	if (cobsetptr->cob_line_trace
+	if (common_state (ctx)->line_trace
 	 && (COB_MODULE_PTR->flag_debug_trace & COB_MODULE_TRACE)) {
 		char	val[60];
 		if (cob_trace_prep (ctx)
@@ -3558,7 +3570,7 @@ void
 cob_trace_entry_ctx (cob_context *ctx, const char *name)
 {
 	/* actual tracing, if activated */
-	if (cobsetptr->cob_line_trace
+	if (common_state (ctx)->line_trace
 	 && (COB_MODULE_PTR->flag_debug_trace & COB_MODULE_TRACE)) {
 		char	val[60];
 		if (cob_trace_prep (ctx)
@@ -3581,7 +3593,7 @@ void
 cob_trace_exit_ctx (cob_context *ctx, const char *name)
 {
 	/* actual tracing, if activated */
-	if (cobsetptr->cob_line_trace
+	if (common_state (ctx)->line_trace
 	 && (COB_MODULE_PTR->flag_debug_trace & COB_MODULE_TRACE)) {
 		char	val[60];
 		if (cob_trace_prep (ctx)
@@ -3604,7 +3616,7 @@ void
 cob_trace_statement_ctx (cob_context *ctx, const enum cob_statement stmt)
 {
 	/* actual tracing, if activated */
-	if (cobsetptr->cob_line_trace
+	if (common_state (ctx)->line_trace
 	 && (COB_MODULE_PTR->flag_debug_trace & COB_MODULE_TRACEALL)) {
 		char	val[60];
 		if (cob_trace_prep (ctx)) {
@@ -3646,7 +3658,7 @@ cob_ready_trace_ctx (cob_context *ctx)
 	int		k;
 	const int	MAX_ITERS = 10240;
 
-	cobsetptr->cob_line_trace = 1;
+	common_state (ctx)->line_trace = 1;
 	if (!cobsetptr->cob_trace_file) {
 		cob_check_trace_file ();
 	}
@@ -3671,7 +3683,7 @@ cob_reset_trace_ctx (cob_context *ctx)
 	int		k;
 	const int	MAX_ITERS = 10240;
 
-	cobsetptr->cob_line_trace = 0;
+	common_state (ctx)->line_trace = 0;
 	/* FIXME: with the change above only the current program and its calers need
 	   to be reset here */
 	for (k = 0, mod = COB_MODULE_PTR; mod && k < MAX_ITERS; mod = mod->next, k++) {
@@ -3973,6 +3985,7 @@ cob_context_create (void)
 	ctx->settings = cobsetptr;
 	ctx->common = cob_malloc (sizeof (struct cob_common_state));
 	ctx->common->current_arg = 1;
+	ctx->common->line_trace = cobsetptr->cob_line_trace;
 	cob_init_switches (ctx);
 
 	/* process level values, owned by the main context */
@@ -4193,7 +4206,7 @@ cob_module_global_enter_ctx (cob_context **pctx, cob_module **module,
 	COB_MODULE_PTR->statement = STMT_UNKNOWN;
 	ctx->glob.cob_stmt_exception = 0;
 
-	if (cobsetptr->cob_line_trace)
+	if (common_state (ctx)->line_trace)
 		COB_MODULE_PTR->flag_debug_trace |= COB_MODULE_READYTRACE;
 	else
 		COB_MODULE_PTR->flag_debug_trace &= ~COB_MODULE_READYTRACE;
@@ -11833,6 +11846,7 @@ cob_init (const int argc, char **argv)
 
 	/* Copy COB_PHYSICAL_CANCEL from settings (internal) to global structure */
 	ctx->glob.cob_physical_cancel = cobsetptr->cob_physical_cancel;
+	common_state (ctx)->line_trace = cobsetptr->cob_line_trace;
 
 	/* Internal Debug Log */
 	if (cobsetptr->cob_debug_log) {

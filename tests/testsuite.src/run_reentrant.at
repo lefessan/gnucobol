@@ -1502,6 +1502,102 @@ ctx2 sub: 0003
 AT_CLEANUP
 
 
+AT_SETUP([READY TRACE in one execution context])
+AT_KEYWORDS([runreentrant cob_context_create READY TRACE])
+
+# READY TRACE / RESET TRACE only change the tracing of the context
+
+AT_DATA([trc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      trc.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+       MAIN-PARA.
+           EVALUATE OP
+           WHEN "R"
+              READY TRACE
+           WHEN "X"
+              RESET TRACE
+           END-EVALUATE
+           DISPLAY TAG " " OP
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+trc (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("trc", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   trc (ctx1, "ctx1", "R");
+   trc (ctx2, "ctx2", "N");
+   trc (ctx1, "ctx1", "N");
+   trc (ctx1, "ctx1", "X");
+   trc (ctx1, "ctx1", "N");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE -ftraceall trc.cob], [0], [], [])
+AT_CHECK([COB_TRACE_FILE=trace.txt $COBCRUN_DIRECT ./host], [0],
+[ctx1 R
+ctx2 N
+ctx1 N
+ctx1 X
+ctx1 N
+], [])
+# traced: the end of the first call in ctx1 (after READY TRACE), the
+# third call in ctx1, the fourth one until RESET TRACE; not the call
+# in ctx2
+AT_CHECK([cat trace.txt], [0],
+[Source: 'trc.cob'
+Program-Id:  trc
+Program-Id:  trc                         DISPLAY                         Line:     16
+Program-Id:  trc                         GOBACK                          Line:     17
+Program-Id:  trc                   Exit: trc                             Line:     17
+Program-Id:  trc                  Entry: trc                             Line:      9
+Program-Id:  trc              Paragraph: MAIN-PARA                       Line:      9
+Program-Id:  trc                         EVALUATE                        Line:     10
+Program-Id:  trc                         WHEN                            Line:     11
+Program-Id:  trc                         WHEN                            Line:     13
+Program-Id:  trc                         DISPLAY                         Line:     16
+Program-Id:  trc                         GOBACK                          Line:     17
+Program-Id:  trc                   Exit: trc                             Line:     17
+Program-Id:  trc                  Entry: trc                             Line:      9
+Program-Id:  trc              Paragraph: MAIN-PARA                       Line:      9
+Program-Id:  trc                         EVALUATE                        Line:     10
+Program-Id:  trc                         WHEN                            Line:     11
+Program-Id:  trc                         WHEN                            Line:     13
+Program-Id:  trc                         RESET TRACE                     Line:     14
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
