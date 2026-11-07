@@ -91,10 +91,20 @@ pas l'entrée standard (EC-IMP-ACCEPT), écran refusé proprement,
 CBL_GC_FORK refusé, SIGPIPE laissé à l'hôte ; enfant d'un tube
 bidirectionnel sûr après `fork` (`_exit`, bogue amont) ; STOP RUN sans
 contexte courant.
-Restent : DISPLAY reste sur la sortie standard (journal du serveur ;
-un crochet de l'hôte pour l'envoyer au journal CICS relève de T5) ; les
-gestionnaires de signaux de libcob (runtime non hébergé) font `exit` ;
-les éléments EXTERNAL survivent à la fin de run unit d'une tâche.
+Puis : stockage de la run unit (EXTERNAL, allocations) libéré à la fin
+de run unit d'une tâche ; `cob_context_set_display_handler` (DISPLAY
+UPON SYSOUT / SYSERR envoyés à une fonction de l'hôte).
+Reste (choix assumé) : les gestionnaires de signaux de libcob font
+`exit` dans un runtime non hébergé (processus autonome, comportement
+amont).
+
+API de l'hôte (résumé) : `cob_set_hosted (1)` puis `cob_init (0, NULL)` ;
+par tâche : `cob_context_create`, `cob_context_enter`,
+`cob_context_set_end_handler`, `cob_context_set_display_handler`,
+`cob_putenv_ctx` (environnement de la tâche),
+`cob_call_with_exception_check_ctx` (retour 0, 1 STOP RUN, -1 / -2
+erreur ; `cob_last_exit_code_ctx`), `cob_context_leave`,
+`cob_context_destroy`.
 
 ### T3 — Choix de version et étude de l'ABI TXSeries
 - Choisir version et plateforme (probablement Linux x86_64 ; 32 ou 64 bits ?).
