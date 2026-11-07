@@ -398,6 +398,20 @@ Conséquences pour `cobc/codegen.c` :
         TMPDIR calculé une fois sous verrou. Variables globales
         modifiables de libcob : 169 (réglages, signaux, STOP RUN,
         `screenio.c`, verrous et tables de niveau processus) ;
+      - **faits le 2026-11-07/08** : READY TRACE / RESET TRACE par
+        contexte (fichier de trace, de dump et SYSPUNCH ouverts une fois
+        sous verrou) ; fonctions LOCALE-DATE/TIME/COMPARE et
+        CBL_GC_PRINTABLE sans `setlocale` (`newlocale` + `*_l`),
+        `localeconv` sous verrou ; locale par contexte (`locale_t`,
+        `uselocale` dans `cob_context_enter`, `cob_set_locale` /
+        CLASSIFICATION) ; environnement par contexte (surcharges lues
+        par ACCEPT FROM ENVIRONMENT, l'association des noms de fichiers
+        `DD_`…, la relecture des réglages ; le contexte principal seul
+        écrit toujours dans l'environnement du processus) ; CALL
+        "SYSTEM" avec l'environnement du contexte (`posix_spawn`).
+        Restent : environnement des tubes (`popen`), répertoire courant
+        par contexte (§7.3 du DESIGN, CBL_CHANGE_DIR), réglages
+        modifiés par une relecture de l'environnement (partagés) ;
   - code généré : caches `call_X` / `func_X` (écriture concurrente
     d'un pointeur, même valeur ; CANCEL les remet à NULL) et
     `cob_reference_count` (incréments atomiques) ;
