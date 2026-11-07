@@ -219,22 +219,104 @@ isam_dummy ()
 	return 0;
 }
 
+/* The x-ISAM libraries (C-ISAM API) are not thread-safe (global iserrno,
+   isrecnum, internal tables): all their calls, from the entries of the
+   functions table, are done under isam_lock, released while waiting for
+   a locked file or record (isam_wait). */
+COB_LOCK_DEFINE (isam_lock);
+
+static void
+isam_wait (const unsigned int msec)
+{
+	cob_lock_release (&isam_lock);
+	cob_sleep_msec (msec);
+	cob_lock_acquire (&isam_lock);
+}
+
+#define ISAM_LOCKED(call)		\
+	int	ret;			\
+	cob_lock_acquire (&isam_lock);	\
+	ret = call;			\
+	cob_lock_release (&isam_lock);	\
+	return ret
+
+static int
+isam_open_locked (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+{
+	ISAM_LOCKED (isam_open (ctx, a, f, filename, mode, sharing));
+}
+static int
+isam_close_locked (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
+{
+	ISAM_LOCKED (isam_close (ctx, a, f, opt));
+}
+static int
+isam_start_locked (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
+{
+	ISAM_LOCKED (isam_start (ctx, a, f, cond, key));
+}
+static int
+isam_read_locked (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int opts)
+{
+	ISAM_LOCKED (isam_read (ctx, a, f, key, opts));
+}
+static int
+isam_read_next_locked (cob_context *ctx, cob_file_api *a, cob_file *f, const int opts)
+{
+	ISAM_LOCKED (isam_read_next (ctx, a, f, opts));
+}
+static int
+isam_write_locked (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
+{
+	ISAM_LOCKED (isam_write (ctx, a, f, opt));
+}
+static int
+isam_rewrite_locked (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
+{
+	ISAM_LOCKED (isam_rewrite (ctx, a, f, opt));
+}
+static int
+isam_delete_locked (cob_context *ctx, cob_file_api *a, cob_file *f)
+{
+	ISAM_LOCKED (isam_delete (ctx, a, f));
+}
+static int
+isam_file_delete_locked (cob_context *ctx, cob_file_api *a, cob_file *f, char *name)
+{
+	ISAM_LOCKED (isam_file_delete (ctx, a, f, name));
+}
+static int
+isam_sync_locked (cob_context *ctx, cob_file_api *a, cob_file *f)
+{
+	ISAM_LOCKED (isam_sync (ctx, a, f));
+}
+static int
+isam_commit_locked (cob_context *ctx, cob_file_api *a, cob_file *f)
+{
+	ISAM_LOCKED (isam_commit (ctx, a, f));
+}
+static int
+isam_rollback_locked (cob_context *ctx, cob_file_api *a, cob_file *f)
+{
+	ISAM_LOCKED (isam_rollback (ctx, a, f));
+}
+
 static const struct cob_fileio_funcs ext_indexed_funcs = {
-	isam_open,
-	isam_close,
-	isam_start,
-	isam_read,
-	isam_read_next,
-	isam_write,
-	isam_rewrite,
-	isam_delete,
-	isam_file_delete,
+	isam_open_locked,
+	isam_close_locked,
+	isam_start_locked,
+	isam_read_locked,
+	isam_read_next_locked,
+	isam_write_locked,
+	isam_rewrite_locked,
+	isam_delete_locked,
+	isam_file_delete_locked,
 	cob_isam_init_fileio,
 	cob_isam_exit_fileio,
 	isam_dummy,			/* forking */
-	isam_sync,			/* sync */
-	isam_commit,		/* commit */
-	isam_rollback,		/* rollback */
+	isam_sync_locked,		/* sync */
+	isam_commit_locked,		/* commit */
+	isam_rollback_locked,		/* rollback */
 	isam_dummy,			/* unlock */
 	isam_version
 };
@@ -713,7 +795,7 @@ isopen_retry(cob_context *ctx, cob_file *f, char *filename, int mode)
 			break;
 		if (retry > 0) {
 			retry--;
-			cob_sleep_msec(interval);
+			isam_wait ((unsigned int)interval);
 		}
 		isfd = isopen ((void *)filename, mode);
 	}
@@ -770,7 +852,7 @@ isread_retry(cob_context *ctx, cob_file *f, void *data, int mode)
 			break;
 		if (retry > 0) {
 			retry--;
-			cob_sleep_msec(interval);
+			isam_wait ((unsigned int)interval);
 		}
 	} while (sts != 0 && retry != 0);
 	if (ISERRNO == ELOCKED

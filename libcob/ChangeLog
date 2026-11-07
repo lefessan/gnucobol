@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fisam.c (isam_dummy, isopen_retry, isread_retry): calls of the x-ISAM
+	  libraries under a lock
 	* common.c (free_context_settings, cob_accept_user_name_ctx,
 	  cob_display_environment_ctx, cob_get_environment_ctx, cob_sys_x91,
 	  cob_process_settings, ...): runtime reads of the settings of the
