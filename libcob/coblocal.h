@@ -514,6 +514,8 @@ COB_HIDDEN cob_module	*cob_find_module_ctx	(cob_context *, const char *);
 COB_HIDDEN const char	*cob_ctx_cwd		(cob_context *);
 COB_HIDDEN char		*cob_ctx_path		(cob_context *, const char *);
 COB_HIDDEN int		cob_ctx_chdir		(cob_context *, const char *);
+COB_HIDDEN FILE		*cob_ctx_popen		(cob_context *, const char *,
+						 const char *, long *);
 struct tm;
 COB_HIDDEN struct tm	*cob_localtime		(const time_t *, struct tm *);
 COB_HIDDEN struct tm	*cob_gmtime		(const time_t *, struct tm *);

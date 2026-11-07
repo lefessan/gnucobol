@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_ctx_chdir), common.c (env_child_free,
+	  cob_ctx_system), common.h, fileio.c (cob_chk_file_mapping,
+	  cob_file_open, cob_file_close): pipes with the environment and
+	  directory of the context
 	* coblocal.h (cob_find_module_ctx), common.c (cob_exit_common_state,
 	  env_overlay_free, cob_ctx_system), fileio.c (apply_file_paths,
 	  cob_chk_file_mapping, cob_param_no_quotes, cob_sys_get_current_dir,

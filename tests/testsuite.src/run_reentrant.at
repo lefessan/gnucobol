@@ -1688,12 +1688,17 @@ AT_DATA([ev.cob], [
        FILE-CONTROL.
            SELECT OUT-FILE ASSIGN TO "OUTF"
                   ORGANIZATION LINE SEQUENTIAL.
+           SELECT PIPE-IN ASSIGN TO PCMD
+                  ORGANIZATION LINE SEQUENTIAL.
        DATA             DIVISION.
        FILE             SECTION.
        FD OUT-FILE.
        01 OUT-REC       PIC X(4).
+       FD PIPE-IN.
+       01 PIPE-REC      PIC X(10).
        WORKING-STORAGE  SECTION.
        01 V             PIC X(10).
+       01 PCMD          PIC X(30) VALUE "< echo pipe$MYVAR".
        LINKAGE          SECTION.
        01 TAG           PIC X(4).
        01 OP            PIC X.
@@ -1710,6 +1715,11 @@ AT_DATA([ev.cob], [
            END-IF
            IF OP = "X"
               CALL "SYSTEM" USING "echo $MYVAR >> sys.txt"
+              OPEN INPUT PIPE-IN
+              MOVE SPACES TO PIPE-REC
+              READ PIPE-IN END-READ
+              CLOSE PIPE-IN
+              DISPLAY TAG " <" PIPE-REC ">"
            END-IF
            MOVE SPACES TO V
            ACCEPT V FROM ENVIRONMENT "MYVAR"
@@ -1763,8 +1773,11 @@ AT_CHECK([$COBCRUN_DIRECT ./host], [0],
 [ctx1 MYVAR=<ctx1      >
 ctx2 MYVAR=<          >
 ctx2 MYVAR=<ctx2      >
+ctx1 <pipectx1  >
 ctx1 MYVAR=<ctx1      >
+ctx2 <pipectx2  >
 ctx2 MYVAR=<ctx2      >
+main <pipe      >
 main MYVAR=<          >
 process MYVAR: (unset)
 ], [])
@@ -1797,12 +1810,17 @@ AT_DATA([cd.cob], [
        FILE-CONTROL.
            SELECT OUT-FILE ASSIGN TO "out.txt"
                   ORGANIZATION LINE SEQUENTIAL.
+           SELECT PIPE-OUT ASSIGN TO PCMD
+                  ORGANIZATION LINE SEQUENTIAL.
        DATA             DIVISION.
        FILE             SECTION.
        FD OUT-FILE.
        01 OUT-REC       PIC X(4).
+       FD PIPE-OUT.
+       01 PIPE-REC      PIC X(4).
        WORKING-STORAGE  SECTION.
        01 RC            PIC S9(9) BINARY.
+       01 PCMD          PIC X(30) VALUE "> cat > piped.txt".
        LINKAGE          SECTION.
        01 TAG           PIC X(4).
        01 DIR           PIC X(2).
@@ -1817,6 +1835,10 @@ AT_DATA([cd.cob], [
            MOVE TAG TO OUT-REC
            WRITE OUT-REC
            CLOSE OUT-FILE
+           OPEN OUTPUT PIPE-OUT
+           MOVE TAG TO PIPE-REC
+           WRITE PIPE-REC
+           CLOSE PIPE-OUT
            CALL "SYSTEM" USING "echo sys > where.txt"
            GOBACK.
 ])
@@ -1883,6 +1905,11 @@ AT_CHECK([cat d1/where.txt d2/where.txt where.txt], [0],
 [sys
 sys
 sys
+], [])
+AT_CHECK([cat d1/piped.txt d2/piped.txt piped.txt], [0],
+[ctx1
+ctx2
+main
 ], [])
 
 AT_CLEANUP

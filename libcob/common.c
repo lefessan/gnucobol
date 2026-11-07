@@ -66,6 +66,7 @@
 #endif
 #if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
 #include <spawn.h>
+#include <fcntl.h>
 extern char	**environ;
 #endif
 
@@ -7085,58 +7086,69 @@ env_child_free (char **envp)
 }
 #endif
 
-/* system () for the context: the command sees the environment of the
-   context (with its overlays, see env_set) */
+#if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
+/* start "sh -c command" for the context, in its directory and with its
+   environment, with the file actions 'act' (initialized); returns 0 and
+   the child in '*pid' if started */
+static int
+spawn_command (cob_context *ctx, const char *command, char **envp,
+	       posix_spawn_file_actions_t *act, pid_t *pid)
+{
+	const char	*cwd = cob_ctx_cwd (ctx);
+	char	*cmd = NULL;
+	char	*argv[4];
+	int	ret;
+
+	argv[0] = (char *)"sh";
+	argv[1] = (char *)"-c";
+	argv[2] = (char *)command;
+	argv[3] = NULL;
+	if (cwd) {
+#ifdef	HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCHDIR_NP
+		posix_spawn_file_actions_addchdir_np (act, cwd);
+#else
+		/* cd in the shell, the directory quoted */
+		size_t	i, k = 0;
+		cmd = cob_malloc (4 * strlen (cwd) + strlen (command) + 16);
+		k += sprintf (cmd, "cd '");
+		for (i = 0; cwd[i]; i++) {
+			if (cwd[i] == '\'') {
+				k += sprintf (cmd + k, "'\\''");
+			} else {
+				cmd[k++] = cwd[i];
+			}
+		}
+		sprintf (cmd + k, "' && %s", command);
+		argv[2] = cmd;
+#endif
+	}
+	ret = posix_spawn (pid, "/bin/sh", act, NULL, argv,
+			   envp ? envp : environ);
+	if (cmd) {
+		cob_free (cmd);
+	}
+	return ret;
+}
+#endif
+
+/* system () for the context: the command sees the environment and the
+   current directory of the context (see env_set, cob_ctx_chdir) */
 static int
 cob_ctx_system (cob_context *ctx, const char *command)
 {
 #if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
 	char	**envp = env_child (ctx);
-	const char	*cwd = cob_ctx_cwd (ctx);
-	if (envp || cwd) {
+	if (envp || cob_ctx_cwd (ctx)) {
+		posix_spawn_file_actions_t	act;
 		pid_t	pid;
 		int	status = -1;
-		char	*argv[4];
-		char	*cmd = NULL;
-		posix_spawn_file_actions_t	actions;
-		posix_spawn_file_actions_t	*pactions = NULL;
-		argv[0] = (char *)"sh";
-		argv[1] = (char *)"-c";
-		argv[2] = (char *)command;
-		argv[3] = NULL;
-		if (cwd) {
-#ifdef	HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCHDIR_NP
-			posix_spawn_file_actions_init (&actions);
-			posix_spawn_file_actions_addchdir_np (&actions, cwd);
-			pactions = &actions;
-#else
-			/* cd in the shell, the directory quoted */
-			size_t	i, k = 0;
-			cmd = cob_malloc (4 * strlen (cwd) + strlen (command) + 16);
-			k += sprintf (cmd, "cd '");
-			for (i = 0; cwd[i]; i++) {
-				if (cwd[i] == '\'') {
-					k += sprintf (cmd + k, "'\\''");
-				} else {
-					cmd[k++] = cwd[i];
-				}
-			}
-			sprintf (cmd + k, "' && %s", command);
-			argv[2] = cmd;
-#endif
-		}
-		if (posix_spawn (&pid, "/bin/sh", pactions, NULL, argv,
-				 envp ? envp : environ) == 0) {
+		posix_spawn_file_actions_init (&act);
+		if (spawn_command (ctx, command, envp, &act, &pid) == 0) {
 			while (waitpid (pid, &status, 0) == -1 && errno == EINTR) {
 				;
 			}
 		}
-		if (pactions) {
-			posix_spawn_file_actions_destroy (pactions);
-		}
-		if (cmd) {
-			cob_free (cmd);
-		}
+		posix_spawn_file_actions_destroy (&act);
 		if (envp) {
 			env_child_free (envp);
 		}
@@ -7146,6 +7158,51 @@ cob_ctx_system (cob_context *ctx, const char *command)
 	COB_UNUSED (ctx);
 #endif
 	return system (command);
+}
+
+/* popen () for the context, see cob_ctx_system; when the command was
+   started with posix_spawn, '*pid' is the child, to be waited for after
+   fclose, else 0 (popen, close with pclose) */
+FILE *
+cob_ctx_popen (cob_context *ctx, const char *command, const char *mode,
+	       long *pid)
+{
+#if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
+	char	**envp = env_child (ctx);
+	*pid = 0;
+	if (envp || cob_ctx_cwd (ctx)) {
+		posix_spawn_file_actions_t	act;
+		const int	reading = mode[0] == 'r';
+		FILE	*fp = NULL;
+		pid_t	child;
+		int	fds[2];
+		if (pipe (fds) == 0) {
+			const int	mine = reading ? fds[0] : fds[1];
+			const int	its = reading ? fds[1] : fds[0];
+			(void)fcntl (mine, F_SETFD, FD_CLOEXEC);
+			posix_spawn_file_actions_init (&act);
+			posix_spawn_file_actions_adddup2 (&act, its, reading ? 1 : 0);
+			posix_spawn_file_actions_addclose (&act, its);
+			if (spawn_command (ctx, command, envp, &act, &child) == 0) {
+				close (its);
+				fp = fdopen (mine, mode);
+				*pid = (long)child;
+			} else {
+				close (its);
+				close (mine);
+			}
+			posix_spawn_file_actions_destroy (&act);
+		}
+		if (envp) {
+			env_child_free (envp);
+		}
+		return fp;
+	}
+#else
+	COB_UNUSED (ctx);
+	*pid = 0;
+#endif
+	return popen (command, mode);
 }
 
 /* set entry into environment, with/without overwriting existing values */

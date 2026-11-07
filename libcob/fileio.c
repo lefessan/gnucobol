@@ -1822,7 +1822,9 @@ cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 	char	*p;
 
 	chk_file_mapping (ctx, f, filename);
-	if (file_open_name[0] == '|') {		/* pipe */
+	if (file_open_name[0] == '|'		/* pipes */
+	 || file_open_name[0] == '>'
+	 || file_open_name[0] == '<') {
 		return;
 	}
 	p = cob_ctx_path (ctx, file_open_name);
@@ -4692,9 +4694,11 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 		} else {
 			fmode = "wb";
 		}
-		fp = popen (filename + 1, fmode);
+		fp = cob_ctx_popen (ctx, filename + 1, fmode, &f->file_pid);
 		if (fp == NULL)
 			return COB_STATUS_30_PERMANENT_ERROR;
+		/* started with posix_spawn: wait for it at close, as pclose */
+		f->flag_pipe_wait = f->file_pid != 0;
 		f->file = fp;
 		if (fp) {
 			f->fd = fileno (fp);
@@ -4715,9 +4719,11 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 		} else {
 			fmode = "rb";
 		}
-		fp = popen (filename + 1, fmode);
+		fp = cob_ctx_popen (ctx, filename + 1, fmode, &f->file_pid);
 		if (fp == NULL)
 			return COB_STATUS_30_PERMANENT_ERROR;
+		/* started with posix_spawn: wait for it at close, as pclose */
+		f->flag_pipe_wait = f->file_pid != 0;
 		f->file = fp;
 		f->fileout = NULL;
 		f->fdout = -1;
@@ -5209,7 +5215,13 @@ cob_file_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 					f->file_handle = NULL;
 				}
 #elif defined (HAVE_UNISTD_H)
-				{
+				if (f->flag_pipe_wait) {
+					int	sts;
+					while (waitpid (f->file_pid, &sts, 0) == -1
+					    && errno == EINTR) {
+						;
+					}
+				} else {
 					int	sts;
 					errno = 0;
 					kill (f->file_pid, 0);
@@ -5228,6 +5240,7 @@ cob_file_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 				pclose ((FILE *)f->file);
 			}
 			f->flag_is_pipe = 0;
+			f->flag_pipe_wait = 0;
 			f->file = f->fileout = NULL;
 			f->fd = f->fdout = -1;
 			f->file_pid = 0;

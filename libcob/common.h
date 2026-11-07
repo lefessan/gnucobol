@@ -1667,7 +1667,8 @@ typedef struct __cob_file {
 	unsigned int		flag_is_std:1;		/* LINE SEQUENTIAL as 'stdin/stdout/stderr' */
 	unsigned int		flag_is_concat:1;	/* SEQUENTIAL concatenated file names */
 	unsigned int		flag_needs_cr;		/* Needs CR */
-	unsigned int		unused_bits:3;
+	unsigned int		flag_pipe_wait:1;	/* pipe: child (file_pid) to wait for at close */
+	unsigned int		unused_bits:2;
 
 	cob_field			*last_key;		/* Last field used as 'key' for I/O */
 	enum cob_file_operation		last_operation;		/* Most recent I/O operation */
