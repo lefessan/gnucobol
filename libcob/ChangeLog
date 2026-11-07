@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fileio.h, fodbc.c (fodbc_state, odbc_file_delete, odbc_open),
+	  fsqlxfd.c (db_cmpkey): ODBC connections established one at a time
 	* common.c (cob_putenv_ctx, cob_display_env_value_ctx): no rescan of
 	  the shared settings from a context's environment
 	* common.h, fodbc.c (odbc_version, odbc_commit, odbc_rollback,

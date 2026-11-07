@@ -110,6 +110,9 @@ fodbc_state (cob_context *ctx)
 /* the connection of the context */
 #define CTX_DB		(&fodbc_state (ctx)->db)
 
+/* connections are established one at a time, see odbc_open */
+COB_LOCK_DEFINE (odbc_join_lock);
+
 #define ODBC_STATE(d)		((struct cob_fodbc_state *)(d))
 #define db_join			(ODBC_STATE (db)->db_join)
 #define useDriverCursor		(ODBC_STATE (db)->useDriverCursor)
@@ -1568,7 +1571,11 @@ odbc_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename
 
 	DEBUG_LOG("db",("DELETE FILE %s\n",f->select_name));
 	if (db_join) {			/* Join DataBase, on first OPEN of INDEXED file */
+		/* the ODBC driver manager is not thread-safe while connecting
+		   (configuration files read with static buffers) */
+		cob_lock_acquire (&odbc_join_lock);
 		join_environment (ctx, a, f);
+		cob_lock_release (&odbc_join_lock);
 		if (db_join < 0) {
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
@@ -1622,7 +1629,11 @@ odbc_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 	}
 	if (db_join) {			/* Join DataBase, on first OPEN of INDEXED file */
 		joined = 1;
+		/* the ODBC driver manager is not thread-safe while connecting
+		   (configuration files read with static buffers) */
+		cob_lock_acquire (&odbc_join_lock);
 		join_environment (ctx, a, f);
+		cob_lock_release (&odbc_join_lock);
 		if (db_join < 0) {
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}

@@ -149,8 +149,10 @@ db_cmpkey (cob_context *ctx, cob_file *f, unsigned char *keyarea, unsigned char 
 /* Routines common to both ODBC and OCI interfaces */
 #if defined(WITH_ODBC) || defined(WITH_OCI)
 
-static char	high_value[6];	/* value to replace HIGH-VALUES in index */
-static int	len_high_value = 0;
+/* value to replace HIGH-VALUES in index: in the state of the connection
+   (it depends on the type of the data base) */
+#define high_value	(db->high_value)
+#define len_high_value	(db->len_high_value)
 
 /* Is fld all the given character */
 static int

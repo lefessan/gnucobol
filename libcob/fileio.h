@@ -273,6 +273,8 @@ struct db_state {
 	char	dbCon[256];			/* Full connect string */
 
 	int		dbVer;				/* Data Base version */
+	char	high_value[6];		/* value to replace HIGH-VALUES in index */
+	int		len_high_value;		/* its length, 0: not set yet */
 	int		updatesDone;		/* # Updates done since last COMMIT */
 	int		commitInterval;		/* COMMIT every N updates */
 #define BIGCOMMIT	0x7FFFFFF
