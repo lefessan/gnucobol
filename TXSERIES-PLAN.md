@@ -47,6 +47,29 @@ Le runtime ne doit jamais terminer ni perturber le processus hôte.
   (redirection, erreur propre) plutôt que blocage ou plantage.
 - Pas de fuite mémoire d'une tâche à l'autre (processus de longue durée).
 
+#### T2 — conception (2026-11-07)
+Existant amont : `cob_call_with_exception_check` appelle un programme
+après un `setjmp` ; STOP RUN, erreur d'exécution, erreur interne font un
+`longjmp` vers lui (1, -1, -2) au lieu de `exit`, mais après avoir
+terminé tout le runtime (`cob_terminate_routines`) et avec un tampon
+global.
+Proposition, par étapes :
+1. **Frontière par contexte** : `cob_call_with_exception_check_ctx (ctx,
+   …)` pose le point de retour dans le contexte. Dans un contexte autre
+   que le principal, STOP RUN et les erreurs fatales terminent la *run
+   unit du contexte* seulement (COMMIT ou ROLLBACK selon
+   `COB_STOP_RUN_COMMIT`, ROLLBACK sur erreur ; fermeture de ses
+   fichiers ; pile de programmes remise à zéro), puis reviennent à la
+   frontière (1 / -1 / -2) ; code de retour par contexte
+   (`cob_last_exit_code_ctx`). Le contexte principal garde le
+   comportement amont. Sans frontière : comportement actuel (`exit`).
+2. **Procédures de sortie** (CBL_EXIT_PROC) par contexte.
+3. **Signaux** : option pour ne pas installer les gestionnaires de
+   libcob (l'hôte gère les siennes), `sigaction` / `pthread_sigmask`.
+4. **Hook d'ABEND** enregistré par l'hôte (pour produire un ABEND CICS
+   avec le message d'erreur), appelé avant le retour à la frontière.
+5. Pas de fuite d'une tâche à l'autre (Valgrind / ASan sur le banc).
+
 ### T3 — Choix de version et étude de l'ABI TXSeries
 - Choisir version et plateforme (probablement Linux x86_64 ; 32 ou 64 bits ?).
 - Récupérer la sortie de `cicstcl` (COBOL IBM et Micro Focus) pour un
