@@ -163,6 +163,7 @@ struct xml_state {
 	xmlSchemaValidCtxtPtr val_ctx;
 	xmlSchemaSAXPlugPtr xsd_plug;
 	xmlParserErrors err;
+	int		last_error_code;	/* of the error handler */
 #endif
 	struct xml_event *first_event;	/* pointer to first processed event */
 	struct xml_event *event;	/* pointer to last processed event */
@@ -1599,12 +1600,11 @@ xml_error_handler (void *user_data, LIBXML_CONST_ERROR_PTR err) {
 	cob_context	*ctx = COB_CTX_TODO;
 	struct xml_state *parse_state = user_data;
 	enum xml_parser_state state = parse_state->state;
-	static int last_error_code = 0;
 
 	/* suppress duplicate message */
 	if (err->code == XML_SCHEMAP_FAILED_LOAD
-	 && last_error_code == XML_IO_LOAD_ERROR) {
-		last_error_code = err->code;
+	 && parse_state->last_error_code == XML_IO_LOAD_ERROR) {
+		parse_state->last_error_code = err->code;
 		return;
 	}
 
@@ -1650,7 +1650,7 @@ xml_error_handler (void *user_data, LIBXML_CONST_ERROR_PTR err) {
 			state, err->file, err->line, err->code, err->message);
 	}
 
-	last_error_code = err->code;
+	parse_state->last_error_code = err->code;
 }
 
 static void
@@ -1739,7 +1739,7 @@ xml_cdata (void *user_data, const xmlChar *content, int len) {
 void xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field *validation,
 		const int flags, struct xml_state *state)
 {
-	static int first_xml = 1;
+	static unsigned int warned = 0;	/* once for the process */
 
 	if (state->ctx == NULL) {
 		char	*enc = NULL;
@@ -1869,8 +1869,8 @@ void xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field 
 		state->state = XML_PARSER_JUST_STARTED;
 	}
 
-	if (first_xml) {
-		first_xml = 0;
+	if (!cob_atomic_load_uint (&warned)) {
+		cob_atomic_store_uint (&warned, 1);
 		cob_runtime_warning_ctx (ctx, _("%s is unfinished"),
 			"XML PARSE");
 	}
@@ -2045,7 +2045,7 @@ xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *co
 		  const int with_xml_dec, const char *ns_data, cob_field *ns_prefix,
 		  const char decimal_point)
 {
-	static int first_xml = 1;
+	static unsigned int warned = 0;	/* once for the process */
 
 	COB_UNUSED (out);
 	COB_UNUSED (tree);
@@ -2054,8 +2054,8 @@ xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *co
 	COB_UNUSED (ns_data);
 	COB_UNUSED (ns_prefix);
 	COB_UNUSED (decimal_point);
-	if (first_xml) {
-		first_xml = 0;
+	if (!cob_atomic_load_uint (&warned)) {
+		cob_atomic_store_uint (&warned, 1);
 		cob_runtime_warning_ctx (ctx, _("runtime is not configured to support %s"),
 			"XML");
 	}
@@ -2067,15 +2067,15 @@ xml_generate (cob_context *ctx, cob_field *out, cob_ml_tree *tree, cob_field *co
 void xml_parse (cob_context *ctx, cob_field *in, cob_field *encoding, cob_field *validation,
 		const int flags, struct xml_state *state)
 {
-	static int first_xml = 1;
+	static unsigned int warned = 0;	/* once for the process */
 
 	COB_UNUSED (in);
 	COB_UNUSED (encoding);
 	COB_UNUSED (validation);
 	COB_UNUSED (flags);
 
-	if (first_xml) {
-		first_xml = 0;
+	if (!cob_atomic_load_uint (&warned)) {
+		cob_atomic_store_uint (&warned, 1);
 		cob_runtime_warning_ctx (ctx, _("runtime is not configured to support %s"),
 			"XML");
 	}

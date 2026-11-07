@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* mlio.c (xml_error_handler, xml_parse, xml_generate): no static state
+	  in the XML error handler
 	* intrinsic.c (setup_cob_pi, setup_cob_sqrt_two, setup_cob_log_half,
 	  setup_cob_log_ten, cob_mpf_log, cob_mpf_log10, ...): constants of the
 	  intrinsic functions computed under a lock
