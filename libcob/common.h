@@ -1906,6 +1906,7 @@ struct cob_call_state;		/* opaque, call.c */
 struct cob_cobcapi_state;	/* opaque, cobcapi.c */
 struct cob_common_state;	/* opaque, common.c */
 struct cob_fbdb_state;		/* opaque, fbdb.c */
+struct cob_fodbc_state;		/* opaque, fodbc.c */
 struct cob_fextfh_state;	/* opaque, fextfh.c */
 struct cob_fileio_state;	/* opaque, fileio.c */
 struct cob_intrinsic_state;	/* opaque, intrinsic.c */
@@ -1932,6 +1933,7 @@ typedef struct cob_context {
 	struct cob_call_state		*call;		/* allocated on first use */
 	struct cob_fextfh_state		*fextfh;	/* allocated on first use */
 	struct cob_fbdb_state		*fbdb;		/* allocated on first use */
+	struct cob_fodbc_state		*fodbc;		/* allocated on first use */
 	struct cob_fileio_state		*fileio;	/* allocated on first use */
 	struct cob_prof_state		*prof;		/* allocated on first use */
 } cob_context;

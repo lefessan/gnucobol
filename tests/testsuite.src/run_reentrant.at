@@ -1915,6 +1915,156 @@ main
 AT_CLEANUP
 
 
+AT_SETUP([ODBC connection of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create ODBC COMMIT ROLLBACK])
+
+# each context has its own ODBC connection: it connects to the DSN of
+# its environment, and COMMIT / ROLLBACK only apply to its updates;
+# needs the SQLite ODBC driver (COB_TEST_SQLITE_ODBC: path of the
+# driver, else the usual place)
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+AT_CHECK([test -f "${COB_TEST_SQLITE_ODBC:=/usr/lib/x86_64-linux-gnu/odbc/libsqlite3odbc.so}" || exit 77])
+AT_CHECK([mkdir schema && cat > odbcinst.ini <<EOF
+@<:@SQLite3@:>@
+Driver=$COB_TEST_SQLITE_ODBC
+EOF
+cat > odbc.ini <<EOF
+@<:@cobtest1@:>@
+Driver=SQLite3
+Database=$PWD/db1.sqlite
+@<:@cobtest2@:>@
+Driver=SQLite3
+Database=$PWD/db2.sqlite
+EOF
+], [0], [], [])
+
+AT_DATA([od.cob], [
+      $SET XFD "ALL"
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      od.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT F ASSIGN TO "tasks" ORGANIZATION INDEXED
+                  ACCESS DYNAMIC RECORD KEY K STATUS FS.
+       I-O-CONTROL.
+           APPLY COMMIT ON F.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD F.
+       01 R.
+          05 K          PIC 9(4).
+          05 V          PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       01 ARG           PIC X(8).
+       PROCEDURE        DIVISION USING TAG OP ARG.
+           EVALUATE OP
+           WHEN "S"
+              DISPLAY "COB_SCHEMA_DSN" UPON ENVIRONMENT-NAME
+              DISPLAY ARG UPON ENVIRONMENT-VALUE
+              OPEN OUTPUT F
+              CLOSE F
+              OPEN I-O F
+              DISPLAY TAG " open: " FS
+           WHEN "W"
+              MOVE ARG (1:4) TO K
+              MOVE TAG TO V
+              WRITE R
+              DISPLAY TAG " write: " FS
+           WHEN "C"
+              COMMIT
+              DISPLAY TAG " commit"
+           WHEN "R"
+              ROLLBACK
+              DISPLAY TAG " rollback"
+           WHEN "X"
+              CLOSE F
+           WHEN "L"
+              DISPLAY "COB_SCHEMA_DSN" UPON ENVIRONMENT-NAME
+              DISPLAY ARG UPON ENVIRONMENT-VALUE
+              OPEN INPUT F
+              MOVE 0 TO K
+              START F KEY >= K
+              PERFORM UNTIL FS NOT = "00"
+                 READ F NEXT
+                 IF FS = "00"
+                    DISPLAY TAG " " ARG ": " K " " V
+                 END-IF
+              END-PERFORM
+              CLOSE F
+              DISPLAY TAG " " ARG ": end"
+           END-EVALUATE
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+od (cob_context *ctx, const char *tag, const char *op, const char *arg)
+{
+   void *argv[3];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   argv[2] = (void *)arg;
+   (void)cob_call ("od", 3, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2, *ctx3;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   od (ctx1, "ctx1", "S", "cobtest1");
+   od (ctx1, "ctx1", "W", "0001    ");
+   od (ctx2, "ctx2", "S", "cobtest2");
+   od (ctx2, "ctx2", "W", "0002    ");
+   od (ctx2, "ctx2", "R", "        ");
+   od (ctx1, "ctx1", "C", "        ");
+   od (ctx1, "ctx1", "X", "        ");
+   od (ctx2, "ctx2", "X", "        ");
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+
+   ctx3 = cob_context_create ();
+   od (ctx3, "ctx3", "L", "cobtest1");
+   cob_context_destroy (ctx3);
+   ctx3 = cob_context_create ();
+   od (ctx3, "ctx3", "L", "cobtest2");
+   cob_context_destroy (ctx3);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([COB_SCHEMA_DIR=$PWD/schema $COMPILE_MODULE -fsql od.cob], [0], [], [])
+AT_CHECK([ODBCSYSINI=$PWD ODBCINI=$PWD/odbc.ini COB_SCHEMA_DIR=$PWD/schema \
+          IX_OPTIONS=format=odbc $COBCRUN_DIRECT ./host], [0],
+[ctx1 open: 00
+ctx1 write: 00
+ctx2 open: 00
+ctx2 write: 00
+ctx2 rollback
+ctx1 commit
+ctx3 cobtest1: 0001 ctx1
+ctx3 cobtest1: end
+ctx3 cobtest2: end
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

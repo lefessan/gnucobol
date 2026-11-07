@@ -59,6 +59,7 @@ static int odbc_file_unlock (cob_context *, cob_file_api *, cob_file *);
 static void odbc_exit_fileio(cob_context *, cob_file_api *);
 static int odbc_fork 		(cob_context *, cob_file_api *);
 static char * odbc_version (void);
+static void odbc_exit_context (cob_context *, cob_file_api *);
 
 static const struct cob_fileio_funcs odbc_indexed_funcs = {
 	odbc_open,
@@ -77,15 +78,44 @@ static const struct cob_fileio_funcs odbc_indexed_funcs = {
 	odbc_commit,
 	odbc_rollback,
 	odbc_file_unlock,
-	odbc_version
+	odbc_version,
+	odbc_exit_context
 };
 
-static int		db_join = 1;
-static struct db_state db[1];
-static int	useDriverCursor  = FALSE;
-static int	useIfneededCursor= TRUE;
-static char	varFetch[256];
-static char	varFetch2[256];
+/* State of a context: its own ODBC environment and connection (a task
+   commits or rolls back only its own updates); the db_state is the first
+   member, the other members are reached from a 'db' pointer */
+struct cob_fodbc_state {
+	struct db_state	db;
+	int		db_join;		/* connection still to be done (1),
+						   failed (-1) */
+	int		useDriverCursor;
+	int		useIfneededCursor;
+	char		varFetch[256];
+	char		varFetch2[256];
+};
+
+static struct cob_fodbc_state *
+fodbc_state (cob_context *ctx)
+{
+	if (ctx->fodbc == NULL) {
+		ctx->fodbc = cob_malloc (sizeof (struct cob_fodbc_state));
+		ctx->fodbc->db_join = 1;
+		ctx->fodbc->useDriverCursor = FALSE;
+		ctx->fodbc->useIfneededCursor = TRUE;
+	}
+	return ctx->fodbc;
+}
+
+/* the connection of the context */
+#define CTX_DB		(&fodbc_state (ctx)->db)
+
+#define ODBC_STATE(d)		((struct cob_fodbc_state *)(d))
+#define db_join			(ODBC_STATE (db)->db_join)
+#define useDriverCursor		(ODBC_STATE (db)->useDriverCursor)
+#define useIfneededCursor	(ODBC_STATE (db)->useIfneededCursor)
+#define varFetch		(ODBC_STATE (db)->varFetch)
+#define varFetch2		(ODBC_STATE (db)->varFetch2)
 
 struct indexed_file {
 	struct file_xfd	*fx;
@@ -759,6 +789,7 @@ odbc_free_stmt ( SQL_STMT *s)
 static int
 odbc_commit (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	COB_UNUSED (a);
 	COB_UNUSED (f);
 	if (!db->isopen)
@@ -831,6 +862,7 @@ odbc_commit (cob_context *ctx, cob_file_api *a, cob_file *f)
 static int
 odbc_rollback (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	COB_UNUSED (a);
 	COB_UNUSED (f);
 	if (!db->isopen)
@@ -899,6 +931,7 @@ odbc_rollback (cob_context *ctx, cob_file_api *a, cob_file *f)
 static int
 odbc_sync (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	if (!db->isopen)
 		return 0;
 	if (chkSts(db,(char*) "Commit EndTran ENV",db->dbEnvH,
@@ -997,6 +1030,7 @@ odbcCountIndex(cob_context *ctx,
 *****************************************************/
 static int
 odbcCheckDups(
+	struct db_state	*db,
 	cob_file *f,
 	SQL_STMT *s)
 {
@@ -1203,6 +1237,7 @@ odbc_create_table (cob_context *ctx,
 static void
 join_environment (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	char	*env, tmp[256];
 	SQLSMALLINT		len;
 	int		sts;
@@ -1526,6 +1561,7 @@ join_environment (cob_context *ctx, cob_file_api *a, cob_file *f)
 static int
 odbc_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	char		buff[COB_FILE_MAX+1];
 	struct file_xfd	*fx;
@@ -1571,6 +1607,7 @@ odbc_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename
 static int
 odbc_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	int				i, k, ln, joined = 0;
 	char		buff[COB_FILE_MAX+1];
@@ -1831,6 +1868,7 @@ odbc_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 static int
 odbc_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int		k;
@@ -1884,6 +1922,7 @@ odbc_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 static int
 odbc_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	int		ky, klen, partlen, paramtype;
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
@@ -1965,6 +2004,7 @@ odbc_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_
 static int
 odbc_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	struct map_xfd *col;
@@ -2032,6 +2072,7 @@ odbc_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const
 static int
 odbc_read_cont (cob_context *ctx, cob_file *f)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			ret = COB_STATUS_00_SUCCESS;
@@ -2082,6 +2123,7 @@ TryAgain:
 static int
 odbc_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			ky;
@@ -2204,7 +2246,7 @@ odbc_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_o
 		} else {
 			s = &fx->key[f->curkey]->where_pdup;
 		}
-		if (odbcCheckDups (f, s) > 0)
+		if (odbcCheckDups (db, f, s) > 0)
 			ret = COB_STATUS_02_SUCCESS_DUPLICATE;
 	}
 
@@ -2217,6 +2259,7 @@ odbc_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_o
 static int
 odbc_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			k, num;
@@ -2278,6 +2321,7 @@ odbc_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 static int
 odbc_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			k, pos;
@@ -2331,6 +2375,7 @@ odbc_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 static int
 odbc_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
+	struct db_state	*db = CTX_DB;	/* connection of the context */
 	struct indexed_file	*p;
 	struct file_xfd	*fx;
 	int			k, pos, num, klen;
@@ -2437,6 +2482,35 @@ static void
 odbc_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED (a);
+}
+
+/* end of a context: its connection is closed (an open transaction is
+   rolled back, as when the process ends without disconnecting), and its
+   state freed */
+static void
+odbc_exit_context (cob_context *ctx, cob_file_api *a)
+{
+	struct db_state	*db;
+
+	COB_UNUSED (a);
+	if (ctx->fodbc == NULL) {
+		return;
+	}
+	db = CTX_DB;
+	if (db->dbDbcH != NULL) {
+		if (db->isopen) {
+			if (!db->autocommit) {
+				(void)SQLEndTran (SQL_HANDLE_DBC, db->dbDbcH, SQL_ROLLBACK);
+			}
+			(void)SQLDisconnect (db->dbDbcH);
+		}
+		(void)SQLFreeHandle (SQL_HANDLE_DBC, db->dbDbcH);
+	}
+	if (db->dbEnvH != NULL) {
+		(void)SQLFreeHandle (SQL_HANDLE_ENV, db->dbEnvH);
+	}
+	cob_free (ctx->fodbc);
+	ctx->fodbc = NULL;
 }
 
 void
