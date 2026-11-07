@@ -333,7 +333,15 @@ struct sort_state {
 #define	COB_SWITCH_MAX	36  /* maximum switches, must match cobc/tree.h! */
 
 /* State of common.c, one per context */
+/* variable of the environment set or removed (value NULL) in a context */
+struct cob_env_overlay {
+	struct cob_env_overlay	*next;
+	char			*name;
+	char			*value;
+};
+
 struct cob_common_state {
+	struct cob_env_overlay	*env_overlay;	/* environment of the context */
 	char			*cob_local_env;
 	size_t			cob_local_env_size;
 	int			current_arg;
@@ -388,6 +396,10 @@ common_state (cob_context *ctx)
 {
 	return ctx ? ctx->common : &no_context_state;
 }
+
+/* environment of the contexts, see env_set */
+static char	*env_get (cob_context *, const char *);
+static void	env_overlay_free (cob_context *);
 
 #define cob_alloc_base		(common_state (ctx)->cob_alloc_base)
 #define cob_module_list		(common_state (ctx)->cob_module_list)
@@ -822,6 +834,7 @@ cob_exit_common_state (cob_context *ctx)
 	struct cob_alloc_cache	*x;
 	struct cob_alloc_cache	*y;
 
+	env_overlay_free (ctx);
 	if (common_state (ctx)->commlnptr) {
 		cob_free (common_state (ctx)->commlnptr);
 		common_state (ctx)->commlnptr = NULL;
@@ -2950,7 +2963,7 @@ cob_rescan_env_vals (cob_context *ctx)
 	/* Check for possible environment variables */
 	for (i = 0; i < NUM_CONFIG; i++) {
 		if (gc_conf[i].env_name
-		 && (env = getenv (gc_conf[i].env_name)) != NULL
+		 && (env = env_get (ctx, gc_conf[i].env_name)) != NULL
 		 && *env != 0) {
 			old_type = gc_conf[i].data_type;
 			gc_conf[i].data_type |= STS_ENVSET;
@@ -6807,6 +6820,115 @@ unsetenv (const char *name) {
 }
 #endif
 
+/* Environment of the contexts (TXSERIES-T1-DESIGN.md, 7.2)
+
+   setenv / unsetenv are not thread-safe with getenv: while the main
+   context is the only one, the variables set by the programs go to the
+   environment of the process (seen by the child processes); in a
+   context created by cob_context_create, or while such contexts exist,
+   they are overlays of the context, read first by env_get (not seen yet
+   by the child processes) */
+
+static struct cob_env_overlay *
+env_overlay_find (cob_context *ctx, const char *name)
+{
+	struct cob_env_overlay	*o;
+	if (ctx == NULL) {
+		return NULL;
+	}
+	for (o = common_state (ctx)->env_overlay; o; o = o->next) {
+		if (strcmp (o->name, name) == 0) {
+			return o;
+		}
+	}
+	return NULL;
+}
+
+/* value of the variable 'name' for the context */
+static char *
+env_get (cob_context *ctx, const char *name)
+{
+	struct cob_env_overlay	*o = env_overlay_find (ctx, name);
+	if (o) {
+		return o->value;
+	}
+	return getenv (name);
+}
+
+static int	cob_unsetenv_process (const char *);
+
+/* whether the context writes in the environment of the process */
+static int
+env_of_process (cob_context *ctx)
+{
+	return ctx == NULL
+	    || (ctx == cob_main_context
+	     && cob_atomic_load_uint (&ctx->rt->other_contexts) == 0);
+}
+
+/* forget the overlay of 'name' */
+static void
+env_overlay_remove (cob_context *ctx, const char *name)
+{
+	struct cob_env_overlay	**po, *o;
+	if (ctx == NULL) {
+		return;
+	}
+	for (po = &common_state (ctx)->env_overlay; (o = *po) != NULL; po = &o->next) {
+		if (strcmp (o->name, name) == 0) {
+			*po = o->next;
+			cob_free (o->name);
+			if (o->value) {
+				cob_free (o->value);
+			}
+			cob_free (o);
+			return;
+		}
+	}
+}
+
+/* set (value NULL: remove) the variable 'name' for the context */
+static int
+env_set (cob_context *ctx, const char *name, const char *value)
+{
+	struct cob_env_overlay	*o;
+
+	if (env_of_process (ctx)) {
+		env_overlay_remove (ctx, name);
+		if (value) {
+			return cob_setenv (name, value, 1);
+		}
+		return cob_unsetenv_process (name);
+	}
+	o = env_overlay_find (ctx, name);
+	if (o == NULL) {
+		o = cob_malloc (sizeof (struct cob_env_overlay));
+		o->name = cob_strdup (name);
+		o->next = common_state (ctx)->env_overlay;
+		common_state (ctx)->env_overlay = o;
+	} else if (o->value) {
+		cob_free (o->value);
+	}
+	o->value = value ? cob_strdup (value) : NULL;
+	return 0;
+}
+
+/* free the environment overlays of the context */
+static void
+env_overlay_free (cob_context *ctx)
+{
+	struct cob_env_overlay	*o, *n;
+	for (o = common_state (ctx)->env_overlay; o; o = n) {
+		n = o->next;
+		cob_free (o->name);
+		if (o->value) {
+			cob_free (o->value);
+		}
+		cob_free (o);
+	}
+	common_state (ctx)->env_overlay = NULL;
+}
+
 /* set entry into environment, with/without overwriting existing values */
 int
 cob_setenv (const char *name, const char *value, int overwrite) {
@@ -6824,9 +6946,15 @@ cob_setenv (const char *name, const char *value, int overwrite) {
 #endif
 }
 
-/* remove entry from environment */
+/* remove entry from environment (of the context, see env_set) */
 int
 cob_unsetenv_ctx (cob_context *ctx, const char *name) {
+	return env_set (ctx, name, NULL);
+}
+
+/* remove entry from the environment of the process */
+static int
+cob_unsetenv_process (const char *name) {
 #if defined(HAVE_SETENV) && HAVE_SETENV
 	unsetenv (name);
 	return 0;
@@ -6873,7 +7001,11 @@ cob_putenv_ctx (cob_context *ctx, char *name)
 	int	ret;
 
 	if (name && strchr (name, '=')) {
-		ret = putenv (cob_strdup (name));
+		char	*n = cob_strdup (name);
+		char	*v = strchr (n, '=');
+		*v++ = 0;
+		ret = env_set (ctx, n, v);
+		cob_free (n);
 		if (!ret) {
 			cob_rescan_env_vals (ctx);
 		}
@@ -6942,7 +7074,7 @@ cob_display_env_value_ctx (cob_context *ctx, const cob_field *f)
 			cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);
 			return;
 		}
-		ret = cob_setenv (common_state (ctx)->cob_local_env, buff, 1);
+		ret = env_set (ctx, common_state (ctx)->cob_local_env, buff);
 	}
 	if (ret != 0) {
 		cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);
@@ -7000,7 +7132,7 @@ cob_get_environment_ctx (cob_context *ctx, const cob_field *envname, cob_field *
 			}
 		}
 	}
-	p = getenv (buff);
+	p = env_get (ctx, buff);
 	if (p) {
 		cob_move_intermediate (ctx, envval, p, strlen (p));
 	} else {
@@ -7022,7 +7154,7 @@ cob_accept_environment_ctx (cob_context *ctx, cob_field *f)
 	const char *p = NULL;
 
 	if (common_state (ctx)->cob_local_env) {
-		p = getenv (common_state (ctx)->cob_local_env);
+		p = env_get (ctx, common_state (ctx)->cob_local_env);
 	}
 	if (p) {
 		cob_move_intermediate (ctx, f, p, strlen (p));
@@ -12889,13 +13021,13 @@ cob_get_env_ctx (cob_context *ctx, const char *envname, char *envused)
 	if (envused == NULL)
 		envused = (void*)wrk;
 	strcpy(envused, envname);
-	if ((env = getenv (envused)) != NULL)
+	if ((env = env_get (ctx, envused)) != NULL)
 		return env;
 	if (memcmp(envname,"COB_",4) == 0)
 		strcpy(envused, envname + 4);
 	else
 		sprintf(envused, "COB_%s", envname);
-	if ((env = getenv (envused)) != NULL)
+	if ((env = env_get (ctx, envused)) != NULL)
 		return env;
 	uenvname = (unsigned char *)envname;
 	for (i=0; uenvname[i] != 0; i++) {
@@ -12912,7 +13044,7 @@ cob_get_env_ctx (cob_context *ctx, const char *envname, char *envused)
 				envused[i] = uenvname[j];
 		}
 		envused[i] = 0;
-		if ((env = getenv (envused)) != NULL)
+		if ((env = env_get (ctx, envused)) != NULL)
 			return env;
 		strcpy(envused,"cob_");
 		for (i=4,j=0; uenvname[j] != 0; i++,j++) {
@@ -12922,7 +13054,7 @@ cob_get_env_ctx (cob_context *ctx, const char *envname, char *envused)
 				envused[i] = uenvname[j];
 		}
 		envused[i] = 0;
-		if ((env = getenv (envused)) != NULL)
+		if ((env = env_get (ctx, envused)) != NULL)
 			return env;
 	}
 	if (haslwr) {	/* Try all upper case */
@@ -12933,7 +13065,7 @@ cob_get_env_ctx (cob_context *ctx, const char *envname, char *envused)
 				envused[i] = uenvname[j];
 		}
 		envused[i] = 0;
-		if ((env = getenv (envused)) != NULL)
+		if ((env = env_get (ctx, envused)) != NULL)
 			return env;
 		strcpy(envused,"COB_");
 		for (i=4,j=0; uenvname[j] != 0; i++,j++) {
@@ -12943,7 +13075,7 @@ cob_get_env_ctx (cob_context *ctx, const char *envname, char *envused)
 				envused[i] = uenvname[j];
 		}
 		envused[i] = 0;
-		if ((env = getenv (envused)) != NULL)
+		if ((env = env_get (ctx, envused)) != NULL)
 			return env;
 	}
 	return NULL;

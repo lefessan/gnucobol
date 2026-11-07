@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (common_state, cob_exit_common_state, cob_rescan_env_vals,
+	  unsetenv, cob_setenv, cob_unsetenv_ctx, ...): environment of the
+	  execution contexts
 	* common.c (cob_context_free, cob_get_current_context,
 	  cob_context_enter, cob_context_leave, cob_sys_justify,
 	  cob_set_locale_ctx): locale of an execution context

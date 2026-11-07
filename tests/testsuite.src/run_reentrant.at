@@ -1672,6 +1672,105 @@ main: 11/07/26
 AT_CLEANUP
 
 
+AT_SETUP([environment of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create ENVIRONMENT-VALUE ACCEPT DD_])
+
+# while other contexts exist, a variable set in a context with DISPLAY
+# UPON ENVIRONMENT-VALUE is only seen by this context (ACCEPT FROM
+# ENVIRONMENT, mapping of the file names); the environment of the
+# process is not changed
+
+AT_DATA([ev.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ev.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO "OUTF"
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 V             PIC X(10).
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           IF OP = "S"
+              DISPLAY "MYVAR" UPON ENVIRONMENT-NAME
+              DISPLAY TAG UPON ENVIRONMENT-VALUE
+              DISPLAY "DD_OUTF" UPON ENVIRONMENT-NAME
+              DISPLAY TAG UPON ENVIRONMENT-VALUE
+              OPEN OUTPUT OUT-FILE
+              MOVE TAG TO OUT-REC
+              WRITE OUT-REC
+              CLOSE OUT-FILE
+           END-IF
+           MOVE SPACES TO V
+           ACCEPT V FROM ENVIRONMENT "MYVAR"
+           DISPLAY TAG " MYVAR=<" V ">"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <stdlib.h>
+#include <libcob.h>
+
+static void
+ev (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("ev", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   ev (ctx1, "ctx1", "S");
+   ev (ctx2, "ctx2", " ");
+   ev (ctx2, "ctx2", "S");
+   ev (ctx1, "ctx1", " ");
+   ev (main_ctx, "main", " ");
+   printf ("process MYVAR: %s\n", getenv ("MYVAR") ? getenv ("MYVAR") : "(unset)");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ev.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 MYVAR=<ctx1      >
+ctx2 MYVAR=<          >
+ctx2 MYVAR=<ctx2      >
+ctx1 MYVAR=<ctx1      >
+main MYVAR=<          >
+process MYVAR: (unset)
+], [])
+AT_CHECK([cat ctx1 ctx2], [0],
+[ctx1
+ctx2
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
