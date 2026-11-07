@@ -4898,7 +4898,10 @@ cob_file_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename,
 			f->file_features &= ~COB_FILE_LS_VALIDATE;
 			f->flag_ls_instab = 0;
 			f->file_pid = s_pid;
-			signal (SIGPIPE, SIG_IGN);
+			/* the signals of a hosted runtime are left to the host */
+			if (!cob_is_hosted ()) {
+				signal (SIGPIPE, SIG_IGN);
+			}
 			return COB_STATUS_00_SUCCESS;
 		} else {			/* Child process */
 			/* only async-signal-safe calls until execv: the parent
