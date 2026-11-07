@@ -14412,8 +14412,10 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 	/* Allocate and initialize LOCAL storage */
 	if (prog->local_storage) {
 		if (local_mem) {
+			/* in the allocations of the context: freed with it if the
+			   program is abandoned (STOP RUN returning to the host) */
 			output_line ("/* Allocate LOCAL storage */");
-			output_line ("cob_local_ptr = cob_malloc (%dU);",
+			output_line ("cob_local_ptr = cob_cache_malloc_ctx (ctx, %dU);",
 				     local_mem);
 			if (prog->flag_global_use
 		 	 || cb_flag_symbols) {
@@ -14820,7 +14822,7 @@ output_internal_function (struct cb_program *prog, cb_tree parameter_list)
 		output_line ("/* Deallocate LOCAL storage */");
 		if (local_mem) {
 			output_line ("if (cob_local_ptr) {");
-			output_line ("\tcob_free (cob_local_ptr);");
+			output_line ("\tcob_cache_free_ctx (ctx, cob_local_ptr);");
 			output_line ("\tcob_local_ptr = NULL;");
 			if (current_prog->flag_global_use
 		 	 || cb_flag_symbols) {
