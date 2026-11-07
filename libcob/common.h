@@ -2003,6 +2003,8 @@ COB_EXPIMP void	cob_init			(const int, char **);
 COB_EXPIMP void	cob_init_nomain		(const int, char **);
 COB_EXPIMP void	cob_common_init		(void *);
 
+COB_EXPIMP void		cob_set_hosted		(const int);
+COB_EXPIMP int		cob_is_hosted		(void);
 COB_EXPIMP cob_context	*cob_get_current_context	(void);
 COB_EXPIMP cob_context	*cob_context_enter	(cob_context *);
 COB_EXPIMP void		cob_context_leave	(cob_context *);

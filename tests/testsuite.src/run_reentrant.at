@@ -2572,6 +2572,44 @@ libcob: ep.cob:21: error: module 'nosuchprog' not found
 AT_CLEANUP
 
 
+AT_SETUP([hosted runtime: no signal handlers])
+AT_KEYWORDS([runreentrant cob_set_hosted signal])
+
+# a hosted runtime (cob_set_hosted before cob_init) installs no signal
+# handler, the host keeps its own
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   struct sigaction sa;
+   const int hosted = argc > 1 && strcmp (argv[1], "hosted") == 0;
+
+   cob_set_hosted (hosted);
+   cob_init (0, NULL);
+   sigaction (SIGSEGV, NULL, &sa);
+   printf ("hosted %d, SIGSEGV handler: %s\n", cob_is_hosted (),
+           sa.sa_handler == SIG_DFL ? "default" : "libcob");
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host hosted], [0],
+[hosted 1, SIGSEGV handler: default
+], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[hosted 0, SIGSEGV handler: libcob
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

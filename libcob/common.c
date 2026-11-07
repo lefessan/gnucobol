@@ -483,6 +483,8 @@ struct dyn_attr {
 };
 
 static int			exit_code = 0;	/* exit code when leaving libcob */
+/* the runtime is hosted by a server (cob_set_hosted, before cob_init) */
+static int			cob_hosted = 0;
 /* last runtime error of the main context (or without context), still
    available after the end of the runtime */
 static char			process_err_str[COB_ERRBUF_SIZE] = {0};
@@ -1703,6 +1705,10 @@ cob_set_signal (void)
 {
 #if	defined (HAVE_SIGNAL_H)
 	int k;
+	/* a hosted runtime leaves the signals to the host */
+	if (cob_hosted) {
+		return;
+	}
 #ifdef	HAVE_SIGACTION
 	struct sigaction	sa;
 	struct sigaction	osa;
@@ -5042,6 +5048,22 @@ cob_real_put_sign (cob_context *ctx, cob_field *f, const int sign)
 		}
 		return;
 	}
+}
+
+/* the runtime is hosted by a server (for example a transaction monitor
+   running the tasks in contexts): libcob installs no signal handler, the
+   host handles them; to be called before cob_init */
+void
+cob_set_hosted (const int hosted)
+{
+	cob_hosted = hosted;
+}
+
+/* whether the runtime is hosted */
+int
+cob_is_hosted (void)
+{
+	return cob_hosted;
 }
 
 /* Registration of external handlers */
