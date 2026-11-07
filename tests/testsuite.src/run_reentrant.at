@@ -1317,6 +1317,191 @@ ctx2 C: 00
 AT_CLEANUP
 
 
+AT_SETUP([COBOL to C to COBOL in several execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create CALL cob_call])
+
+# a COBOL program calls a C function, which calls back a COBOL program
+# with cob_call: the callee runs in the current context of the caller
+# (its WORKING-STORAGE is the one of that context)
+
+AT_DATA([proga.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      proga.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG " proga: " CNT
+           CALL "cfunc" USING TAG
+           GOBACK.
+])
+
+AT_DATA([progb.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      progb.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 10 TO CNT
+           DISPLAY TAG " progb: " CNT
+           GOBACK.
+])
+
+AT_DATA([cfunc.c], [[
+#include <libcob.h>
+
+COB_EXT_EXPORT int
+cfunc (char *tag)
+{
+   void *argv[1];
+   argv[0] = tag;
+   return cob_call ("progb", 1, argv);
+}
+]])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_proga (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("proga", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx2 = cob_context_create ();
+
+   call_proga (main_ctx, "main");
+   call_proga (ctx2, "ctx2");
+   call_proga (main_ctx, "main");
+   call_proga (ctx2, "ctx2");
+
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE proga.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE progb.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE cfunc.c], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[main proga: 0001
+main progb: 0010
+ctx2 proga: 0001
+ctx2 progb: 0010
+main proga: 0002
+main progb: 0020
+ctx2 proga: 0002
+ctx2 progb: 0020
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([IS INITIAL programs in several execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create INITIAL])
+
+# an INITIAL program gets its initial state at each call, in each
+# context; a program it calls keeps its state per context
+
+AT_DATA([init.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      init IS INITIAL.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG " init: " CNT
+           CALL "sub" USING TAG
+           GOBACK.
+])
+
+AT_DATA([sub.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG " sub: " CNT
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_init (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("init", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx2 = cob_context_create ();
+
+   call_init (main_ctx, "main");
+   call_init (ctx2, "ctx2");
+   call_init (main_ctx, "main");
+   call_init (ctx2, "ctx2");
+   call_init (ctx2, "ctx2");
+
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE init.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sub.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[main init: 0001
+main sub: 0001
+ctx2 init: 0001
+ctx2 sub: 0001
+main init: 0001
+main sub: 0002
+ctx2 init: 0001
+ctx2 sub: 0002
+ctx2 init: 0001
+ctx2 sub: 0003
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
