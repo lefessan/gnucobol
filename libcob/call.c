@@ -1127,9 +1127,11 @@ cob_set_cancel_ctx (cob_context *ctx, cob_module *m)
 	p = call_table[hash ((const unsigned char *)(m->module_name))];
 	for (; p; p = p->next) {
 		if (strcmp (m->module_name, p->name) == 0) {
-			/* Set path in program module structure */
-			if (p->path && m->module_path && !*(m->module_path)) {
-				*(m->module_path) = p->path;
+			/* Set path in program module structure (static of
+			   the module, shared by the contexts, set once) */
+			if (p->path && m->module_path
+			 && !cob_atomic_load_ptr (m->module_path)) {
+				cob_atomic_store_ptr (m->module_path, p->path);
 			}
 			call_lock_release ();
 			return;

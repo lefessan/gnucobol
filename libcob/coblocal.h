@@ -250,9 +250,13 @@
 #if	defined(__GNUC__) || defined(__clang__)
 #define cob_atomic_load_uint(p)		__atomic_load_n ((p), __ATOMIC_ACQUIRE)
 #define cob_atomic_store_uint(p,v)	__atomic_store_n ((p), (v), __ATOMIC_RELEASE)
-#else	/* aligned unsigned int: atomic on the supported platforms */
+#define cob_atomic_load_ptr(p)		__atomic_load_n ((p), __ATOMIC_ACQUIRE)
+#define cob_atomic_store_ptr(p,v)	__atomic_store_n ((p), (v), __ATOMIC_RELEASE)
+#else	/* aligned unsigned int / pointer: atomic on the supported platforms */
 #define cob_atomic_load_uint(p)		(*(volatile unsigned int *)(p))
 #define cob_atomic_store_uint(p,v)	(*(volatile unsigned int *)(p) = (v))
+#define cob_atomic_load_ptr(p)		(*(p))
+#define cob_atomic_store_ptr(p,v)	(*(p) = (v))
 #endif
 
 /* TODO (T1.2/T1.3): context for callers that do not receive it yet;

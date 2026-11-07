@@ -4264,8 +4264,11 @@ cob_intr_module_source (void)
 cob_field *
 cob_intr_module_path_ctx (cob_context *ctx)
 {
-	if (!COB_MODULE_PTR->module_path
-	 || !(*COB_MODULE_PTR->module_path)) {
+	/* the path is set once by another context (cob_set_cancel) */
+	const char	*path = COB_MODULE_PTR->module_path
+		? cob_atomic_load_ptr (COB_MODULE_PTR->module_path) : NULL;
+
+	if (!path) {
 		cob_field	field;
 		COB_FIELD_INIT (1, NULL, &const_alpha_attr);
 		make_field_entry (ctx, &field);
@@ -4273,7 +4276,7 @@ cob_intr_module_path_ctx (cob_context *ctx)
 		curr_field->data[0] = ' ';
 		return curr_field;
 	}
-	cob_alloc_set_field_str (ctx, *COB_MODULE_PTR->module_path, 0, 0);
+	cob_alloc_set_field_str (ctx, path, 0, 0);
 	return curr_field;
 }
 
