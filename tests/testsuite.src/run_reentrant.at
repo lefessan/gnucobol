@@ -2067,6 +2067,115 @@ ctx3 cobtest2: end
 AT_CLEANUP
 
 
+AT_SETUP([ODBC in several threads])
+AT_KEYWORDS([runreentrant cob_context_create ODBC thread])
+
+# 8 threads, each with its own context, connect at the same time to
+# their own data base (DSN of the environment of the context), write
+# and read records; needs the SQLite ODBC driver (see the previous test)
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+AT_CHECK([drv="${COB_TEST_SQLITE_ODBC:-/usr/lib/x86_64-linux-gnu/odbc/libsqlite3odbc.so}"
+test -f "$drv" || exit 77
+mkdir schema && printf '@<:@SQLite3@:>@\nDriver=%s\n' "$drv" > odbcinst.ini
+for i in 0 1 2 3 4 5 6 7; do
+  printf '@<:@cobmt%d@:>@\nDriver=SQLite3\nDatabase=%s/db%d.sqlite\n' $i "$PWD" $i
+done > odbc.ini
+], [0], [], [])
+
+AT_DATA([ow.cob], [
+      $SET XFD "ALL"
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ow.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT F ASSIGN TO "mtrecs" ORGANIZATION INDEXED
+                  ACCESS DYNAMIC RECORD KEY K STATUS FS.
+       I-O-CONTROL.
+           APPLY COMMIT ON F.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD F.
+       01 R.
+          05 K          PIC 9(6).
+          05 V          PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       01 I             PIC 9(6).
+       01 BAD           PIC 9(6) VALUE 0.
+       LINKAGE          SECTION.
+       01 RES           PIC 9(6).
+       PROCEDURE        DIVISION USING RES.
+           OPEN OUTPUT F
+           CLOSE F
+           OPEN I-O F
+           PERFORM VARYING I FROM 1 BY 1 UNTIL I > 200
+              MOVE I TO K
+              MOVE "val" TO V
+              WRITE R
+              IF FS NOT = "00" ADD 1 TO BAD END-IF
+           END-PERFORM
+           COMMIT
+           PERFORM VARYING I FROM 1 BY 1 UNTIL I > 200
+              MOVE I TO K
+              READ F KEY IS K
+              IF FS NOT = "00" OR K NOT = I ADD 1 TO BAD END-IF
+           END-PERFORM
+           CLOSE F
+           MOVE BAD TO RES
+           GOBACK.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <libcob.h>
+#define N 8
+static int bads[N];
+static void *task (void *arg)
+{
+   int id = (int)((int *)arg - bads);
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char env[40], res[7] = "000000";
+   void *argv[1] = { res };
+   snprintf (env, sizeof env, "COB_SCHEMA_DSN=cobmt%d", id);
+   cob_putenv_ctx (ctx, env);
+   (void)cob_call ("ow", 1, argv);
+   *(int *)arg = (res[0]-'0')*100000 + atoi (res + 1) ;
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+int main (int argc, char **argv)
+{
+   pthread_t th[N]; int i;
+   cob_init (argc, argv);
+   for (i = 0; i < N; i++) pthread_create (&th[i], NULL, task, &bads[i]);
+   for (i = 0; i < N; i++) { pthread_join (th[i], NULL); printf ("thread %d: %d bad\n", i, bads[i]); }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([COB_SCHEMA_DIR=$PWD/schema $COMPILE_MODULE -fsql ow.cob], [0], [], [])
+AT_CHECK([ODBCSYSINI=$PWD ODBCINI=$PWD/odbc.ini COB_SCHEMA_DIR=$PWD/schema \
+          IX_OPTIONS=format=odbc $COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
