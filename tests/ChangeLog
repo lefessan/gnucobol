@@ -1,6 +1,13 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* reentrant-bench/README, reentrant-bench/arith.cob,
+	  reentrant-bench/calls.cob, reentrant-bench/compare.sh,
+	  reentrant-bench/csub.cob, reentrant-bench/idxf.cob,
+	  reentrant-bench/scale.c, reentrant-bench/scale.sh,
+	  reentrant-bench/seqf.cob, reentrant-bench/strs.cob,
+	  reentrant-bench/work.cob, reentrant-bench/wsub.cob: new files,
+	  benchmarks of the reentrant runtime
 	* testsuite.src/run_reentrant.at: COBOL to C to COBOL and IS INITIAL in
 	  several contexts
 	* testsuite.src/run_reentrant.at: profiling data per context or const

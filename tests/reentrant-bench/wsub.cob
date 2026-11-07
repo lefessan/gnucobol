@@ -1,0 +1,7 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. wsub.
+       DATA DIVISION.
+       LINKAGE SECTION.
+       01 C     PIC 9(8).
+       PROCEDURE DIVISION USING C.
+           GOBACK.
