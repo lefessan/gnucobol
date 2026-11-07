@@ -2689,6 +2689,72 @@ run
 AT_CLEANUP
 
 
+AT_SETUP([hosted runtime: console input and screen I/O])
+AT_KEYWORDS([runreentrant cob_set_hosted ACCEPT screen])
+
+# a hosted runtime (server) does not read its standard input: ACCEPT
+# gives spaces and EC-IMP-ACCEPT; screen I/O is a runtime error, which
+# returns to the host
+
+AT_CHECK([test "$COB_HAS_CURSES" = "yes" || exit 77])
+
+AT_DATA([ac.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ac.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 X             PIC X(4) VALUE "init".
+       LINKAGE          SECTION.
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING OP.
+           IF OP = "A"
+              ACCEPT X
+              DISPLAY "accept: <" X "> "
+                      FUNCTION TRIM (FUNCTION EXCEPTION-STATUS)
+           ELSE
+              DISPLAY "screen" AT 0101
+           END-IF
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+   void *a[1];
+   int ret;
+
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   ctx = cob_context_create ();
+   (void)cob_context_enter (ctx);
+   a[0] = "A";
+   ret = cob_call_with_exception_check_ctx (ctx, "ac", 1, a);
+   printf ("accept: return %d\n", ret);
+   a[0] = "S";
+   ret = cob_call_with_exception_check_ctx (ctx, "ac", 1, a);
+   printf ("screen: return %d\n", ret);
+   cob_context_destroy (ctx);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ac.cob], [0], [], [])
+AT_CHECK([echo data | $COBCRUN_DIRECT ./host], [0],
+[accept: <    > EC-IMP-ACCEPT
+accept: return 0
+screen: return -1
+], [libcob: ac.cob:15: error: screen I/O is not available in a hosted runtime
+])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

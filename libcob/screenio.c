@@ -1134,6 +1134,11 @@ cob_screen_init (cob_context *ctx)
 	if (ctx->glob.cob_screen_initialized) {
 		return 0;
 	}
+	/* a hosted runtime (server) has no terminal */
+	if (cob_is_hosted ()) {
+		cob_runtime_error_ctx (ctx, _("screen I/O is not available in a hosted runtime"));
+		cob_hard_failure ();
+	}
 
 	cob_base_inp = NULL;
 	totl_index = 0;

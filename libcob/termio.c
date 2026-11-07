@@ -1125,6 +1125,19 @@ cob_accept_ctx (cob_context *ctx, cob_field *f)
 	/* always flush to ensure buffered output is seen */
 	fflush (stdout);
 
+	/* a hosted runtime (server) does not read its standard input: as at
+	   its end */
+	if (cob_is_hosted ()) {
+		if (f) {
+			cob_set_exception_ctx (ctx, COB_EC_IMP_ACCEPT);
+			temp.size = 1;
+			temp.data = (unsigned char *)" ";
+			temp.attr = &const_alpha_attr;
+			cob_move_ctx (ctx, &temp, f);
+		}
+		return;
+	}
+
 	/* extension: ACCEPT OMITTED */
 	if (!f) {
 		for (; ; ) {

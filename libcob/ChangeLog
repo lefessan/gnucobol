@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* screenio.c (cob_screen_init), termio.c (cob_accept_ctx): console
+	  input and screen I/O of a hosted runtime
 	* common.c (cob_stop_run_ctx): STOP RUN without current context ends
 	  the main run unit
 	* common.c (call_end_handler, context_returns, end_context_run_unit,
