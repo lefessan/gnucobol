@@ -1,6 +1,11 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h, common.c (cob_sys_printable), intrinsic.c
+	  (get_interval_and_current_year_from_args, locale_time,
+	  cob_intr_locale_date_ctx, cob_intr_lcl_time_from_secs,
+	  cob_intr_mon_decimal_point_ctx, cob_intr_num_decimal_point_ctx, ...):
+	  locale functions without changing the locale of the process
 	* common.c (cob_stack_trace_internal, cob_get_dump_file), termio.c
 	  (cob_display_va_ctx): SYSPUNCH and dump files opened once under a
 	  lock

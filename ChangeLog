@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* configure.ac: locale functions without changing the locale of the
+	  process
 	* HOWTO-TSAN.md: BDB in several threads
 	* HOWTO-TSAN.md: new file, finding and fixing data races with
 	  ThreadSanitizer

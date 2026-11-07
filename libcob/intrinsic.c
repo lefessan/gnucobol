@@ -64,6 +64,7 @@
 #include <locale.h>
 #endif
 
+
 /* Function prototypes */
 static cob_u32_t	integer_of_date (const int, const int, const int);
 static void		get_iso_week (const int, int *, int *);
@@ -1851,6 +1852,35 @@ get_interval_and_current_year_from_args (cob_context *ctx, const int num_args, v
 
 #if defined(_WIN32) || defined(__CYGWIN__) || defined (HAVE_LANGINFO_CODESET)
 #ifdef HAVE_LANGINFO_CODESET
+#if defined (COB_THREAD_LOCALES) && defined (HAVE_NL_LANGINFO_L)
+/* copy to 'buff' the item 'item' of the locale 'name' for the category
+   'mask' (the other categories of the current locale of the thread),
+   without changing the locale of the process; 'name' NULL or not
+   available: the current locale */
+static void
+langinfo_of_locale (const int mask, const char *name, const nl_item item,
+		    char *buff, const size_t size)
+{
+	locale_t	base, loc = (locale_t)0;
+
+	if (name) {
+		base = duplocale (uselocale ((locale_t)0));
+		if (base != (locale_t)0) {
+			loc = newlocale (mask, name, base);
+			if (loc == (locale_t)0) {
+				freelocale (base);
+			}
+		}
+	}
+	if (loc != (locale_t)0) {
+		snprintf (buff, size, "%s", nl_langinfo_l (item, loc));
+		freelocale (loc);
+	} else {
+		snprintf (buff, size, "%s", nl_langinfo (item));
+	}
+}
+#endif
+
 static int
 locale_time (cob_context *ctx, const int hours, const int minutes, const int seconds,
 	     cob_field *locale_field, char *buff)
@@ -1858,6 +1888,7 @@ locale_time (cob_context *ctx, const int hours, const int minutes, const int sec
 	int 	deflocale = 0;
 	struct tm	tstruct;
 	char		buff2[LOCTIME_BUFSIZE] =  { '\0' };
+	char		locale_buff[COB_MINI_BUFF];
 
 	/* Initialize tstruct to given time */
 	memset ((void *)&tstruct, 0, sizeof(struct tm));
@@ -1866,23 +1897,30 @@ locale_time (cob_context *ctx, const int hours, const int minutes, const int sec
 	tstruct.tm_sec = seconds;
 
 	if (locale_field) {
-		char		locale_buff[COB_MINI_BUFF];
 		deflocale = cob_field_to_string (locale_field, locale_buff,
 				COB_MINI_MAX, CCM_NONE);
 		if (deflocale < 1) {
 			return 1;
 		}
-		(void) setlocale (LC_TIME, locale_buff);
 	}
 
 	/* Get strftime format string for locale */
 	memset (buff2, 0, LOCTIME_BUFSIZE);
+#if defined (COB_THREAD_LOCALES) && defined (HAVE_NL_LANGINFO_L)
+	/* without changing the locale of the process */
+	langinfo_of_locale (LC_TIME_MASK, deflocale ? locale_buff : NULL,
+			    T_FMT, buff2, LOCTIME_BUFSIZE - 1);
+#else
+	if (deflocale) {
+		(void) setlocale (LC_TIME, locale_buff);
+	}
 	snprintf (buff2, LOCTIME_BUFSIZE - 1, "%s", nl_langinfo (T_FMT));
 
 	/* Set locale if not done yet */
 	if (deflocale) {
 		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}
+#endif
 
 	strftime (buff, LOCTIME_BUFSIZE, buff2, &tstruct);
 
@@ -6996,13 +7034,21 @@ cob_intr_locale_date_ctx (cob_context *ctx, const int offset, const int length,
 		if (deflocale < 1) {
 			goto derror;
 		}
-		(void) setlocale (LC_TIME, locale_buff);
 	}
 	memset (buff2, 0, sizeof(buff2));
+#if defined (COB_THREAD_LOCALES) && defined (HAVE_NL_LANGINFO_L)
+	/* without changing the locale of the process */
+	langinfo_of_locale (LC_TIME_MASK, deflocale ? locale_buff : NULL,
+			    D_FMT, buff2, sizeof(buff2) - 1);
+#else
+	if (deflocale) {
+		(void) setlocale (LC_TIME, locale_buff);
+	}
 	snprintf(buff2, sizeof(buff2) - 1, "%s", nl_langinfo (D_FMT));
 	if (deflocale) {
 		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}
+#endif
 	strftime (buff, sizeof(buff), buff2, &tstruct);
 #else
 	memset ((void *)&syst, 0, sizeof(syst));
@@ -7174,11 +7220,29 @@ cob_intr_lcl_time_from_secs (const int offset, const int length, cob_field *srcf
 	return cob_intr_lcl_time_from_secs_ctx (COB_CTX_COMPAT, offset, length, srcfield, locale_field);
 }
 
+#ifdef	HAVE_LOCALECONV
+/* localeconv returns a static buffer, shared by the threads */
+COB_LOCK_DEFINE (localeconv_lock);
+
+/* copy to 'buff' the string member at 'offset' of localeconv,
+   return its length */
+static size_t
+localeconv_str (const size_t offset, char *buff, const size_t size)
+{
+	const char	*v;
+	cob_lock_acquire (&localeconv_lock);
+	v = *(const char **)((const char *)localeconv () + offset);
+	snprintf (buff, size, "%s", v ? v : "");
+	cob_lock_release (&localeconv_lock);
+	return strlen (buff);
+}
+#endif
+
 cob_field *
 cob_intr_mon_decimal_point_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
-	struct lconv	*p;
+	char		lc_value[COB_MINI_BUFF];
 	size_t		size;
 #endif
 	cob_field	field;
@@ -7187,8 +7251,8 @@ cob_intr_mon_decimal_point_ctx (cob_context *ctx)
 	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
-	p = localeconv ();
-	size = strlen (p->mon_decimal_point);
+	size = localeconv_str (offsetof (struct lconv, mon_decimal_point),
+			      lc_value, sizeof (lc_value));
 	if (size) {
 		field.size = size;
 	} else {
@@ -7196,7 +7260,7 @@ cob_intr_mon_decimal_point_ctx (cob_context *ctx)
 	}
 	make_field_entry (ctx, &field);
 	if (size) {
-		memcpy (curr_field->data, p->mon_decimal_point, size);
+		memcpy (curr_field->data, lc_value, size);
 	} else {
 		curr_field->size = 0;
 		curr_field->data[0] = 0;
@@ -7220,7 +7284,7 @@ cob_field *
 cob_intr_num_decimal_point_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
-	struct lconv	*p;
+	char		lc_value[COB_MINI_BUFF];
 	size_t		size;
 #endif
 	cob_field	field;
@@ -7229,8 +7293,8 @@ cob_intr_num_decimal_point_ctx (cob_context *ctx)
 	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
-	p = localeconv ();
-	size = strlen (p->decimal_point);
+	size = localeconv_str (offsetof (struct lconv, decimal_point),
+			      lc_value, sizeof (lc_value));
 	if (size) {
 		field.size = size;
 	} else {
@@ -7238,7 +7302,7 @@ cob_intr_num_decimal_point_ctx (cob_context *ctx)
 	}
 	make_field_entry (ctx, &field);
 	if (size) {
-		memcpy (curr_field->data, p->decimal_point, size);
+		memcpy (curr_field->data, lc_value, size);
 	} else {
 		curr_field->size = 0;
 		curr_field->data[0] = 0;
@@ -7262,7 +7326,7 @@ cob_field *
 cob_intr_mon_thousands_sep_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
-	struct lconv	*p;
+	char		lc_value[COB_MINI_BUFF];
 	size_t		size;
 #endif
 	cob_field	field;
@@ -7271,8 +7335,8 @@ cob_intr_mon_thousands_sep_ctx (cob_context *ctx)
 	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
-	p = localeconv ();
-	size = strlen (p->mon_thousands_sep);
+	size = localeconv_str (offsetof (struct lconv, mon_thousands_sep),
+			      lc_value, sizeof (lc_value));
 	if (size) {
 		field.size = size;
 	} else {
@@ -7280,7 +7344,7 @@ cob_intr_mon_thousands_sep_ctx (cob_context *ctx)
 	}
 	make_field_entry (ctx, &field);
 	if (size) {
-		memcpy (curr_field->data, p->mon_thousands_sep, size);
+		memcpy (curr_field->data, lc_value, size);
 	} else {
 		curr_field->size = 0;
 		curr_field->data[0] = 0;
@@ -7304,7 +7368,7 @@ cob_field *
 cob_intr_num_thousands_sep_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
-	struct lconv	*p;
+	char		lc_value[COB_MINI_BUFF];
 	size_t		size;
 #endif
 	cob_field	field;
@@ -7313,8 +7377,8 @@ cob_intr_num_thousands_sep_ctx (cob_context *ctx)
 	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
-	p = localeconv ();
-	size = strlen (p->thousands_sep);
+	size = localeconv_str (offsetof (struct lconv, thousands_sep),
+			      lc_value, sizeof (lc_value));
 	if (size) {
 		field.size = size;
 	} else {
@@ -7322,7 +7386,7 @@ cob_intr_num_thousands_sep_ctx (cob_context *ctx)
 	}
 	make_field_entry (ctx, &field);
 	if (size) {
-		memcpy (curr_field->data, p->thousands_sep, size);
+		memcpy (curr_field->data, lc_value, size);
 	} else {
 		curr_field->size = 0;
 		curr_field->data[0] = 0;
@@ -7346,7 +7410,7 @@ cob_field *
 cob_intr_currency_symbol_ctx (cob_context *ctx)
 {
 #ifdef	HAVE_LOCALECONV
-	struct lconv	*p;
+	char		lc_value[COB_MINI_BUFF];
 	size_t		size;
 #endif
 	cob_field	field;
@@ -7355,8 +7419,8 @@ cob_intr_currency_symbol_ctx (cob_context *ctx)
 	ctx->glob.cob_exception_code = 0;
 
 #ifdef	HAVE_LOCALECONV
-	p = localeconv ();
-	size = strlen (p->currency_symbol);
+	size = localeconv_str (offsetof (struct lconv, currency_symbol),
+			      lc_value, sizeof (lc_value));
 	if (size) {
 		field.size = size;
 	} else {
@@ -7364,7 +7428,7 @@ cob_intr_currency_symbol_ctx (cob_context *ctx)
 	}
 	make_field_entry (ctx, &field);
 	if (size) {
-		memcpy (curr_field->data, p->currency_symbol, size);
+		memcpy (curr_field->data, lc_value, size);
 	} else {
 		curr_field->size = 0;
 		curr_field->data[0] = 0;
@@ -7592,6 +7656,9 @@ cob_intr_locale_compare_va_ctx (cob_context *ctx, const int params, va_list cob_
 	size_t		size;
 	size_t		size2;
 	int		ret;
+#if defined (COB_THREAD_LOCALES) && defined (HAVE_STRCOLL_L)
+	locale_t	cloc = (locale_t)0;	/* LC_COLLATE of the parameter */
+#endif
 #endif
 	cob_field	field;
 	va_list		args;
@@ -7640,13 +7707,30 @@ cob_intr_locale_compare_va_ctx (cob_context *ctx, const int params, va_list cob_
 		if (deflocale < 1) {
 			goto derror;
 		}
-#ifdef	HAVE_SETLOCALE
+#if defined (COB_THREAD_LOCALES) && defined (HAVE_STRCOLL_L)
+		/* without changing the locale of the process */
+		{
+			locale_t base = duplocale (uselocale ((locale_t)0));
+			if (base != (locale_t)0) {
+				cloc = newlocale (LC_COLLATE_MASK, locale_buff, base);
+				if (cloc == (locale_t)0) {
+					freelocale (base);
+				}
+			}
+		}
+#elif defined (HAVE_SETLOCALE)
 		(void) setlocale (LC_COLLATE, locale_buff);
 #else
 		goto derror;
 #endif
 	}
 
+#if defined (COB_THREAD_LOCALES) && defined (HAVE_STRCOLL_L)
+	if (cloc != (locale_t)0) {
+		ret = strcoll_l ((char *)p1, (char *)p2, cloc);
+		freelocale (cloc);
+	} else
+#endif
 	ret = strcoll ((char *)p1, (char *)p2);
 	if (ret < 0) {
 		curr_field->data[0] = '<';
@@ -7658,7 +7742,8 @@ cob_intr_locale_compare_va_ctx (cob_context *ctx, const int params, va_list cob_
 	cob_free (p1);
 	cob_free (p2);
 
-#ifdef	HAVE_SETLOCALE
+#if !(defined (COB_THREAD_LOCALES) && defined (HAVE_STRCOLL_L)) \
+ && defined (HAVE_SETLOCALE)
 	if (deflocale) {
 		(void) setlocale (LC_ALL, ctx->glob.cob_locale);
 	}

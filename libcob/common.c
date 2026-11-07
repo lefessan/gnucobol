@@ -8731,7 +8731,11 @@ cob_sys_printable (void *p1, ...)
 	unsigned char		*dotptr;
 	unsigned char		dotrep;
 	cob_u8_ptr		data;
+#if defined (COB_THREAD_LOCALES) && defined (HAVE_ISPRINT_L)
+	locale_t	ctype = (locale_t)0;	/* LC_CTYPE of the class */
+#else
 	char		*previous_locale = NULL;
+#endif
 
 	COB_CHK_PARMS (CBL_GC_PRINTABLE, 1);
 	COB_UNUSED (p1);
@@ -8749,6 +8753,23 @@ cob_sys_printable (void *p1, ...)
 	} else {
 		dotrep = (unsigned char)'.';
 	}
+#if defined (COB_THREAD_LOCALES) && defined (HAVE_ISPRINT_L)
+	/* without changing the locale of the process */
+	if (ctx->glob.cob_locale_ctype) {
+		ctype = newlocale (LC_CTYPE_MASK, ctx->glob.cob_locale_ctype,
+				   (locale_t)0);
+	}
+	data = p1;
+	for (n = 0; n < datalen; ++n) {
+		if (ctype != (locale_t)0
+		 ? !isprint_l (data[n], ctype) : !isprint (data[n])) {
+			data[n] = dotrep;
+		}
+	}
+	if (ctype != (locale_t)0) {
+		freelocale (ctype);
+	}
+#else
 #ifdef	HAVE_SETLOCALE
 	if (ctx->glob.cob_locale_ctype) {
 		previous_locale = setlocale (LC_CTYPE, NULL);
@@ -8765,6 +8786,7 @@ cob_sys_printable (void *p1, ...)
 	if (previous_locale) {
 		setlocale (LC_CTYPE, previous_locale);
 	}
+#endif
 #endif
 	return 0;
 }

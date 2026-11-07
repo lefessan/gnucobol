@@ -245,6 +245,13 @@
 #define cob_lock_release(l)	(void)(l)
 #endif
 
+/* locales of the threads (POSIX 2008), to not change the locale of the
+   process during the execution (locale_t from <locale.h>) */
+#if defined (HAVE_NEWLOCALE) && defined (HAVE_DUPLOCALE) \
+ && defined (HAVE_FREELOCALE) && defined (HAVE_USELOCALE)
+#define COB_THREAD_LOCALES	1
+#endif
+
 /* Atomic load / store of an unsigned int, for a value set once and
    read without lock (with the lock to set it) */
 #if	defined(__GNUC__) || defined(__clang__)
