@@ -372,12 +372,15 @@ Conséquences pour `cobc/codegen.c` :
       pas `/proc/partitions`) ; tests « physical CANCEL with several
       execution contexts », « dynamic CALL and CANCEL in several
       threads ». Restent :
-      - verrous `fcntl` de `fileio.c` (fichiers séquentiels et relatifs)
-        et de LMDB (verrou de fichier à l'OPEN) : propres au processus,
-        ils ne séparent pas les contextes ; choix à faire entre verrous
-        OFD (`F_OFD_SETLK`, Linux) et table de verrous interne au
-        runtime ; l'attente avec `SIGALRM` / `alarm` (RETRY) est aussi
-        de niveau processus ;
+      - ~~verrous `fcntl` de `fileio.c`~~ **fait le 2026-11-07** (choix
+        de l'utilisateur : table interne) : table des verrous des
+        contextes dans `fileio.c`, consultée avant `fcntl` ; verrous des
+        autres contextes reposés après un unlock ou un close ; attente
+        RETRY par scrutation (plus de `SIGALRM`) ; corrige aussi UNLOCK,
+        qui ne libérait pas les verrous d'enregistrements (amont).
+        Reste : le verrou de fichier à l'OPEN de LMDB (`fcntl` direct
+        dans `flmdb.c`), `prev_lock` jamais renseigné (amont, voir
+        BUGS-FOUND.md) ;
       - LMDB : pas de verrous d'enregistrements (déjà le cas en amont) ;
         `MDB_NOTLS` si un contexte peut passer d'un thread à l'autre avec
         une transaction de lecture ouverte ;
