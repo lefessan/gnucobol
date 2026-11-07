@@ -139,6 +139,31 @@ erreur ; `cob_last_exit_code_ctx`), `cob_context_leave`,
   `cicsmkcobolit` et les symboles qu'il attend (image `ibmcom/txseries`
   sur Docker Hub, licence IBM à accepter).
 
+#### T3 — étude de la version d'évaluation 11.1 (2026-11-07)
+Détails complets dans **`TXSERIES-COBOLIT-API.md`**. En résumé :
+- L'image `ibmcom/txseries` n'existe plus ; l'essai de 90 jours d'IBM
+  (IBM ID) fournit TXSeries 11.1 **64 bits** pour Linux x86-64, en
+  conteneur (UBI 8) et en installeur.
+- La méthode COBOL-IT (`pinca_cobolit.o`, `-lcobit`) est inutilisable en
+  64 bits (résultats de `cob_resolve` tronqués à 32 bits, `-m32` dans
+  le script). Il existe une seconde méthode, **COBCLD (« CobolCloud »)**,
+  même code, même API, correcte en 64 bits : programmes `.cld` compilés
+  par `cobc`, runtime `-lcobcld`, variable `COBOLCLDIR`. **Cible
+  retenue : COBCLD.**
+- API attendue : 12 fonctions (`cob_get_rtd`, `cob_init (rtd, …)`,
+  `cob_resolve (rtd, name)`, `cob_resolve_error`,
+  `cob_enterprise_{set,get}_current_region`,
+  `cob_enterprise_cancel_region`, débogueur, `cob_dump_debug_info`,
+  `CBL_ERROR_PROC`, `CBL_EXIT_PROC`) ; un `rtd` avec un `jmp_buf` en
+  `0x40` armé par TXSeries avant chaque programme ; une « région »
+  COBOL-IT par niveau de LINK (au plus 15) ; programme appelé
+  directement `entry (eib, commarea)`.
+- Le source traduit compile avec notre `cobc` en `-std=mf` ;
+  `-fthread-safe` (passé par `cicstcl`) est encore refusé.
+- T5 se précise : bibliothèque `libcobcld` (statique, symboles cachés)
+  au-dessus de libcob, une tâche CICS = un contexte, une région = un
+  niveau de LINK, STOP RUN = `longjmp` vers le `jmp_buf` du rtd.
+
 ### T4 — Dialecte du source traduit
 - Créer `config/txseries.conf` (dérivé de `mf.conf` ou `ibm.conf`).
 - Ordre des octets / troncature / taille des `COMP` et `COMP-5`

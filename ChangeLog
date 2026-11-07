@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-COBOLIT-API.md: new file, API of the COBOL-IT and CobolCloud
+	  language methods
+	* TXSERIES-PLAN.md: API of the COBOL-IT and CobolCloud language methods
 	* TXSERIES-PLAN.md: first findings of T3 (COBOL-IT integration)
 	* TXSERIES-PLAN.md: T2 done, summary of the host API
 	* TXSERIES-PLAN.md: T2 status
