@@ -346,6 +346,9 @@ struct cob_env_overlay {
 
 struct cob_common_state {
 	struct cob_env_overlay	*env_overlay;	/* environment of the context */
+	char			*cwd;		/* current directory of the context,
+						   absolute; NULL: the one of the
+						   process (see cob_ctx_chdir) */
 	char			*cob_local_env;
 	size_t			cob_local_env_size;
 	int			current_arg;
@@ -839,6 +842,10 @@ cob_exit_common_state (cob_context *ctx)
 	struct cob_alloc_cache	*y;
 
 	env_overlay_free (ctx);
+	if (common_state (ctx)->cwd) {
+		cob_free (common_state (ctx)->cwd);
+		common_state (ctx)->cwd = NULL;
+	}
 	if (common_state (ctx)->commlnptr) {
 		cob_free (common_state (ctx)->commlnptr);
 		common_state (ctx)->commlnptr = NULL;
@@ -6933,6 +6940,96 @@ env_overlay_free (cob_context *ctx)
 	common_state (ctx)->env_overlay = NULL;
 }
 
+/* Current directory of the contexts (TXSERIES-T1-DESIGN.md, 7.3)
+
+   chdir changes the directory of the whole process: while the main
+   context is the only one, CBL_CHANGE_DIR still calls chdir; in a
+   context created by cob_context_create, or while such contexts exist,
+   the directory is kept in the context, and libcob resolves the relative
+   paths of the files and directories against it */
+
+static int
+path_is_absolute (const char *path)
+{
+	if (path[0] == '/') {
+		return 1;
+	}
+#ifdef	_WIN32
+	if (path[0] == '\\'
+	 || (isalpha ((unsigned char)path[0]) && path[1] == ':')) {
+		return 1;
+	}
+#endif
+	return 0;
+}
+
+/* current directory of the context, NULL: the one of the process */
+const char *
+cob_ctx_cwd (cob_context *ctx)
+{
+	return ctx ? common_state (ctx)->cwd : NULL;
+}
+
+/* 'path' resolved against the current directory of the context, as an
+   allocated string; NULL if it does not need to be (absolute path, or
+   directory of the process) */
+char *
+cob_ctx_path (cob_context *ctx, const char *path)
+{
+	const char	*cwd = cob_ctx_cwd (ctx);
+	char	*p;
+
+	if (cwd == NULL
+	 || path == NULL || path[0] == 0
+	 || path_is_absolute (path)) {
+		return NULL;
+	}
+	p = cob_malloc (strlen (cwd) + strlen (path) + 2);
+	sprintf (p, "%s%c%s", cwd, SLASH_CHAR, path);
+	return p;
+}
+
+/* change the current directory of the context (CBL_CHANGE_DIR), returns
+   0 if done */
+int
+cob_ctx_chdir (cob_context *ctx, const char *dir)
+{
+	char	*target = cob_ctx_path (ctx, dir);
+	const char	*d = target ? target : dir;
+	int	ret = -1;
+
+	if (env_of_process (ctx)) {
+		ret = chdir (d);
+		if (ret == 0 && ctx && common_state (ctx)->cwd) {
+			cob_free (common_state (ctx)->cwd);
+			common_state (ctx)->cwd = NULL;
+		}
+	} else {
+		/* canonical absolute path of an existing directory */
+		char	*abs = NULL;
+		struct stat	st;
+#ifdef	_WIN32
+		abs = _fullpath (NULL, d, 0);
+#else
+		abs = realpath (d, NULL);
+#endif
+		if (abs && stat (abs, &st) == 0 && S_ISDIR (st.st_mode)) {
+			if (common_state (ctx)->cwd) {
+				cob_free (common_state (ctx)->cwd);
+			}
+			common_state (ctx)->cwd = cob_strdup (abs);
+			ret = 0;
+		}
+		if (abs) {
+			free (abs);
+		}
+	}
+	if (target) {
+		cob_free (target);
+	}
+	return ret;
+}
+
 #if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
 /* environment for a child process of the context: the one of the
    process with the overlays of the context; NULL if there is none;
@@ -6995,20 +7092,54 @@ cob_ctx_system (cob_context *ctx, const char *command)
 {
 #if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
 	char	**envp = env_child (ctx);
-	if (envp) {
+	const char	*cwd = cob_ctx_cwd (ctx);
+	if (envp || cwd) {
 		pid_t	pid;
 		int	status = -1;
 		char	*argv[4];
+		char	*cmd = NULL;
+		posix_spawn_file_actions_t	actions;
+		posix_spawn_file_actions_t	*pactions = NULL;
 		argv[0] = (char *)"sh";
 		argv[1] = (char *)"-c";
 		argv[2] = (char *)command;
 		argv[3] = NULL;
-		if (posix_spawn (&pid, "/bin/sh", NULL, NULL, argv, envp) == 0) {
+		if (cwd) {
+#ifdef	HAVE_POSIX_SPAWN_FILE_ACTIONS_ADDCHDIR_NP
+			posix_spawn_file_actions_init (&actions);
+			posix_spawn_file_actions_addchdir_np (&actions, cwd);
+			pactions = &actions;
+#else
+			/* cd in the shell, the directory quoted */
+			size_t	i, k = 0;
+			cmd = cob_malloc (4 * strlen (cwd) + strlen (command) + 16);
+			k += sprintf (cmd, "cd '");
+			for (i = 0; cwd[i]; i++) {
+				if (cwd[i] == '\'') {
+					k += sprintf (cmd + k, "'\\''");
+				} else {
+					cmd[k++] = cwd[i];
+				}
+			}
+			sprintf (cmd + k, "' && %s", command);
+			argv[2] = cmd;
+#endif
+		}
+		if (posix_spawn (&pid, "/bin/sh", pactions, NULL, argv,
+				 envp ? envp : environ) == 0) {
 			while (waitpid (pid, &status, 0) == -1 && errno == EINTR) {
 				;
 			}
 		}
-		env_child_free (envp);
+		if (pactions) {
+			posix_spawn_file_actions_destroy (pactions);
+		}
+		if (cmd) {
+			cob_free (cmd);
+		}
+		if (envp) {
+			env_child_free (envp);
+		}
 		return status;
 	}
 #else

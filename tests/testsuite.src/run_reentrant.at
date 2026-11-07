@@ -1781,6 +1781,113 @@ ctx2
 AT_CLEANUP
 
 
+AT_SETUP([current directory of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create CBL_CHANGE_DIR CBL_CREATE_DIR])
+
+# while other contexts exist, CBL_CHANGE_DIR only changes the current
+# directory of the context: the relative names of its files and
+# directories, and its child processes, use it; the directory of the
+# process is not changed
+
+AT_DATA([cd.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      cd.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO "out.txt"
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 RC            PIC S9(9) BINARY.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 DIR           PIC X(2).
+       PROCEDURE        DIVISION USING TAG DIR.
+           IF DIR NOT = SPACES
+              CALL "CBL_CHANGE_DIR" USING DIR RETURNING RC
+              DISPLAY TAG " CBL_CHANGE_DIR: " RC
+              CALL "CBL_CREATE_DIR" USING "sub" RETURNING RC
+              DISPLAY TAG " CBL_CREATE_DIR: " RC
+           END-IF
+           OPEN OUTPUT OUT-FILE
+           MOVE TAG TO OUT-REC
+           WRITE OUT-REC
+           CLOSE OUT-FILE
+           CALL "SYSTEM" USING "echo sys > where.txt"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <libcob.h>
+
+static void
+cd (cob_context *ctx, const char *tag, const char *dir)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)dir;
+   (void)cob_call ("cd", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx1, *ctx2;
+   char before[4096], after[4096];
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   (void)getcwd (before, sizeof (before));
+   cd (ctx1, "ctx1", "d1");
+   cd (ctx2, "ctx2", "d2");
+   cd (ctx1, "ctx1", "  ");
+   cd (main_ctx, "main", "  ");
+   (void)getcwd (after, sizeof (after));
+   printf ("process directory unchanged: %d\n", strcmp (before, after) == 0);
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([mkdir d1 d2], [0], [], [])
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE cd.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 CBL_CHANGE_DIR: +000000000
+ctx1 CBL_CREATE_DIR: +000000000
+ctx2 CBL_CHANGE_DIR: +000000000
+ctx2 CBL_CREATE_DIR: +000000000
+process directory unchanged: 1
+], [])
+AT_CHECK([cat d1/out.txt d2/out.txt out.txt], [0],
+[ctx1
+ctx2
+main
+], [])
+AT_CHECK([test -d d1/sub && test -d d2/sub && test ! -d sub], [0], [], [])
+AT_CHECK([cat d1/where.txt d2/where.txt where.txt], [0],
+[sys
+sys
+sys
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

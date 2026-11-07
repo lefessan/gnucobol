@@ -1,6 +1,11 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_find_module_ctx), common.c (cob_exit_common_state,
+	  env_overlay_free, cob_ctx_system), fileio.c (apply_file_paths,
+	  cob_chk_file_mapping, cob_param_no_quotes, cob_sys_get_current_dir,
+	  cob_sys_create_dir, cob_sys_change_dir, ...): current directory of
+	  the execution contexts
 	* common.c (env_overlay_free, cob_sys_system, cob_sys_x91): CALL
 	  "SYSTEM" with the environment of the context
 	* common.c (common_state, cob_exit_common_state, cob_rescan_env_vals,

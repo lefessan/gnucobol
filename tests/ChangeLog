@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: current directory of the execution
+	  contexts
 	* testsuite.src/run_reentrant.at: CALL "SYSTEM" with the environment of
 	  the context
 	* testsuite.src/run_reentrant.at: environment of the execution contexts

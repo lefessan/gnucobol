@@ -1811,9 +1811,32 @@ apply_file_paths (cob_context *ctx, char *src)
 	}
 }
 
-/* adjust static buffer file_open_name per applicable mapping rules */
+static void	chk_file_mapping (cob_context *, cob_file *, char *);
+
+/* adjust static buffer file_open_name per applicable mapping rules,
+   then resolve a relative name against the current directory of the
+   context (see cob_ctx_chdir) */
 void
 cob_chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
+{
+	char	*p;
+
+	chk_file_mapping (ctx, f, filename);
+	if (file_open_name[0] == '|') {		/* pipe */
+		return;
+	}
+	p = cob_ctx_path (ctx, file_open_name);
+	if (p) {
+		if (strlen (p) <= COB_FILE_MAX) {
+			strcpy (file_open_name, p);
+		}
+		cob_free (p);
+	}
+}
+
+/* adjust static buffer file_open_name per applicable mapping rules */
+static void
+chk_file_mapping (cob_context *ctx, cob_file *f, char *filename)
 {
 	char		*p;
 	char		*src;
@@ -8880,6 +8903,20 @@ cob_param_no_quotes (cob_context *ctx, int n)
 	return cob_field_no_quotes(ctx, f);
 }
 
+/* parameter 'n' as a path, resolved against the current directory of
+   the context (allocated) */
+static char *
+cob_param_path (cob_context *ctx, int n)
+{
+	char	*fn = cob_param_no_quotes (ctx, n);
+	char	*p = cob_ctx_path (ctx, fn);
+	if (p) {
+		cob_free (fn);
+		return p;
+	}
+	return fn;
+}
+
 /* set the name for the internal filename buffer
    and apply filename mapping;
    returns the pointer to the static buffer */
@@ -9303,7 +9340,11 @@ cob_sys_get_current_dir (const int p1, const int p2, unsigned char *p3)
 		return 129;
 	}
 	memset (dir, ' ', (size_t)dir_length);
-	dirname = getcwd (NULL, (size_t)0);
+	if (cob_ctx_cwd (cob_get_current_context ())) {
+		dirname = strdup (cob_ctx_cwd (cob_get_current_context ()));
+	} else {
+		dirname = getcwd (NULL, (size_t)0);
+	}
 	if (dirname == NULL) {
 		return 128;
 	}
@@ -9339,7 +9380,7 @@ cob_sys_create_dir (unsigned char *dir)
 
 	COB_CHK_PARMS (CBL_CREATE_DIR, 1);
 
-	fn = cob_param_no_quotes (ctx, 1);
+	fn = cob_param_path (ctx, 1);
 	if (fn == NULL) {
 		return -1;
 	}
@@ -9367,7 +9408,7 @@ cob_sys_change_dir (unsigned char *dir)
 	if (fn == NULL) {
 		return -1;
 	}
-	ret = chdir (fn);
+	ret = cob_ctx_chdir (ctx, fn);
 	cob_free (fn);
 	if (ret) {
 		return 128;
@@ -9387,7 +9428,7 @@ cob_sys_delete_dir (unsigned char *dir)
 
 	COB_CHK_PARMS (CBL_DELETE_DIR, 1);
 
-	fn = cob_param_no_quotes (ctx, 1);
+	fn = cob_param_path (ctx, 1);
 	if (fn == NULL) {
 		return -1;
 	}
@@ -9475,7 +9516,7 @@ cob_sys_file_info (unsigned char *file_name, unsigned char *file_info)
 	if (cob_get_num_params () < 2 ) {
 		return 128;
 	}
-	fn = cob_param_no_quotes (ctx, 1);
+	fn = cob_param_path (ctx, 1);
 	if (fn == NULL) {
 		return -1;
 	}
@@ -9540,7 +9581,7 @@ cob_sys_file_delete (unsigned char *file_name, unsigned char *file_type)
 	if (cob_get_num_params () < 2 ) {
 		return 128;
 	}
-	fn = cob_param_no_quotes (ctx, 1);
+	fn = cob_param_path (ctx, 1);
 	if (fn == NULL) {
 		return -1;
 	}

@@ -510,6 +510,10 @@ COB_HIDDEN const char *cob_statement_name[STMT_MAX_ENTRY];
 
 COB_HIDDEN void		cob_print_field		(cob_context *, FILE *, cob_field *, int, int);
 COB_HIDDEN cob_module	*cob_find_module_ctx	(cob_context *, const char *);
+/* current directory of the context, common.c */
+COB_HIDDEN const char	*cob_ctx_cwd		(cob_context *);
+COB_HIDDEN char		*cob_ctx_path		(cob_context *, const char *);
+COB_HIDDEN int		cob_ctx_chdir		(cob_context *, const char *);
 struct tm;
 COB_HIDDEN struct tm	*cob_localtime		(const time_t *, struct tm *);
 COB_HIDDEN struct tm	*cob_gmtime		(const time_t *, struct tm *);
