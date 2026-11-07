@@ -402,6 +402,34 @@ local_file( dev_t device )
 
 /* INDEXED */
 
+static void
+env_close_cb (void *env)
+{
+	mdb_env_close ((MDB_env *)env);
+}
+
+/* close the environment of a file: its descriptor may hold the locks of
+   other contexts on the file (any close releases all the fcntl locks of
+   the process on the file), see cob_ctx_lock_close */
+static void
+lmdb_env_close (struct indexed_file *p)
+{
+#ifdef	HAVE_FCNTL
+	mdb_filehandle_t	fd;
+#endif
+	if (p->db_env == NULL) {
+		return;
+	}
+#ifdef	HAVE_FCNTL
+	if (mdb_env_get_fd (p->db_env, &fd) == MDB_SUCCESS
+	 && fd >= 0) {
+		cob_ctx_lock_close (p, fd, env_close_cb, p->db_env);
+	} else
+#endif
+	mdb_env_close (p->db_env);
+	p->db_env = NULL;
+}
+
 /* Get the next number in a set of duplicates */
 static unsigned int
 get_dupno (cob_file *f, const cob_u32_t i)
@@ -962,7 +990,7 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 
 	if (f->nkeys > 1) {
 		if ((ret = mdb_env_set_maxdbs(p->db_env,f->nkeys)) != MDB_SUCCESS ) {
-			mdb_env_close(p->db_env);
+			lmdb_env_close (p);
 			p->db_env = NULL;
 			indexed_file_free(p);
 			return mdb_cob_status(ret);
@@ -993,7 +1021,7 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 	}
 
 	if ((ret = mdb_env_open(p->db_env, filename, p->env_flags, 0770)) != MDB_SUCCESS) {
-		mdb_env_close(p->db_env);
+		lmdb_env_close (p);
 		p->db_env = NULL;
 		indexed_file_free(p);
 		return mdb_cob_status(ret);
@@ -1010,24 +1038,20 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 		}
 
 		if ((ret = mdb_env_get_fd(p->db_env, &p->fd)) != MDB_SUCCESS) {
-			mdb_env_close(p->db_env);
+			lmdb_env_close (p);
 			p->db_env = NULL;
 			indexed_file_free(p);
 			return mdb_cob_status(ret);
 		}
 
-		memset((void *)&p->lock, 0, sizeof (struct flock));
-		p->lock.l_type = lock_mode;
-		p->lock.l_whence = SEEK_SET;
-		p->lock.l_start = 0;
-		p->lock.l_len = 0;
-		p->lock.l_pid = getpid();
-		errno = 0;
-		int fcd = 0;
-		fcd = fcntl(p->fd, F_SETLK, &p->lock);
-		if (fcd < 0) {
+		/* lock of the whole file, also against the other contexts of the
+		   process */
+		if (!cob_ctx_lock_try (ctx, p, p->fd, 0, 0, (short)lock_mode,
+				       &f->blockpid)) {
 			ret = errno;
+			lmdb_env_close (p);
 			p->fd = -1;
+			indexed_file_free (p);
 			switch (ret) {
 			case EACCES:
 			case EAGAIN:
@@ -1041,7 +1065,7 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 	}
 
 	if ((ret = mdb_txn_begin(p->db_env, NULL, p->txn_flags, &p->txn)) != MDB_SUCCESS) {
-		mdb_env_close(p->db_env);
+		lmdb_env_close (p);
 		p->db_env = NULL;
 		indexed_file_free(p);
 		return mdb_cob_status(ret);
@@ -1062,7 +1086,7 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 			for (j = 0; j < i; ++j) {
 				mdb_dbi_close(p->db_env,*p->db[j]);
 			}
-			mdb_env_close(p->db_env);
+			lmdb_env_close (p);
 			p->db_env = NULL;
 			indexed_file_free(p);
 			return mdb_cob_status(ret);
@@ -1111,7 +1135,7 @@ lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const
 			for (j = 0; j < i; ++j) {
 				mdb_dbi_close(p->db_env,*p->db[j]);
 			}
-			mdb_env_close(p->db_env);
+			lmdb_env_close (p);
 			p->db_env = NULL;
 			indexed_file_free(p);
 			return mdb_cob_status(ret);
@@ -1144,7 +1168,7 @@ lmdb_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 	for (i = 0; i < f->nkeys; i++) {
 		mdb_close(p->db_env, *p->db[i]);
 	}
-	mdb_env_close(p->db_env);
+	lmdb_env_close (p);
 	p->db_env = NULL;
 	if (p) cob_free(p);
 	return COB_STATUS_00_SUCCESS;

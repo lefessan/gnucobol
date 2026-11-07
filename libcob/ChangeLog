@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_gmtime, cob_ctx_lock_try), flmdb.c (local_file,
+	  lmdb_open, lmdb_close): lock at OPEN of LMDB files between contexts
 	* coblocal.h (cob_gmtime), fileio.c (ctx_lock_add, ctx_lock_remove,
 	  ctx_lock_reapply, ctx_unlock_records, ctx_lock_close, try_lock_range,
 	  ...): lock table of the contexts usable by the file backends

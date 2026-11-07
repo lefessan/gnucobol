@@ -1120,6 +1120,105 @@ ctx2 C 1: 00
 AT_CLEANUP
 
 
+AT_SETUP([file lock at OPEN of INDEXED files between contexts])
+AT_KEYWORDS([runreentrant cob_context_create INDEXED LOCK SHARING])
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+
+# an INDEXED file opened for exclusive use in a context cannot be
+# opened in another context of the process until it is closed
+
+AT_DATA([xo.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      xo.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT IX ASSIGN TO "ixfile"
+                  ORGANIZATION INDEXED ACCESS DYNAMIC
+                  RECORD KEY IK
+                  SHARING WITH NO OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD IX.
+       01 IR.
+          05 IK         PIC X(4).
+          05 IDATA      PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           EVALUATE OP
+           WHEN "W"
+              OPEN OUTPUT IX
+              MOVE "K001" TO IK
+              MOVE "data" TO IDATA
+              WRITE IR
+              CLOSE IX
+           WHEN "O"
+              OPEN I-O IX
+           WHEN "C"
+              CLOSE IX
+           END-EVALUATE
+           DISPLAY TAG " " OP ": " FS
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+xo (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("xo", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   xo (ctx1, "ctx1", "W");
+   xo (ctx1, "ctx1", "O");
+   xo (ctx2, "ctx2", "O");   /* opened by ctx1 */
+   xo (ctx1, "ctx1", "C");
+   xo (ctx2, "ctx2", "O");
+   xo (ctx1, "ctx1", "O");   /* opened by ctx2 */
+   xo (ctx2, "ctx2", "C");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE xo.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 W: 00
+ctx1 O: 00
+ctx2 O: 61
+ctx1 C: 00
+ctx2 O: 00
+ctx1 O: 61
+ctx2 C: 00
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

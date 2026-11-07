@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: lock at OPEN of LMDB files between
+	  contexts
 	* testsuite.src/run_reentrant.at: UNLOCK releases the record locks of
 	  SEQUENTIAL and RELATIVE files
 	* testsuite.src/run_reentrant.at: file and record locks between
