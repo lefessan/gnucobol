@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md: T1.4 settings in common.c, V-ISAM, printer pipe
 	* TXSERIES-PLAN.md: runtime settings per context
 	* TXSERIES-PLAN.md: status with "TXSeries plan, HOWTO-TSAN: ODBC per
 	  context"

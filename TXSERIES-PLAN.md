@@ -400,8 +400,21 @@ Conséquences pour `cobc/codegen.c` :
         (fichiers de trace, dump, impression, SYSPUNCH) lus par
         `cob_process_settings ()`. Reste : `common.c` lit encore
         `cobsetptr` directement (~240 endroits, surtout init / config /
-        sortie) ; les lectures à l'exécution (avertissements, mangling
-        des noms…) ignorent la copie du contexte ;
+        sortie) ; ~~les lectures à l'exécution~~ converties le
+        2026-11-07 (avertissements, mangling des noms, nom
+        d'utilisateur, interrupteurs de CALL X"91") ; le reste est de
+        niveau processus (init, configuration, API C
+        `cob_set_runtime_option`, fichiers de trace / dump, signaux,
+        sortie, date fixée de `COB_CURRENT_DATE`) ;
+      - **V-ISAM fait le 2026-11-07** : appels des bibliothèques x-ISAM
+        (API C-ISAM non thread-safe) sous un verrou de processus,
+        relâché pendant les attentes RETRY ; leurs verrous de fichiers
+        et d'enregistrements (`fcntl` internes) ne séparent toujours pas
+        les contextes d'un processus ;
+      - **tube d'impression fait le 2026-11-07** (`cob_ctx_popen`) ;
+      - restent pour T1 : OCI (`foci.c`, pas d'Oracle pour tester),
+        `screenio.c` (terminal unique, déclaré non supporté en
+        multi-thread) ;
       - **faits le 2026-11-07** : verrou de fichier à l'OPEN de LMDB par
         la table des contextes (fonctions `cob_ctx_lock_try` /
         `cob_ctx_lock_close` exportées pour les gestionnaires) ;
