@@ -2176,6 +2176,96 @@ thread 7: 0 bad
 AT_CLEANUP
 
 
+AT_SETUP([runtime settings of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create COB_LS_FIXED ENVIRONMENT-VALUE])
+
+# a runtime setting set in the environment of a context (while other
+# contexts exist) only applies to this context: here COB_LS_FIXED keeps
+# the trailing spaces of the LINE SEQUENTIAL records; emptying the
+# variable gives back the setting of the process
+
+AT_DATA([ls.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ls.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO FNAME
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(5).
+       WORKING-STORAGE  SECTION.
+       01 FNAME         PIC X(12).
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           IF OP = "S"
+              DISPLAY "COB_LS_FIXED" UPON ENVIRONMENT-NAME
+              DISPLAY "TRUE" UPON ENVIRONMENT-VALUE
+           END-IF
+           IF OP = "U"
+              DISPLAY "COB_LS_FIXED" UPON ENVIRONMENT-NAME
+              DISPLAY " " UPON ENVIRONMENT-VALUE
+           END-IF
+           STRING TAG OP ".txt" DELIMITED SIZE INTO FNAME
+           OPEN OUTPUT OUT-FILE
+           MOVE "ab" TO OUT-REC
+           WRITE OUT-REC
+           CLOSE OUT-FILE
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+ls (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("ls", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   ls (ctx1, "ctx1", "S");
+   ls (ctx2, "ctx2", "N");
+   ls (main_ctx, "main", "N");
+   ls (ctx1, "ctx1", "U");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ls.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0], [], [])
+AT_CHECK([cat ctx1S.txt ctx2N.txt mainN.txt ctx1U.txt | tr ' ' '_'], [0],
+[ab___
+ab
+ab
+ab
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

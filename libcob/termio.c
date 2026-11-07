@@ -350,17 +350,17 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 		break;
 	case 2:	/* PRINTER */
 		/* display to external specified print file handle */
-		if (ctx->settings->cob_display_print_file) {
-			fp = ctx->settings->cob_display_print_file;
+		if (cob_process_settings ()->cob_display_print_file) {
+			fp = cob_process_settings ()->cob_display_print_file;
 		/* display to configured print file */
-		} else if (ctx->settings->cob_display_print_filename != NULL) {
+		} else if (cob_process_settings ()->cob_display_print_filename != NULL) {
 			const char *mode;
 			if (!ctx->settings->cob_unix_lf) {
 				mode = "a";
 			} else {
 				mode = "ab";
 			}
-			fp = fopen (ctx->settings->cob_display_print_filename, mode);
+			fp = fopen (cob_process_settings ()->cob_display_print_filename, mode);
 			if (fp == NULL) {
 				fp = stderr;
 			} else {
@@ -368,7 +368,7 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 			}
 #ifdef HAVE_POPEN
 		/* display to configured print command (piped) */
-		} else if (ctx->settings->cob_display_print_pipe != NULL) {
+		} else if (cob_process_settings ()->cob_display_print_pipe != NULL) {
 			const char* mode;
 			if (!ctx->settings->cob_unix_lf) {
 				mode = "w";
@@ -376,7 +376,7 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 				/* Note: this doesn't seem to help with pipes :-( */
 				mode = "wb";
 			}
-			fp = popen (ctx->settings->cob_display_print_pipe, mode);
+			fp = popen (cob_process_settings ()->cob_display_print_pipe, mode);
 			if (fp == NULL) {
 				fp = stderr;
 			} else {
@@ -398,8 +398,8 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 	case 3:	/* SYSPCH */
 		/* open if not available but specified (once for the process) */
 		cob_lock_acquire (&punch_file_lock);
-		if (!ctx->settings->cob_display_punch_file
-		 && ctx->settings->cob_display_punch_filename != NULL) {
+		if (!cob_process_settings ()->cob_display_punch_file
+		 && cob_process_settings ()->cob_display_punch_filename != NULL) {
 			const char* mode;
 			if (!ctx->settings->cob_unix_lf) {
 				mode = "w";
@@ -407,17 +407,17 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 				/* Note: this doesn't seem to help with pipes :-( */
 				mode = "wb";
 			}
-			fp = fopen (ctx->settings->cob_display_punch_filename, mode);
+			fp = fopen (cob_process_settings ()->cob_display_punch_filename, mode);
 			if (fp == NULL) {
 				cob_runtime_warning_ctx (ctx, _("cannot open %s (=%s)"),
-					"COB_DISPLAY_PUNCH_FILE", ctx->settings->cob_display_punch_filename);
-				cob_free (ctx->settings->cob_display_punch_filename);
-				ctx->settings->cob_display_punch_filename = NULL;
+					"COB_DISPLAY_PUNCH_FILE", cob_process_settings ()->cob_display_punch_filename);
+				cob_free (cob_process_settings ()->cob_display_punch_filename);
+				cob_process_settings ()->cob_display_punch_filename = NULL;
 			} else {
-				ctx->settings->cob_display_punch_file = fp;
+				cob_process_settings ()->cob_display_punch_file = fp;
 			}
 		}
-		fp = ctx->settings->cob_display_punch_file;
+		fp = cob_process_settings ()->cob_display_punch_file;
 		cob_lock_release (&punch_file_lock);
 		/* display to already opened punch file */
 		if (fp) {

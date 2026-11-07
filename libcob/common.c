@@ -408,6 +408,8 @@ common_state (cob_context *ctx)
 /* environment of the contexts, see env_set */
 static char	*env_get (cob_context *, const char *);
 static void	env_overlay_free (cob_context *);
+static void	rescan_context_setting (cob_context *, const char *, const char *);
+static void	free_context_settings (cob_context *);
 
 #define cob_alloc_base		(common_state (ctx)->cob_alloc_base)
 #define cob_module_list		(common_state (ctx)->cob_module_list)
@@ -843,6 +845,7 @@ cob_exit_common_state (cob_context *ctx)
 	struct cob_alloc_cache	*y;
 
 	env_overlay_free (ctx);
+	free_context_settings (ctx);
 	if (common_state (ctx)->cwd) {
 		cob_free (common_state (ctx)->cwd);
 		common_state (ctx)->cwd = NULL;
@@ -7289,12 +7292,16 @@ cob_putenv_ctx (cob_context *ctx, char *name)
 		char	*v = strchr (n, '=');
 		*v++ = 0;
 		ret = env_set (ctx, n, v);
-		cob_free (n);
-		/* the runtime settings are shared by the contexts: only a
-		   change of the environment of the process rescans them */
-		if (!ret && env_of_process (ctx)) {
-			cob_rescan_env_vals (ctx);
+		/* a change of the environment of the process rescans the
+		   settings of the process, an overlay those of the context */
+		if (!ret) {
+			if (env_of_process (ctx)) {
+				cob_rescan_env_vals (ctx);
+			} else {
+				rescan_context_setting (ctx, n, v);
+			}
 		}
+		cob_free (n);
 		return ret;
 	}
 	return -1;
@@ -7366,11 +7373,15 @@ cob_display_env_value_ctx (cob_context *ctx, const cob_field *f)
 		cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);
 		return;
 	}
-	/* Rescan term/screen variables; the runtime settings are shared by
-	   the contexts: only a change of the environment of the process
-	   rescans them (TODO: settings of the context) */
+	/* Rescan term/screen variables: a change of the environment of the
+	   process rescans the settings of the process, an overlay those of
+	   the context */
 	if (env_of_process (ctx)) {
 		cob_rescan_env_vals (ctx);
+	} else {
+		char	buff[COB_MEDIUM_BUFF];
+		(void)cob_field_to_string (f, buff, COB_MEDIUM_MAX, CCM_NONE);
+		rescan_context_setting (ctx, common_state (ctx)->cob_local_env, buff);
 	}
 }
 
@@ -9897,9 +9908,11 @@ translate_boolean_to_int (const char *ptr)
 	return 2;
 }
 
-/* Set runtime setting with given value */
+/* Set runtime setting with given value, in the settings 'set' (the
+   ones of the process, or the copy of a context: then the post-processing
+   of the process-level settings is not done) */
 static int					/* returns 1 if any error, else 0 */
-set_config_val (cob_context *ctx, char *value, int pos)
+set_config_val_in (cob_context *ctx, cob_settings *set, char *value, int pos)
 {
 	register char	*ptr = value;
 	char	*str;
@@ -9910,7 +9923,7 @@ set_config_val (cob_context *ctx, char *value, int pos)
 	const size_t	data_loc = gc_conf[pos].data_loc;
 	const int 	data_len = gc_conf[pos].data_len;
 
-	char 	*data = ((char *)cobsetptr) + data_loc;
+	char 	*data = ((char *)set) + data_loc;
 
 	if (gc_conf[pos].enums) {		/* Translate 'word' into alternate 'value' */
 
@@ -9960,17 +9973,17 @@ set_config_val (cob_context *ctx, char *value, int pos)
 		set_value (data, data_len, numval);
 
 		/* call internal routines that do post-processing */
-		if (data == (char *)&cobsetptr->cob_debugging_mode) {
+		if (data == (char *)&set->cob_debugging_mode) {
 			/* Copy variables from settings (internal) to global structure, each time */
-			ctx->glob.cob_debugging_mode = cobsetptr->cob_debugging_mode;
-		} else if (data == (char *)&cobsetptr->cob_insert_mode
-		        || data == (char *)&cobsetptr->cob_hide_cursor) {
+			ctx->glob.cob_debugging_mode = set->cob_debugging_mode;
+		} else if (data == (char *)&set->cob_insert_mode
+		        || data == (char *)&set->cob_hide_cursor) {
 			cob_settings_screenio (ctx);
-		} else if (data == (char *)&cobsetptr->cob_debugging_mode) {
+		} else if (data == (char *)&set->cob_debugging_mode) {
 			cob_switch[11 + 'D' - 'A'] = (int)numval;
-		} else if (data == (char *)&cobsetptr->cob_ls_nulls) {
+		} else if (data == (char *)&set->cob_ls_nulls) {
 			cob_switch[11 + 'N' - 'A'] = (int)numval;
-		} else if (data == (char *)&cobsetptr->cob_ls_instab) {
+		} else if (data == (char *)&set->cob_ls_instab) {
 			cob_switch[11 + 'T' - 'A'] = (int)numval;
 		}
 
@@ -10062,9 +10075,9 @@ set_config_val (cob_context *ctx, char *value, int pos)
 		set_value (data, data_len, numval);
 
 		/* call internal routines that do post-processing */
-		if (data == (char *)&cobsetptr->cob_mouse_flags
+		if (data == (char *)&set->cob_mouse_flags
 #ifdef HAVE_MOUSEINTERVAL	/* possibly add an internal option for mouse support, too */
-		 || data == (char *)&cobsetptr->cob_mouse_interval
+		 || data == (char *)&set->cob_mouse_interval
 #endif
 		    ) {
 			cob_settings_screenio (ctx);
@@ -10085,13 +10098,15 @@ set_config_val (cob_context *ctx, char *value, int pos)
 			return 1;
 		}
 		memcpy (data, &str, sizeof (char *));
-		if (data_loc == offsetof (cob_settings, cob_preload_str)) {
-			cobsetptr->cob_preload_str_set = cob_strdup(str);
+		if (data_loc == offsetof (cob_settings, cob_preload_str)
+		 && set == cobsetptr) {
+			set->cob_preload_str_set = cob_strdup(str);
 		}
 
 		/* call internal routines that do post-processing */
-		if (data == (char *)cobsetptr->cob_trace_filename
-		 && cobsetptr->cob_trace_file != NULL) {
+		if (set == cobsetptr
+		 && data == (char *)set->cob_trace_filename
+		 && set->cob_trace_file != NULL) {
 			cob_new_trace_file ();
 		}
 
@@ -10102,12 +10117,14 @@ set_config_val (cob_context *ctx, char *value, int pos)
 		}
 		str = cob_expand_env_string (value);
 		memcpy (data, &str, sizeof (char *));
-		if (data_loc == offsetof (cob_settings, cob_preload_str)) {
-			cobsetptr->cob_preload_str_set = cob_strdup (str);
+		if (data_loc == offsetof (cob_settings, cob_preload_str)
+		 && set == cobsetptr) {
+			set->cob_preload_str_set = cob_strdup (str);
 		}
 
 		/* call internal routines that do post-processing */
-		if (data == (void *)cobsetptr->cob_date) {
+		if (set == cobsetptr
+		 && data == (void *)set->cob_date) {
 			check_current_date (ctx);
 		}
 
@@ -10120,6 +10137,140 @@ set_config_val (cob_context *ctx, char *value, int pos)
 		memcpy (data, value, slen);
 	}
 	return 0;
+}
+
+/* Set runtime setting of the process with given value */
+static int					/* returns 1 if any error, else 0 */
+set_config_val (cob_context *ctx, char *value, int pos)
+{
+	return set_config_val_in (ctx, cobsetptr, value, pos);
+}
+
+/* settings of the process */
+cob_settings *
+cob_process_settings (void)
+{
+	return cobsetptr;
+}
+
+/* Runtime settings of the contexts
+
+   A context uses the settings of the process (ctx->settings == cobsetptr)
+   until one of the variables of its own environment (overlays, see
+   env_set) changes a setting: it then gets a copy, whose strings of the
+   configuration table are its own; the other members (open files, lists
+   of the call.c...) stay those of the process, they are only used through
+   the settings of the process. */
+
+/* whether the string setting of position 'pos' is the first one at its
+   place (aliases share the place) */
+static int
+config_first_string (int pos)
+{
+	int	k;
+	if (!(gc_conf[pos].data_type & (ENV_STR | ENV_PATH | ENV_FILE))) {
+		return 0;
+	}
+	for (k = 0; k < pos; k++) {
+		if (gc_conf[k].data_loc == gc_conf[pos].data_loc
+		 && (gc_conf[k].data_type & (ENV_STR | ENV_PATH | ENV_FILE))) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+/* the settings of the context, copied from the ones of the process on
+   first use */
+static cob_settings *
+settings_of_context (cob_context *ctx)
+{
+	cob_settings	*set;
+	int	i;
+
+	if (ctx->settings != cobsetptr) {
+		return ctx->settings;
+	}
+	set = cob_malloc (sizeof (cob_settings));
+	memcpy (set, cobsetptr, sizeof (cob_settings));
+	for (i = 0; i < (int)NUM_CONFIG; i++) {
+		if (config_first_string (i)) {
+			char	**p = (char **)((char *)set + gc_conf[i].data_loc);
+			if (*p) {
+				*p = cob_strdup (*p);
+			}
+		}
+	}
+	ctx->settings = set;
+	return set;
+}
+
+/* free the settings of the context, if it has its own */
+static void
+free_context_settings (cob_context *ctx)
+{
+	int	i;
+
+	if (ctx->settings == NULL || ctx->settings == cobsetptr) {
+		return;
+	}
+	for (i = 0; i < (int)NUM_CONFIG; i++) {
+		if (config_first_string (i)) {
+			char	**p = (char **)((char *)ctx->settings + gc_conf[i].data_loc);
+			if (*p) {
+				cob_free (*p);
+			}
+		}
+	}
+	cob_free (ctx->settings);
+	ctx->settings = cobsetptr;
+}
+
+/* apply the variable 'name' of the environment of the context (value
+   NULL: removed, the value of the process is restored) to its settings */
+static void
+rescan_context_setting (cob_context *ctx, const char *name, const char *value)
+{
+	cob_settings	*set;
+	int	i;
+
+	for (i = 0; i < (int)NUM_CONFIG; i++) {
+		if (gc_conf[i].env_name
+		 && strcmp (gc_conf[i].env_name, name) == 0) {
+			break;
+		}
+	}
+	if (i >= (int)NUM_CONFIG) {
+		return;		/* not a runtime setting */
+	}
+	set = settings_of_context (ctx);
+	if (value && *value) {
+		char	*v = cob_strdup (value);
+		if (set_config_val_in (ctx, set, v, i)) {
+			/* Remove invalid setting */
+			(void)env_set (ctx, name, NULL);
+		}
+		cob_free (v);
+	} else {
+		const size_t	loc = gc_conf[i].data_loc;
+		if (gc_conf[i].data_type & (ENV_STR | ENV_PATH | ENV_FILE)) {
+			char	**p = (char **)((char *)set + loc);
+			char	*v = *(char **)((char *)cobsetptr + loc);
+			if (*p) {
+				cob_free (*p);
+			}
+			*p = v ? cob_strdup (v) : NULL;
+		} else {
+			memcpy ((char *)set + loc, (char *)cobsetptr + loc,
+				(size_t)gc_conf[i].data_len);
+		}
+	}
+	/* settings copied in the context */
+	common_state (ctx)->line_trace = set->cob_line_trace;
+	ctx->glob.cob_debugging_mode = set->cob_debugging_mode;
+	if (set->cob_extended_status == 0) {
+		set->cob_use_esc = 0;
+	}
 }
 
 /* Set runtime setting by name with given value */

@@ -3686,9 +3686,9 @@ set_lock_opts (cob_context *ctx, cob_file *f, unsigned int read_opts)
 static COB_INLINE void
 cob_trace_record (cob_context *ctx, cob_file *f, int indent)
 {
-	fprintf (ctx->settings->cob_trace_file, "%*s : ",
+	fprintf (cob_process_settings ()->cob_trace_file, "%*s : ",
 		indent, "Record");
-	cob_print_field (ctx, ctx->settings->cob_trace_file, f->record,
+	cob_print_field (ctx, cob_process_settings ()->cob_trace_file, f->record,
 		indent + 3, ctx->settings->cob_dump_width);
 }
 
@@ -3698,9 +3698,9 @@ cob_trace_record_key (cob_context *ctx, cob_file *f, int indent)
 	if (!f->last_key) {
 		return;
 	}
-	fprintf (ctx->settings->cob_trace_file, "%*s : ", indent,
+	fprintf (cob_process_settings ()->cob_trace_file, "%*s : ", indent,
 		f->organization == COB_ORG_RELATIVE ? "Record#" : "Key");
-	cob_print_field (ctx, ctx->settings->cob_trace_file, f->last_key,
+	cob_print_field (ctx, cob_process_settings ()->cob_trace_file, f->last_key,
 		indent + 3, ctx->settings->cob_dump_width);
 }
 
@@ -3711,9 +3711,9 @@ cob_trace_record_number (cob_context *ctx, cob_file *f, int indent)
 	 || f->organization != COB_ORG_RELATIVE) {
 		return;
 	}
-	fprintf (ctx->settings->cob_trace_file, "%*s : ",
+	fprintf (cob_process_settings ()->cob_trace_file, "%*s : ",
 		indent, "Record#");
-	cob_print_field (ctx, ctx->settings->cob_trace_file, f->last_key,
+	cob_print_field (ctx, cob_process_settings ()->cob_trace_file, f->last_key,
 		indent + 3, ctx->settings->cob_dump_width);
 }
 
@@ -3818,30 +3818,30 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 	 && f->last_operation != COB_LAST_NONE) {
 		/* If necessary open, so that I/O can be traced by itself */
 		cob_check_trace_file ();
-		fprintf (ctx->settings->cob_trace_file, "%*s", indent-3, "");
+		fprintf (cob_process_settings ()->cob_trace_file, "%*s", indent-3, "");
 		switch (f->last_operation) {
 			default:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"Unknown I/O on %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_CLOSE:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"CLOSE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_COMMIT:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"COMMIT %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_ROLLBACK:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"ROLLBACK %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_OPEN:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"OPEN %s %s -> '%s' Status: %.2s\n",
 					f->open_mode == COB_OPEN_INPUT  ? "INPUT" :
 					f->open_mode == COB_OPEN_OUTPUT ? "OUTPUT" :
@@ -3852,12 +3852,12 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 					f->file_status);
 				break;
 			case COB_LAST_DELETE_FILE:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"DELETE FILE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				break;
 			case COB_LAST_READ:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"READ %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				if (status == 0) {
@@ -3866,13 +3866,13 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 				cob_trace_record_key (ctx, f, indent);
 				break;
 			case COB_LAST_START:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"START %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				cob_trace_record_key (ctx, f, indent);
 				break;
 			case COB_LAST_READ_SEQ:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"READ Sequential %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				if (status == 0) {
@@ -3881,21 +3881,21 @@ cob_file_save_status (cob_context *ctx, cob_file *f, cob_field *fnstatus, const 
 				cob_trace_record_number (ctx, f, indent);
 				break;
 			case COB_LAST_WRITE:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"WRITE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				cob_trace_record (ctx, f, indent);
 				cob_trace_record_number (ctx, f, indent);
 				break;
 			case COB_LAST_REWRITE:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"REWRITE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 				cob_trace_record (ctx, f, indent);
 				cob_trace_record_number (ctx, f, indent);
 				break;
 			case COB_LAST_DELETE:
-				fprintf (ctx->settings->cob_trace_file,
+				fprintf (cob_process_settings ()->cob_trace_file,
 					"DELETE %s Status: %.2s\n",
 					f->select_name, f->file_status);
 # if 1	/* CHECKME: We likely should print only the key here */
