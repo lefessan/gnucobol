@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (env_overlay_free, cob_sys_system, cob_sys_x91): CALL
+	  "SYSTEM" with the environment of the context
 	* common.c (common_state, cob_exit_common_state, cob_rescan_env_vals,
 	  unsetenv, cob_setenv, cob_unsetenv_ctx, ...): environment of the
 	  execution contexts

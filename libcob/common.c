@@ -64,6 +64,10 @@
 #ifdef	HAVE_SYS_WAIT_H
 #include <sys/wait.h>
 #endif
+#if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
+#include <spawn.h>
+extern char	**environ;
+#endif
 
 #ifdef	_WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -6929,6 +6933,90 @@ env_overlay_free (cob_context *ctx)
 	common_state (ctx)->env_overlay = NULL;
 }
 
+#if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
+/* environment for a child process of the context: the one of the
+   process with the overlays of the context; NULL if there is none;
+   free with env_child_free */
+static char **
+env_child (cob_context *ctx)
+{
+	struct cob_env_overlay	*o;
+	char	**envp;
+	size_t	n = 0, k = 0, i;
+
+	if (ctx == NULL || common_state (ctx)->env_overlay == NULL) {
+		return NULL;
+	}
+	for (i = 0; environ[i]; i++) {
+		n++;
+	}
+	for (o = common_state (ctx)->env_overlay; o; o = o->next) {
+		n++;
+	}
+	envp = cob_malloc ((n + 1) * sizeof (char *));
+	for (i = 0; environ[i]; i++) {
+		const char	*eq = strchr (environ[i], '=');
+		size_t	len = eq ? (size_t)(eq - environ[i]) : strlen (environ[i]);
+		for (o = common_state (ctx)->env_overlay; o; o = o->next) {
+			if (strlen (o->name) == len
+			 && strncmp (o->name, environ[i], len) == 0) {
+				break;
+			}
+		}
+		if (o == NULL) {	/* not overridden */
+			envp[k++] = cob_strdup (environ[i]);
+		}
+	}
+	for (o = common_state (ctx)->env_overlay; o; o = o->next) {
+		if (o->value) {
+			envp[k] = cob_malloc (strlen (o->name) + strlen (o->value) + 2);
+			sprintf (envp[k++], "%s=%s", o->name, o->value);
+		}
+	}
+	envp[k] = NULL;
+	return envp;
+}
+
+static void
+env_child_free (char **envp)
+{
+	size_t	i;
+	for (i = 0; envp[i]; i++) {
+		cob_free (envp[i]);
+	}
+	cob_free (envp);
+}
+#endif
+
+/* system () for the context: the command sees the environment of the
+   context (with its overlays, see env_set) */
+static int
+cob_ctx_system (cob_context *ctx, const char *command)
+{
+#if defined (HAVE_POSIX_SPAWN) && !defined (_WIN32)
+	char	**envp = env_child (ctx);
+	if (envp) {
+		pid_t	pid;
+		int	status = -1;
+		char	*argv[4];
+		argv[0] = (char *)"sh";
+		argv[1] = (char *)"-c";
+		argv[2] = (char *)command;
+		argv[3] = NULL;
+		if (posix_spawn (&pid, "/bin/sh", NULL, NULL, argv, envp) == 0) {
+			while (waitpid (pid, &status, 0) == -1 && errno == EINTR) {
+				;
+			}
+		}
+		env_child_free (envp);
+		return status;
+	}
+#else
+	COB_UNUSED (ctx);
+#endif
+	return system (command);
+}
+
 /* set entry into environment, with/without overwriting existing values */
 int
 cob_setenv (const char *name, const char *value, int overwrite) {
@@ -7860,7 +7948,7 @@ cob_sys_system (const void *cmdline)
 				}
 				/* note: if the command cannot be executed _WIN32 always returns 1
 				   while GNU/Linux returns -1 */
-				status = system (command);
+				status = cob_ctx_system (ctx, command);
 				if (ctx->glob.cob_screen_initialized) {
 					cob_screen_set_mode (ctx, 1);
 				}
@@ -8327,7 +8415,7 @@ cob_sys_x91 (void *p1, const void *p2, void *p3)
 		}
 		{
 			/* execute the command line */
-			int ret = system ((const char *)common_state (ctx)->commlnptr);
+			int ret = cob_ctx_system (ctx, (const char *)common_state (ctx)->commlnptr);
 			*result = (unsigned char)ret;
 		}
 		break;
