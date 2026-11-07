@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: no CBL_GC_FORK in a hosted runtime
 	* testsuite.src/run_reentrant.at: console input and screen I/O of a
 	  hosted runtime
 	* testsuite.src/run_reentrant.at: STOP RUN of a hosted runtime ends the

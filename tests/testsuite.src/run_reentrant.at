@@ -2755,6 +2755,49 @@ screen: return -1
 AT_CLEANUP
 
 
+AT_SETUP([hosted runtime: CBL_GC_FORK])
+AT_KEYWORDS([runreentrant cob_set_hosted CBL_GC_FORK])
+
+# a hosted runtime (server with other threads) is not duplicated
+
+AT_DATA([fk.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      fk.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 R             PIC S9(9) BINARY.
+       PROCEDURE        DIVISION.
+           CALL "CBL_GC_FORK" RETURNING R
+           DISPLAY "fork: " R
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   ctx = cob_context_create ();
+   (void)cob_context_enter (ctx);
+   (void)cob_call_with_exception_check_ctx (ctx, "fk", 0, NULL);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE fk.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[fork: -000000001
+], [libcob: warning: 'CBL_GC_FORK' is not supported in a hosted runtime
+])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

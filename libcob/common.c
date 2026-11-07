@@ -9048,6 +9048,11 @@ cob_sys_fork (void)
  */
 #if defined	(HAVE_UNISTD_H) && !(defined (_WIN32))
 	int	pid;
+	/* a hosted runtime (server with other threads) is not duplicated */
+	if (cob_hosted) {
+		cob_runtime_warning_ctx (ctx, _("'%s' is not supported in a hosted runtime"), "CBL_GC_FORK");
+		return -1;
+	}
 	if ((pid = fork ()) == 0 ) {
 		cob_process_id = 0;	/* reset cached value */
 		cob_fork_fileio(ctx, &ctx->glob, cobsetptr);

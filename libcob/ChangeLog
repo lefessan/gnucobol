@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_sys_fork): no CBL_GC_FORK in a hosted runtime
 	* screenio.c (cob_screen_init), termio.c (cob_accept_ctx): console
 	  input and screen I/O of a hosted runtime
 	* common.c (cob_stop_run_ctx): STOP RUN without current context ends
