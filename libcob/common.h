@@ -2014,6 +2014,8 @@ COB_EXPIMP void		*cob_unit_get		(cob_context *, const unsigned int);
 
 COB_EXPIMP int	cob_module_global_enter	(cob_module **, cob_global **,
 						 const int, const int, const unsigned int *);
+/* the context: the one given in '*pctx' (from cob_unit_enter), or the
+   current one of the thread if NULL; returned in '*pctx' */
 COB_EXPIMP int	cob_module_global_enter_ctx	(cob_context **, cob_module **,
 						 cob_global **, const int, const int,
 						 const unsigned int *);

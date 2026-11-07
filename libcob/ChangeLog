@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_module_global_enter_ctx, cob_module_global_enter,
+	  cob_module_enter_ctx, cob_module_enter), common.h
+	  (cob_module_global_enter): one read of the current context at the
+	  entry of a program
 	* common.c (cob_dump_symbols): state of the dump of the symbols in the
 	  context
 	* common.c (check_valid_env_tmpdir, cob_gettmpdir, cob_get_dump_file):

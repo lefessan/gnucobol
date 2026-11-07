@@ -4100,7 +4100,9 @@ cob_module_global_enter_ctx (cob_context **pctx, cob_module **module,
 		  cob_global **mglobal, const int auto_init, const int entry,
 		  const unsigned int *name_hash)
 {
-	cob_context	*ctx = cob_current_context;	/* NULL before cob_init */
+	/* context of the thread, already got by cob_unit_enter in the
+	   generated code (a TLS read is costly in a shared library) */
+	cob_context	*ctx = *pctx;
 	/* Check initialized */
 	if (!cob_initialized) {
 		if (auto_init) {
@@ -4108,10 +4110,14 @@ cob_module_global_enter_ctx (cob_context **pctx, cob_module **module,
 		} else {
 			cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 		}
+		ctx = NULL;
 	}
 
 	/* Get the context of the thread */
-	ctx = *pctx = cob_current_context;
+	if (ctx == NULL) {
+		ctx = cob_current_context;
+	}
+	*pctx = ctx;
 	if (ctx == NULL) {
 		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
 	}
@@ -4200,7 +4206,7 @@ int
 cob_module_global_enter (cob_module **module, cob_global **mglobal,
 		  const int auto_init, const int entry, const unsigned int *name_hash)
 {
-	cob_context	*ctx;
+	cob_context	*ctx = NULL;	/* the current one */
 	return cob_module_global_enter_ctx (&ctx, module, mglobal, auto_init,
 		entry, name_hash);
 }
@@ -4209,6 +4215,7 @@ void
 cob_module_enter_ctx (cob_context **ctx, cob_module **module,
 		  cob_global **mglobal, const int auto_init)
 {
+	*ctx = NULL;	/* the current one */
 	(void)cob_module_global_enter_ctx (ctx, module, mglobal, auto_init, 0, 0);
 }
 
@@ -4217,7 +4224,7 @@ void
 cob_module_enter (cob_module **module, cob_global **mglobal,
 		  const int auto_init)
 {
-	cob_context	*ctx;
+	cob_context	*ctx = NULL;	/* the current one */
 	(void)cob_module_global_enter_ctx (&ctx, module, mglobal, auto_init, 0, 0);
 }
 
