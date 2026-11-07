@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* coblocal.h (cob_gmtime), fileio.c (ctx_lock_add, ctx_lock_remove,
+	  ctx_lock_reapply, ctx_unlock_records, ctx_lock_close, try_lock_range,
+	  ...): lock table of the contexts usable by the file backends
 	* fileio.c (ranges_overlap, ctx_lock_add, ctx_lock_remove,
 	  ctx_unlock_range, cob_file_unlock): UNLOCK releases the record locks
 	  of SEQUENTIAL and RELATIVE files

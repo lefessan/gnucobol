@@ -3053,7 +3053,8 @@ struct ctx_lock {
 	off_t		len;
 	short		type;		/* F_RDLCK or F_WRLCK */
 	cob_context	*owner;
-	cob_file	*f;		/* holder, its fd sets the lock again */
+	const void	*holder;	/* file connector (or backend handle) */
+	int		fd;		/* its descriptor, sets the lock again */
 };
 
 static struct ctx_lock	*ctx_locks = NULL;
@@ -3105,13 +3106,13 @@ ctx_lock_conflict (cob_context *ctx, const struct stat *st,
 
 /* record a lock of the context; called with ctx_locks_lock */
 static void
-ctx_lock_add (cob_context *ctx, cob_file *f, const struct stat *st,
-	      off_t start, off_t len, short type)
+ctx_lock_add (cob_context *ctx, const void *holder, int fd,
+	      const struct stat *st, off_t start, off_t len, short type)
 {
 	struct ctx_lock	*l;
 
 	for (l = ctx_locks; l; l = l->next) {
-		if (l->f == f && l->start == start && l->len == len) {
+		if (l->holder == holder && l->start == start && l->len == len) {
 			l->type = type;
 			return;
 		}
@@ -3123,7 +3124,8 @@ ctx_lock_add (cob_context *ctx, cob_file *f, const struct stat *st,
 	l->len = len;
 	l->type = type;
 	l->owner = ctx;
-	l->f = f;
+	l->holder = holder;
+	l->fd = fd;
 	l->next = ctx_locks;
 	ctx_locks = l;
 }
@@ -3131,13 +3133,13 @@ ctx_lock_add (cob_context *ctx, cob_file *f, const struct stat *st,
 /* forget the locks of 'f' inside the range (all of them if 'all');
    called with ctx_locks_lock */
 static void
-ctx_lock_remove (cob_file *f, off_t start, off_t len, int all)
+ctx_lock_remove (const void *holder, off_t start, off_t len, int all)
 {
 	struct ctx_lock	**pl = &ctx_locks;
 	struct ctx_lock	*l;
 
 	while ((l = *pl) != NULL) {
-		if (l->f == f
+		if (l->holder == holder
 		 && (all || range_inside (l->start, l->len, start, len))) {
 			*pl = l->next;
 			cob_free (l);
@@ -3157,14 +3159,14 @@ ctx_lock_reapply (dev_t dev, ino_t ino, off_t start, off_t len)
 
 	for (l = ctx_locks; l; l = l->next) {
 		if (l->dev == dev && l->ino == ino
-		 && l->f->fd >= 0
+		 && l->fd >= 0
 		 && ranges_overlap (l->start, l->len, start, len)) {
 			memset (&lck, 0, sizeof (struct flock));
 			lck.l_type = l->type;
 			lck.l_whence = SEEK_SET;
 			lck.l_start = l->start;
 			lck.l_len = l->len;
-			(void)fcntl (l->f->fd, F_SETLK, &lck);
+			(void)fcntl (l->fd, F_SETLK, &lck);
 		}
 	}
 }
@@ -3212,7 +3214,7 @@ ctx_unlock_records (cob_file *f)
 	}
 	for (;;) {
 		for (l = ctx_locks; l; l = l->next) {
-			if (l->f == f && l->len != 0) {
+			if (l->holder == f && l->len != 0) {
 				break;
 			}
 		}
@@ -3235,33 +3237,57 @@ ctx_unlock_records (cob_file *f)
 	cob_lock_release (&ctx_locks_lock);
 }
 
-/* close the descriptor (or stream) of 'f': forget its locks, and set
-   again those of the other contexts on the file, lost by the close */
-static void
-ctx_lock_close (cob_file *f, int fd, FILE *fp)
+/* close the descriptor 'fd' of 'holder' with 'closefn (arg)': forget
+   its locks, and set again those of the other contexts on the file,
+   lost by the close (any close of a descriptor of a file releases all
+   the fcntl locks of the process on it) */
+void
+cob_ctx_lock_close (const void *holder, int fd,
+		    void (*closefn) (void *), void *arg)
 {
 	struct stat	st;
 	int		has_st;
 
 	cob_lock_acquire (&ctx_locks_lock);
 	has_st = fd >= 0 && fstat (fd, &st) == 0;
-	ctx_lock_remove (f, 0, 0, 1);
-	if (fp) {
-		fclose (fp);
-	} else if (fd >= 0) {
-		close (fd);
-	}
+	ctx_lock_remove (holder, 0, 0, 1);
+	closefn (arg);
 	if (has_st) {
 		ctx_lock_reapply (st.st_dev, st.st_ino, 0, 0);
 	}
 	cob_lock_release (&ctx_locks_lock);
 }
 
-/* one attempt to lock without waiting: 1 if locked, else 0 with
-   errno (EAGAIN if held by another context or process) */
-static int
-try_lock_range (cob_context *ctx, cob_file *f, off_t start, off_t len,
-		short type)
+static void
+close_fd (void *arg)
+{
+	close (*(int *)arg);
+}
+
+static void
+close_stream (void *arg)
+{
+	fclose ((FILE *)arg);
+}
+
+/* close the descriptor (or stream) of 'f', see cob_ctx_lock_close */
+static void
+ctx_lock_close (cob_file *f, int fd, FILE *fp)
+{
+	if (fp) {
+		cob_ctx_lock_close (f, fd, close_stream, fp);
+	} else if (fd >= 0) {
+		cob_ctx_lock_close (f, fd, close_fd, &fd);
+	}
+}
+
+/* one attempt to lock the range of the descriptor 'fd' of 'holder'
+   without waiting: 1 if locked, else 0 with errno (EAGAIN if held by
+   another context or process), and the pid of the blocking process in
+   '*blockpid' */
+int
+cob_ctx_lock_try (cob_context *ctx, const void *holder, int fd,
+		  off_t start, off_t len, short type, int *blockpid)
 {
 	struct stat	st;
 	struct flock	lck;
@@ -3273,18 +3299,18 @@ try_lock_range (cob_context *ctx, cob_file *f, off_t start, off_t len,
 	lck.l_start = start;
 	lck.l_len = len;
 	cob_lock_acquire (&ctx_locks_lock);
-	has_st = fstat (f->fd, &st) == 0;
+	has_st = fstat (fd, &st) == 0;
 	if (has_st
 	 && ctx_lock_conflict (ctx, &st, start, len, type)) {
 		cob_lock_release (&ctx_locks_lock);
-		f->blockpid = cob_sys_getpid ();
+		*blockpid = cob_sys_getpid ();
 		errno = EAGAIN;
 		return 0;
 	}
 	errno = 0;
-	ret = fcntl (f->fd, F_SETLK, &lck);
+	ret = fcntl (fd, F_SETLK, &lck);
 	if (ret != -1 && has_st) {
-		ctx_lock_add (ctx, f, &st, start, len, type);
+		ctx_lock_add (ctx, holder, fd, &st, start, len, type);
 	}
 	cob_lock_release (&ctx_locks_lock);
 	if (ret == -1) {
@@ -3294,9 +3320,9 @@ try_lock_range (cob_context *ctx, cob_file *f, off_t start, off_t len,
 		lck.l_whence = SEEK_SET;
 		lck.l_start = start;
 		lck.l_len = len;
-		if (fcntl (f->fd, F_GETLK, &lck) != -1
+		if (fcntl (fd, F_GETLK, &lck) != -1
 		 && lck.l_type != F_UNLCK) {
-			f->blockpid = lck.l_pid;
+			*blockpid = lck.l_pid;
 		}
 		errno = err;
 		return 0;
@@ -3357,8 +3383,8 @@ lock_record (cob_context *ctx, cob_file *f, unsigned int recnum, int forwrite, i
 	}
 	for (;;) {
 		*errsts = 0;
-		if (try_lock_range (ctx, f, (off_t)pos, (off_t)rcsz,
-				    (short)lock_type)) {
+		if (cob_ctx_lock_try (ctx, f, f->fd, (off_t)pos, (off_t)rcsz,
+				      (short)lock_type, &f->blockpid)) {
 			if (recnum == 0
 			 && forwrite) 		/* File locked for Exclusive use */
 				f->flag_file_lock = 1;

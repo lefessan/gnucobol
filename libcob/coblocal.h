@@ -502,6 +502,13 @@ COB_HIDDEN cob_module	*cob_find_module_ctx	(cob_context *, const char *);
 struct tm;
 COB_HIDDEN struct tm	*cob_localtime		(const time_t *, struct tm *);
 COB_HIDDEN struct tm	*cob_gmtime		(const time_t *, struct tm *);
+#ifdef	HAVE_FCNTL
+/* locks of the contexts on the files, fileio.c */
+COB_HIDDEN int		cob_ctx_lock_try	(cob_context *, const void *, int,
+						 off_t, off_t, short, int *);
+COB_HIDDEN void		cob_ctx_lock_close	(const void *, int,
+						 void (*) (void *), void *);
+#endif
 
 COB_HIDDEN void		cob_check_trace_file (void);
 
