@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md: status with "TXSeries plan, HOWTO-TSAN: ODBC per
+	  context"
 	* TXSERIES-PLAN.md: T1.4 current directory and pipes per context
 	* TXSERIES-PLAN.md: T1.4 progress (trace, locale, environment)
 	* TXSERIES-PLAN.md: status with "tests/reentrant-bench: benchmarks of

@@ -383,9 +383,16 @@ Conséquences pour `cobc/codegen.c` :
       - LMDB : pas de verrous d'enregistrements (déjà le cas en amont) ;
         `MDB_NOTLS` si un contexte peut passer d'un thread à l'autre avec
         une transaction de lecture ouverte ;
-      - V-ISAM et ODBC en multi-thread : non étudiés (ODBC : connexion
-        `db` globale, `high_value` de `fsqlxfd.c` initialisé à la
-        première utilisation) ;
+      - V-ISAM en multi-thread : non étudié ;
+      - **ODBC fait le 2026-11-07** (pilote SQLite, `libsqliteodbc`) :
+        une connexion (et un environnement ODBC) par contexte, établie
+        au premier OPEN avec les variables de son environnement
+        (`cob_ctx_getenv` dans `fsqlxfd.c`), fermée à la fin du contexte
+        (transaction ouverte annulée) ; connexions établies une à une
+        (gestionnaire unixODBC) ; `high_value` dans la connexion. Une
+        variable d'environnement posée par un contexte ne relit plus
+        les réglages partagés (course avec les autres threads) : il
+        faudra des réglages par contexte. OCI (`foci.c`) non traité ;
       - **faits le 2026-11-07** : verrou de fichier à l'OPEN de LMDB par
         la table des contextes (fonctions `cob_ctx_lock_try` /
         `cob_ctx_lock_close` exportées pour les gestionnaires) ;
