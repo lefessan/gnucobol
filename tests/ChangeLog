@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: profiling data per context or const
 	* testsuite.src/run_reentrant.at: constants of the intrinsic functions
 	  computed under a lock
 	* testsuite.src/run_reentrant.at: lock at OPEN of LMDB files between

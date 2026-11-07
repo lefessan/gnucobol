@@ -67,6 +67,12 @@ struct cob_prof_state {
 
 	/* Whether profiling is active or not. */
 	int				is_active;
+
+	/* Last time returned by get_ns_time, and clock used */
+	cob_ns_time			ns_time;
+#ifdef HAVE_CLOCK_GETTIME
+	clockid_t			clockid;
+#endif
 };
 
 static struct cob_prof_state *
@@ -76,6 +82,9 @@ prof_state (cob_context *ctx)
 		ctx->prof = cob_malloc (sizeof (struct cob_prof_state));
 		ctx->prof->current_idx = -1;
 		ctx->prof->is_active = -1;
+#ifdef HAVE_CLOCK_GETTIME
+		ctx->prof->clockid = CLOCK_REALTIME;
+#endif
 	}
 	return ctx->prof;
 }
@@ -88,10 +97,6 @@ prof_state (cob_context *ctx)
 #define current_idx		(prof_state (ctx)->current_idx)
 #define is_active		(prof_state (ctx)->is_active)
 
-/* Which clock to use for clock_gettime (if available) */
-#ifdef HAVE_CLOCK_GETTIME
-static clockid_t	clockid = CLOCK_REALTIME;
-#endif
 
 /* Cached clock frequency on Windows */
 #ifdef _WIN32
@@ -105,12 +110,12 @@ static LONGLONG 	qpc_freq = 0;
 /* Return the current time in nanoseconds. The result is guaranteed
    to be monotonic, by using an internal storage of the previous time. */
 static cob_ns_time
-get_ns_time (void)
+get_ns_time (cob_context *ctx)
 {
-	static cob_ns_time ns_time = 0;
+	struct cob_prof_state	*st = prof_state (ctx);
 	if (is_test) {
-		ns_time += 1000000;
-		return ns_time;
+		st->ns_time += 1000000;
+		return st->ns_time;
 	}
 
 #ifdef _WIN32
@@ -124,19 +129,19 @@ get_ns_time (void)
 		cob_ns_time nanoseconds;
 #ifdef HAVE_CLOCK_GETTIME
 		struct timespec ts;
-		clock_gettime (clockid, &ts);
+		clock_gettime (st->clockid, &ts);
 		/* we may only have CLOCK_REALTIME, so need the monotonic check below */
 		nanoseconds = COB_U64_C (1000000000) * ts.tv_sec + ts.tv_nsec;
 #else
 		nanoseconds = COB_U64_C (1000000000) * clock () / CLOCKS_PER_SEC;
 #endif
-		if (nanoseconds > ns_time) return nanoseconds;
-		return ns_time;
+		if (nanoseconds > st->ns_time) return nanoseconds;
+		return st->ns_time;
 	}
 }
 
 static void
-prof_setup_clock ()
+prof_setup_clock (cob_context *ctx)
 {
 #ifdef HAVE_CLOCK_GETTIME
 	struct timespec ts;
@@ -157,13 +162,13 @@ prof_setup_clock ()
  	   not all defined clocks are guaranteed to work */
  #ifdef CLOCK_MONOTONIC_RAW
 	if (clock_gettime (CLOCK_MONOTONIC_RAW, &ts) == 0) {
-		clockid = CLOCK_MONOTONIC_RAW;
+		prof_state (ctx)->clockid = CLOCK_MONOTONIC_RAW;
 		return;
 	}
  #endif
  #ifdef CLOCK_MONOTONIC
 	if (clock_gettime (CLOCK_MONOTONIC, &ts) == 0) {
-		clockid = CLOCK_MONOTONIC;
+		prof_state (ctx)->clockid = CLOCK_MONOTONIC;
 		return;
 	}
  #endif
@@ -174,7 +179,7 @@ static void
 prof_init_static (cob_context *ctx)
 {
 	if (is_active == -1 && ctx) {
-		prof_setup_clock ();
+		prof_setup_clock (ctx);
 		is_active = ctx->settings->cob_prof_enable;
 	}
 }
@@ -186,7 +191,7 @@ cob_init_prof (cob_global *lptr, cob_settings *sptr)
 
 struct cob_prof_module *
 cob_prof_init_module_ctx (cob_context *ctx, cob_module *module,
-		      struct cob_prof_procedure *procedures,
+		      const struct cob_prof_procedure *procedures,
 		      size_t procedure_count)
 {
 	COB_UNUSED (module);
@@ -214,7 +219,7 @@ cob_prof_init_module_ctx (cob_context *ctx, cob_module *module,
 
 /* compatibility: cob_prof_init_module without context */
 struct cob_prof_module *
-cob_prof_init_module (cob_module *module, struct cob_prof_procedure *procedures, size_t procedure_count)
+cob_prof_init_module (cob_module *module, const struct cob_prof_procedure *procedures, size_t procedure_count)
 {
 	return cob_prof_init_module_ctx (COB_CTX_COMPAT, module, procedures, procedure_count);
 }
@@ -235,7 +240,7 @@ cob_prof_realloc_arrays (cob_context *ctx)
 		for (i = 0; i < cob_min_int(10, current_idx); i++){
 			struct cob_prof_module *info = called_runtimes[current_idx-1-i];
 			int proc_idx = called_procedures[current_idx-1-i];
-			struct cob_prof_procedure *proc = info->procedures + proc_idx;
+			const struct cob_prof_procedure *proc = info->procedures + proc_idx;
 			cob_runtime_warning_ctx (ctx, _("  * %s at %s:%d"), proc->text,
 					     proc->file, proc->line);
 		}
@@ -275,7 +280,7 @@ cob_prof_enter_procedure_ctx (cob_context *ctx, struct cob_prof_module *info, in
 
 	if (!is_active) return;
 
-	t = get_ns_time ();
+	t = get_ns_time (ctx);
 
 	current_idx++;
 	if (current_idx >= max_prof_depth) {
@@ -306,7 +311,7 @@ cob_prof_exit_procedure_ctx (cob_context *ctx, struct cob_prof_module *info, int
 
 	if (!is_active) return;
 
-	t = get_ns_time ();
+	t = get_ns_time (ctx);
 
 	while (current_idx >= 0) {
 		int curr_proc = called_procedures[current_idx];
@@ -433,7 +438,7 @@ cob_prof_print_line (cob_context *ctx,
 	int 		line;
 	int 		ncalls;
 	cob_ns_time	time = 0;
-	struct cob_prof_procedure	*proc;
+	const struct cob_prof_procedure	*proc;
 
 	if (info){
 		time = info->total_times[proc_idx];

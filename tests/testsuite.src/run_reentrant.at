@@ -1391,5 +1391,12 @@ AT_CHECK([$SHELL "$abs_top_srcdir/build_aux/list-mutable-globals.sh" prog.o \
           | $GREP -v -E '^(cob_unit_slot|cob_module_path)$'],
          [1], [], [])
 
+# also with profiling
+AT_CHECK([$COBC -c ${FLAGS} -fprof -o progp.o prog.cob], [0], [], [])
+AT_CHECK([$SHELL "$abs_top_srcdir/build_aux/list-mutable-globals.sh" progp.o \
+          | cut -f5 | sed -e 's/\.[[0-9]]*$//' \
+          | $GREP -v -E '^(cob_unit_slot|cob_module_path)$'],
+         [1], [], [])
+
 AT_CLEANUP
 

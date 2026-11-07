@@ -3702,7 +3702,7 @@ struct cob_prof_module {
 	/* Array of current recursions per procedure  */
 	unsigned int				*procedure_recursions;
 	/* Array of procedure descriptions */
-	struct cob_prof_procedure	*procedures ;
+	const struct cob_prof_procedure	*procedures ;
 	/* Number of procedures */
 	size_t  			procedure_count;
 };
@@ -3711,11 +3711,11 @@ struct cob_prof_module {
    cob_prof_module structure that will be used to store the counters and
    times. */
 COB_EXPIMP struct cob_prof_module *cob_prof_init_module (cob_module *module,
-	struct cob_prof_procedure	*procedure_names,
+	const struct cob_prof_procedure	*procedure_names,
 	size_t		procedure_count);
 COB_EXPIMP struct cob_prof_module *cob_prof_init_module_ctx (cob_context *,
 	cob_module *module,
-	struct cob_prof_procedure	*procedure_names,
+	const struct cob_prof_procedure	*procedure_names,
 	size_t		procedure_count);
 
 /* Functions used to instrument the generated C code and measure

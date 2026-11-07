@@ -15995,7 +15995,7 @@ output_cob_prof_data ( struct cb_program * program )
 
 		output_local ("static const int nprocedures = %d;\n",
 			      program->procedure_list_len);
-		output_local ("static struct cob_prof_procedure prof_procedures[%d] = {\n",
+		output_local ("static const struct cob_prof_procedure prof_procedures[%d] = {\n",
 			      program->procedure_list_len);
 		sep = ' ';
 		for (l = program->procedure_list; l; l=l->next) {
