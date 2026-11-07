@@ -2353,6 +2353,104 @@ N
 AT_CLEANUP
 
 
+AT_SETUP([STOP RUN and fatal errors in an execution context])
+AT_KEYWORDS([runreentrant cob_context_create cob_call_with_exception_check STOP])
+
+# called with cob_call_with_exception_check_ctx in a context other than
+# the main one, STOP RUN and fatal errors end the run unit of the context
+# (files closed) and return to the host; the process and the other
+# contexts go on
+
+AT_DATA([sr.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sr.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO "sr.txt"
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 MISSING       PIC X(10) VALUE "nosuchprog".
+       LINKAGE          SECTION.
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING OP.
+           EVALUATE OP
+           WHEN "S"
+              OPEN OUTPUT OUT-FILE
+              MOVE "stop" TO OUT-REC
+              WRITE OUT-REC
+              MOVE 7 TO RETURN-CODE
+              STOP RUN
+           WHEN "E"
+              CALL MISSING
+           END-EVALUATE
+           DISPLAY "sr " OP ": back"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static void
+sr (cob_context *ctx, const char *op)
+{
+   void *argv[1];
+   int ret;
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)op;
+   ret = cob_call_with_exception_check_ctx (ctx, "sr", 1, argv);
+   cob_context_leave (prev);
+   printf ("%s: return %d, exit code %d\n", op, ret,
+           cob_last_exit_code_ctx (ctx));
+   fflush (stdout);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+
+   cob_init (argc, argv);
+
+   ctx = cob_context_create ();
+   sr (ctx, "S");
+   cob_context_destroy (ctx);
+
+   ctx = cob_context_create ();
+   sr (ctx, "E");
+   cob_context_destroy (ctx);
+
+   ctx = cob_context_create ();
+   sr (ctx, "N");
+   cob_context_destroy (ctx);
+
+   printf ("host goes on\n");
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sr.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[S: return 1, exit code 7
+E: return -1, exit code -1
+sr N: back
+N: return 0, exit code 0
+host goes on
+], [libcob: sr.cob:26: error: module 'nosuchprog' not found
+])
+AT_CHECK([cat sr.txt], [0],
+[stop
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

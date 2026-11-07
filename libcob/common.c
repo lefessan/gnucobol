@@ -379,6 +379,15 @@ struct cob_common_state {
 	/* READY TRACE / RESET TRACE, initialized from COB_SET_TRACE */
 	unsigned int		line_trace;
 
+#ifndef COB_WITHOUT_JMP
+	/* return point of cob_call_with_exception_check_ctx in a context
+	   other than the main one (STOP RUN, fatal errors), see
+	   end_context_run_unit */
+	jmp_buf			return_jmp;
+	int			return_jmp_set;
+#endif
+	int			exit_code;	/* of the context */
+
 #ifdef	COB_THREAD_LOCALES
 	/* locale of the context, set by cob_set_locale; (locale_t)0: the
 	   locale of the process; applied by cob_context_enter */
@@ -3778,12 +3787,61 @@ call_exit_handlers_and_terminate (cob_context *ctx)
 	cob_terminate_routines (ctx);
 }
 
+#ifndef COB_WITHOUT_JMP
+/* whether STOP RUN and the fatal errors return to the host from the
+   context: a context other than the main one, called through
+   cob_call_with_exception_check_ctx */
+static int
+context_returns (cob_context *ctx)
+{
+	return ctx != NULL
+	    && ctx != cob_main_context
+	    && ctx->common != NULL
+	    && ctx->common->return_jmp_set;
+}
+
+/* end of the run unit of a context other than the main one (STOP RUN,
+   fatal error), then return to its cob_call_with_exception_check_ctx
+   with 'ret': its updates are committed or rolled back
+   (COB_STOP_RUN_COMMIT, always rolled back on error), its files closed,
+   its stack of programs emptied; the other contexts and the runtime go
+   on; the context should then be destroyed by the host */
+DECLNORET static void
+end_context_run_unit (cob_context *ctx, const int ret) COB_A_NORETURN;
+static void
+end_context_run_unit (cob_context *ctx, const int ret)
+{
+	struct cob_alloc_module	*m;
+
+	if (ret == 1 && ctx->settings->cob_stop_run_commit > 0) {
+		cob_commit_ctx (ctx);
+	} else {
+		cob_rollback_ctx (ctx);
+	}
+	cob_exit_fileio_context (ctx);
+	for (m = cob_module_list; m; m = m->next) {
+		if (m->cob_mod_ptr) {
+			m->cob_mod_ptr->module_active = 0;
+		}
+	}
+	COB_MODULE_PTR = NULL;
+	ctx->common->return_jmp_set = 0;
+	longjmp (ctx->common->return_jmp, ret);
+}
+#endif
+
 void
 cob_stop_run_ctx (cob_context *ctx, const int status)
 {
 	if (!cob_initialized) {
 		cob_hard_failure ();
 	}
+#ifndef COB_WITHOUT_JMP
+	if (context_returns (ctx)) {
+		common_state (ctx)->exit_code = status;
+		end_context_run_unit (ctx, 1);
+	}
+#endif
 	call_exit_handlers_and_terminate (ctx);
 	exit_code = status;
 #ifndef COB_WITHOUT_JMP
@@ -3846,7 +3904,14 @@ void
 cob_hard_failure ()
 {
 	cob_context	*ctx = COB_CTX_TODO;
-	unsigned int core_on_error = handle_core_on_error ();
+	unsigned int core_on_error;
+#ifndef COB_WITHOUT_JMP
+	if (context_returns (ctx)) {
+		common_state (ctx)->exit_code = -1;
+		end_context_run_unit (ctx, -1);
+	}
+#endif
+	core_on_error = handle_core_on_error ();
 	if (core_on_error != 4) {
 		if (core_on_error == 2 && cob_initialized) {
 			/* prevent unloading modules */
@@ -3886,6 +3951,12 @@ cob_hard_failure_internal (const char *prefix)
 	}
 	fprintf (stderr, _("Please report this!"));
 	fprintf (stderr, "\n");
+#ifndef COB_WITHOUT_JMP
+	if (context_returns (ctx)) {
+		common_state (ctx)->exit_code = -2;
+		end_context_run_unit (ctx, -2);
+	}
+#endif
 	core_on_error = handle_core_on_error ();
 	if (core_on_error != 4) {
 		if (core_on_error == 2 && cob_initialized) {
@@ -3915,6 +3986,9 @@ cob_hard_failure_internal (const char *prefix)
 int
 cob_last_exit_code_ctx (cob_context *ctx)
 {
+	if (ctx != NULL && ctx != cob_main_context && ctx->common != NULL) {
+		return ctx->common->exit_code;
+	}
 	return exit_code;
 }
 
@@ -12355,6 +12429,26 @@ cob_call_with_exception_check_ctx (cob_context *ctx, const char *name, const int
 {
 #ifndef COB_WITHOUT_JMP
 	int ret;
+	/* a context other than the main one: return point in the context,
+	   the runtime and the other contexts go on (end_context_run_unit) */
+	if (ctx != NULL && ctx != cob_main_context && ctx->common != NULL) {
+		struct cob_common_state	*cs = ctx->common;
+		jmp_buf		saved;
+		const int	saved_set = cs->return_jmp_set;
+		if (saved_set) {	/* nested call */
+			memcpy (saved, cs->return_jmp, sizeof (jmp_buf));
+		}
+		cs->return_jmp_set = 1;
+		ret = setjmp (cs->return_jmp);
+		if (ret == 0) {
+			cs->exit_code = cob_call_ctx (ctx, name, argc, argv);
+		}
+		cs->return_jmp_set = saved_set;
+		if (saved_set) {
+			memcpy (cs->return_jmp, saved, sizeof (jmp_buf));
+		}
+		return ret;
+	}
 	return_jmp_buffer_set = 1;
 	ret = setjmp (return_jmp_buf);
 	if (ret) {

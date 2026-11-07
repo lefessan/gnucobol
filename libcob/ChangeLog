@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (call_exit_handlers_and_terminate, cob_stop_run_ctx,
+	  cob_hard_failure, cob_hard_failure_internal, cob_last_exit_code_ctx,
+	  cob_call_with_exception_check_ctx): STOP RUN and fatal errors return
+	  to the host from a context
 	* termio.c (cob_display_va_ctx): printer pipe in the environment and
 	  directory of the context
 	* fisam.c (isam_dummy, isopen_retry, isread_retry): calls of the x-ISAM
