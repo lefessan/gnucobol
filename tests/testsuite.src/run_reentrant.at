@@ -2627,7 +2627,8 @@ AT_KEYWORDS([runreentrant cob_set_hosted cob_call_with_exception_check STOP])
 
 # in a hosted runtime, the main context is a task as the others: its
 # STOP RUN ends its run unit and returns to the host, the runtime goes on;
-# the next run unit starts with the programs in their initial state
+# the next run unit starts with the programs in their initial state and
+# new EXTERNAL items
 
 AT_DATA([st.cob], [
        IDENTIFICATION   DIVISION.
@@ -2643,12 +2644,16 @@ AT_DATA([st.cob], [
        01 OUT-REC       PIC X(4).
        WORKING-STORAGE  SECTION.
        01 CNT           PIC 9 VALUE 0.
+       01 EXT-CNT       PIC 9 EXTERNAL.
        PROCEDURE        DIVISION.
-           ADD 1 TO CNT
+           IF EXT-CNT NOT NUMERIC
+              MOVE 0 TO EXT-CNT
+           END-IF
+           ADD 1 TO CNT EXT-CNT
            OPEN EXTEND OUT-FILE
            MOVE "run" TO OUT-REC
            WRITE OUT-REC
-           MOVE CNT TO RETURN-CODE
+           COMPUTE RETURN-CODE = EXT-CNT * 10 + CNT
            STOP RUN.
 ])
 
@@ -2677,8 +2682,8 @@ main (int argc, char **argv)
 AT_CHECK([$COMPILE host.c], [0], [], [])
 AT_CHECK([$COMPILE_MODULE st.cob], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./host], [0],
-[return 1, exit code 1
-return 1, exit code 1
+[return 1, exit code 11
+return 1, exit code 11
 host goes on
 ], [])
 AT_CHECK([cat st.txt], [0],

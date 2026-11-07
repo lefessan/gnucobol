@@ -863,13 +863,44 @@ cob_context_free (cob_context *ctx)
 
 /* free the data of the run unit of the context: command line,
    environment, EXTERNAL items, allocations */
+/* free the storage of the run unit of the context: EXTERNAL items and
+   the allocations of the context (ALLOCATE, LOCAL-STORAGE, modules...) */
 static void
-cob_exit_common_state (cob_context *ctx)
+free_run_unit_storage (cob_context *ctx)
 {
 	struct cob_external	*p;
 	struct cob_external	*q;
 	struct cob_alloc_cache	*x;
 	struct cob_alloc_cache	*y;
+
+	/* Free cached externals */
+	for (p = basext; p;) {
+		q = p;
+		p = p->next;
+		if (q->ename) {
+			cob_free (q->ename);
+		}
+		if (q->ext_alloc) {
+			cob_free (q->ext_alloc);
+		}
+		cob_free (q);
+	}
+	basext = NULL;
+
+	/* Free cached mallocs */
+	for (x = cob_alloc_base; x;) {
+		y = x;
+		x = x->next;
+		cob_free (y->cob_pointer);
+		cob_free (y);
+	}
+	cob_alloc_base = NULL;
+	dyn_attr_list = NULL;
+}
+
+static void
+cob_exit_common_state (cob_context *ctx)
+{
 
 	env_overlay_free (ctx);
 	free_context_settings (ctx);
@@ -901,29 +932,7 @@ cob_exit_common_state (cob_context *ctx)
 		ctx->glob.cob_term_buff = NULL;
 	}
 
-	/* Free cached externals */
-	for (p = basext; p;) {
-		q = p;
-		p = p->next;
-		if (q->ename) {
-			cob_free (q->ename);
-		}
-		if (q->ext_alloc) {
-			cob_free (q->ext_alloc);
-		}
-		cob_free (q);
-	}
-	basext = NULL;
-
-	/* Free cached mallocs */
-	for (x = cob_alloc_base; x;) {
-		y = x;
-		x = x->next;
-		cob_free (y->cob_pointer);
-		cob_free (y);
-	}
-	cob_alloc_base = NULL;
-	dyn_attr_list = NULL;
+	free_run_unit_storage (ctx);
 
 	if (cob_last_sfile) {
 		cob_free ((void *)cob_last_sfile);
@@ -3903,7 +3912,8 @@ end_context_run_unit (cob_context *ctx, const int ret)
 	call_end_handler (ctx, ret);
 	/* a new run unit starts with the programs in their initial state:
 	   their modules are released and their instances freed, they are
-	   created again by the next call (the EXTERNAL items are kept) */
+	   created again by the next call; the storage of the run unit
+	   (EXTERNAL items, allocations, abandoned LOCAL-STORAGE) is freed */
 	cob_exit_common_modules (ctx);
 	if (ctx->units) {
 		unsigned int	i;
@@ -3915,6 +3925,7 @@ end_context_run_unit (cob_context *ctx, const int ret)
 		}
 	}
 	COB_MODULE_PTR = NULL;
+	free_run_unit_storage (ctx);
 	ctx->common->return_jmp_set = 0;
 	longjmp (ctx->common->return_jmp, ret);
 }
