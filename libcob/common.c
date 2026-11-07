@@ -319,7 +319,6 @@ COB_TLS cob_context		*cob_current_context = NULL;
 
 static enum cob_module_unload	module_unload = COB_IMMEDIATE;
 
-static int			active_error_handler = 0;
 static int			in_stop_run = 0;
 
 static const cob_field_attr	const_alpha_attr =
@@ -388,6 +387,12 @@ struct cob_common_state {
 #endif
 	int			exit_code;	/* of the context */
 
+	/* procedures of the run unit (CBL_EXIT_PROC, CBL_ERROR_PROC) */
+	struct exit_handlerlist	*exit_hdlrs;
+	struct handlerlist	*hdlrs;
+	int			active_error_handler;
+	char			runtime_err_str[COB_ERRBUF_SIZE];	/* last error */
+
 #ifdef	COB_THREAD_LOCALES
 	/* locale of the context, set by cob_set_locale; (locale_t)0: the
 	   locale of the process; applied by cob_context_enter */
@@ -421,6 +426,10 @@ static void	rescan_context_setting (cob_context *, const char *, const char *);
 static void	free_context_settings (cob_context *);
 static cob_settings	*settings_of_context (cob_context *);
 
+#define exit_hdlrs		(common_state (ctx)->exit_hdlrs)
+#define hdlrs			(common_state (ctx)->hdlrs)
+#define active_error_handler	(common_state (ctx)->active_error_handler)
+#define runtime_err_str		(common_state (ctx)->runtime_err_str)
 #define cob_alloc_base		(common_state (ctx)->cob_alloc_base)
 #define cob_module_list		(common_state (ctx)->cob_module_list)
 #define cob_module_err		(common_state (ctx)->cob_module_err)
@@ -473,8 +482,10 @@ struct dyn_attr {
 	cob_field_attr	attr;
 };
 
-static char			runtime_err_str[COB_ERRBUF_SIZE] = {0};	/* emergency buffer */
 static int			exit_code = 0;	/* exit code when leaving libcob */
+/* last runtime error of the main context (or without context), still
+   available after the end of the runtime */
+static char			process_err_str[COB_ERRBUF_SIZE] = {0};
 
 #ifndef COB_WITHOUT_JMP
 /* longjmp buffer used instead of exit() if cob_init_with_return is used */
@@ -543,18 +554,18 @@ static unsigned char   b2i[]= {
 #define IS_INVALID_DIGIT_DATA(c)	((unsigned char)(c - '0') > 9)	/* not valid digits '0' - '9' */
 #define IS_VALID_DIGIT_DATA(c)	((unsigned char)(c - '0') <= 9)	/* valid digits '0' - '9' */
 
-/* Runtime exit handling */
-static struct exit_handlerlist {
+/* Runtime exit handling: the lists are in the state of the context */
+struct exit_handlerlist {
 	struct exit_handlerlist	*next;
 	int			(*proc)(void);
 	unsigned char priority;
-} *exit_hdlrs;
+};
 
 /* Runtime error handling */
-static struct handlerlist {
+struct handlerlist {
 	struct handlerlist	*next;
 	int			(*proc)(char *s);
-} *hdlrs;
+};
 
 /* note: set again (translated) in print_runtime_conf */
 static const char *setting_group[] = {" hidden setting ", "CALL configuration",
@@ -856,6 +867,14 @@ cob_exit_common_state (cob_context *ctx)
 
 	env_overlay_free (ctx);
 	free_context_settings (ctx);
+	{
+		struct handlerlist	*h, *n;
+		for (h = hdlrs; h; h = n) {
+			n = h->next;
+			cob_free (h);
+		}
+		hdlrs = NULL;
+	}
 	if (common_state (ctx)->cwd) {
 		cob_free (common_state (ctx)->cwd);
 		common_state (ctx)->cwd = NULL;
@@ -3787,6 +3806,22 @@ call_exit_handlers_and_terminate (cob_context *ctx)
 	cob_terminate_routines (ctx);
 }
 
+/* run (once) the exit procedures (CBL_EXIT_PROC) of the run unit of a
+   context other than the main one, at its end */
+static void
+run_context_exit_procedures (cob_context *ctx)
+{
+	struct exit_handlerlist	*h = exit_hdlrs;
+	struct exit_handlerlist	*n;
+
+	exit_hdlrs = NULL;
+	for (; h; h = n) {
+		n = h->next;
+		h->proc ();
+		cob_free (h);
+	}
+}
+
 #ifndef COB_WITHOUT_JMP
 /* whether STOP RUN and the fatal errors return to the host from the
    context: a context other than the main one, called through
@@ -3818,6 +3853,7 @@ end_context_run_unit (cob_context *ctx, const int ret)
 	} else {
 		cob_rollback_ctx (ctx);
 	}
+	run_context_exit_procedures (ctx);
 	cob_exit_fileio_context (ctx);
 	for (m = cob_module_list; m; m = m->next) {
 		if (m->cob_mod_ptr) {
@@ -4003,6 +4039,9 @@ cob_last_exit_code (void)
 const char *
 cob_last_runtime_error_ctx (cob_context *ctx)
 {
+	if (ctx == NULL || ctx == cob_main_context) {
+		return process_err_str;
+	}
 	return runtime_err_str;
 }
 
@@ -4155,6 +4194,7 @@ cob_context_destroy (cob_context *ctx)
 	   release their memory (CANCEL callback) */
 	prev = cob_context_enter (ctx);
 
+	run_context_exit_procedures (ctx);
 	cob_exit_fileio_context (ctx);
 	cob_exit_reportio (ctx);
 	cob_exit_intrinsic_context (ctx);
@@ -7964,6 +8004,7 @@ cob_tidy (void)
 int
 cob_sys_exit_proc (const void *dispo, const void *pptr)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	struct exit_handlerlist *hp;
 	struct exit_handlerlist *h;
 	unsigned char	install_flag;
@@ -8086,6 +8127,7 @@ cob_sys_exit_proc (const void *dispo, const void *pptr)
 int
 cob_sys_error_proc (const void *dispo, const void *pptr)
 {
+	cob_context	*ctx = cob_get_current_context ();
 	struct handlerlist	*hp;
 	struct handlerlist	*h;
 	const unsigned char	*x;
@@ -11138,6 +11180,9 @@ cob_setup_runtime_error_str (cob_context *ctx, const char *fmt, va_list ap)
 		p = runtime_err_str + strlen (runtime_err_str);
 	}
 	vsprintf (p, fmt, ap);
+	if (ctx == NULL || ctx == cob_main_context) {
+		memcpy (process_err_str, runtime_err_str, COB_ERRBUF_SIZE);
+	}
 }
 
 static void

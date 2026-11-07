@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (settings_of_context, cob_exit_common_state,
+	  call_exit_handlers_and_terminate, end_context_run_unit,
+	  cob_last_runtime_error_ctx, cob_context_destroy, ...): exit and error
+	  procedures per execution context
 	* common.c (call_exit_handlers_and_terminate, cob_stop_run_ctx,
 	  cob_hard_failure, cob_hard_failure_internal, cob_last_exit_code_ctx,
 	  cob_call_with_exception_check_ctx): STOP RUN and fatal errors return

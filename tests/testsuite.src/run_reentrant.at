@@ -2451,6 +2451,127 @@ AT_CHECK([cat sr.txt], [0],
 AT_CLEANUP
 
 
+AT_SETUP([exit and error procedures of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create CBL_EXIT_PROC CBL_ERROR_PROC])
+
+# the procedures installed with CBL_EXIT_PROC and CBL_ERROR_PROC belong
+# to the run unit of the context: the exit procedures run at the end of
+# the run unit of their context (STOP RUN, destruction), the error
+# procedures for the errors of their context
+
+AT_DATA([ep.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ep.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 EXIT-ADDR     USAGE PROCEDURE-POINTER.
+       01 ERR-ADDR      USAGE PROGRAM-POINTER.
+       01 MISSING       PIC X(10) VALUE "nosuchprog".
+       LINKAGE          SECTION.
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING OP.
+           EVALUATE OP
+           WHEN "I"
+              SET EXIT-ADDR TO ENTRY "bye"
+              CALL "CBL_EXIT_PROC" USING 0, EXIT-ADDR
+              SET ERR-ADDR TO ENTRY "errp"
+              CALL "CBL_ERROR_PROC" USING 0, ERR-ADDR
+           WHEN "S"
+              STOP RUN
+           WHEN "E"
+              CALL MISSING
+           END-EVALUATE
+           GOBACK.
+       END PROGRAM ep.
+
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      bye.
+       PROCEDURE        DIVISION.
+           DISPLAY "exit procedure"
+           GOBACK.
+       END PROGRAM bye.
+
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      errp.
+       PROCEDURE        DIVISION.
+           DISPLAY "error procedure"
+           MOVE 1 TO RETURN-CODE
+           GOBACK.
+       END PROGRAM errp.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static int
+ep (cob_context *ctx, const char *op)
+{
+   void *argv[1];
+   int ret;
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)op;
+   ret = cob_call_with_exception_check_ctx (ctx, "ep", 1, argv);
+   cob_context_leave (prev);
+   return ret;
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+
+   /* STOP RUN */
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+   ep (ctx1, "I");
+   printf ("ctx2 stop: %d\n", ep (ctx2, "S"));
+   fflush (stdout);
+   printf ("ctx1 stop: %d\n", ep (ctx1, "S"));
+   fflush (stdout);
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+
+   /* errors, end by destruction */
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+   ep (ctx1, "I");
+   printf ("ctx2 error: %d\n", ep (ctx2, "E"));
+   fflush (stdout);
+   printf ("ctx1 error: %d\n", ep (ctx1, "E"));
+   fflush (stdout);
+   cob_context_destroy (ctx2);
+   ctx2 = cob_context_create ();
+   ep (ctx2, "I");
+   printf ("destroy ctx2\n");
+   fflush (stdout);
+   cob_context_destroy (ctx2);
+   cob_context_destroy (ctx1);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ep.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx2 stop: 1
+exit procedure
+ctx1 stop: 1
+ctx2 error: -1
+error procedure
+exit procedure
+ctx1 error: -1
+destroy ctx2
+exit procedure
+], [libcob: ep.cob:21: error: module 'nosuchprog' not found
+libcob: ep.cob:21: error: module 'nosuchprog' not found
+])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
