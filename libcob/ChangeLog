@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (call_end_handler, context_returns, end_context_run_unit,
+	  cob_stop_run_ctx, cob_hard_failure, cob_hard_failure_internal, ...):
+	  STOP RUN of a hosted runtime ends the run unit of the context
 	* common.c (call_exit_handlers_and_terminate, end_context_run_unit,
 	  cob_stop_run_ctx, cob_hard_failure, cob_hard_failure_internal),
 	  common.h (cob_context_destroy): end handler of the host for the run

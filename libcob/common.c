@@ -3844,6 +3844,17 @@ call_end_handler (cob_context *ctx, const int ret)
 		 ret == 1 ? "" : runtime_err_str, ctx->common->end_handler_data);
 }
 
+/* whether the context runs a task of a host: a context other than the
+   main one, or any context of a hosted runtime (cob_set_hosted); its
+   STOP RUN and fatal errors end its run unit only */
+static int
+context_is_task (cob_context *ctx)
+{
+	return ctx != NULL
+	    && ctx->common != NULL
+	    && (ctx != cob_main_context || cob_hosted);
+}
+
 /* run (once) the exit procedures (CBL_EXIT_PROC) of the run unit of a
    context other than the main one, at its end */
 static void
@@ -3867,9 +3878,7 @@ run_context_exit_procedures (cob_context *ctx)
 static int
 context_returns (cob_context *ctx)
 {
-	return ctx != NULL
-	    && ctx != cob_main_context
-	    && ctx->common != NULL
+	return context_is_task (ctx)
 	    && ctx->common->return_jmp_set;
 }
 
@@ -3884,8 +3893,6 @@ end_context_run_unit (cob_context *ctx, const int ret) COB_A_NORETURN;
 static void
 end_context_run_unit (cob_context *ctx, const int ret)
 {
-	struct cob_alloc_module	*m;
-
 	if (ret == 1 && ctx->settings->cob_stop_run_commit > 0) {
 		cob_commit_ctx (ctx);
 	} else {
@@ -3894,9 +3901,17 @@ end_context_run_unit (cob_context *ctx, const int ret)
 	run_context_exit_procedures (ctx);
 	cob_exit_fileio_context (ctx);
 	call_end_handler (ctx, ret);
-	for (m = cob_module_list; m; m = m->next) {
-		if (m->cob_mod_ptr) {
-			m->cob_mod_ptr->module_active = 0;
+	/* a new run unit starts with the programs in their initial state:
+	   their modules are released and their instances freed, they are
+	   created again by the next call (the EXTERNAL items are kept) */
+	cob_exit_common_modules (ctx);
+	if (ctx->units) {
+		unsigned int	i;
+		for (i = 0; i < ctx->units_size; i++) {
+			if (ctx->units[i]) {
+				cob_free (ctx->units[i]);
+				ctx->units[i] = NULL;
+			}
 		}
 	}
 	COB_MODULE_PTR = NULL;
@@ -3917,7 +3932,7 @@ cob_stop_run_ctx (cob_context *ctx, const int status)
 		end_context_run_unit (ctx, 1);
 	}
 #endif
-	if (ctx && ctx != cob_main_context && ctx->common) {
+	if (context_is_task (ctx)) {
 		ctx->common->exit_code = status;
 		call_end_handler (ctx, 1);	/* may not return */
 	}
@@ -3990,7 +4005,7 @@ cob_hard_failure ()
 		end_context_run_unit (ctx, -1);
 	}
 #endif
-	if (ctx && ctx != cob_main_context && ctx->common) {
+	if (context_is_task (ctx)) {
 		ctx->common->exit_code = -1;
 		call_end_handler (ctx, -1);	/* may not return */
 	}
@@ -4040,7 +4055,7 @@ cob_hard_failure_internal (const char *prefix)
 		end_context_run_unit (ctx, -2);
 	}
 #endif
-	if (ctx && ctx != cob_main_context && ctx->common) {
+	if (context_is_task (ctx)) {
 		ctx->common->exit_code = -2;
 		call_end_handler (ctx, -2);	/* may not return */
 	}
@@ -4073,7 +4088,7 @@ cob_hard_failure_internal (const char *prefix)
 int
 cob_last_exit_code_ctx (cob_context *ctx)
 {
-	if (ctx != NULL && ctx != cob_main_context && ctx->common != NULL) {
+	if (context_is_task (ctx)) {
 		return ctx->common->exit_code;
 	}
 	return exit_code;
@@ -12541,9 +12556,10 @@ cob_call_with_exception_check_ctx (cob_context *ctx, const char *name, const int
 {
 #ifndef COB_WITHOUT_JMP
 	int ret;
-	/* a context other than the main one: return point in the context,
-	   the runtime and the other contexts go on (end_context_run_unit) */
-	if (ctx != NULL && ctx != cob_main_context && ctx->common != NULL) {
+	/* the context of a task (see context_is_task): return point in the
+	   context, the runtime and the other contexts go on
+	   (end_context_run_unit) */
+	if (context_is_task (ctx)) {
 		struct cob_common_state	*cs = ctx->common;
 		jmp_buf		saved;
 		const int	saved_set = cs->return_jmp_set;

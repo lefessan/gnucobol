@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: STOP RUN of a hosted runtime ends the
+	  run unit of the context
 	* testsuite.src/run_reentrant.at: end handler of the host for the run
 	  unit of a context
 	* testsuite.src/run_reentrant.at: hosted runtime without signal

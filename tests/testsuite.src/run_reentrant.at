@@ -2622,6 +2622,73 @@ AT_CHECK([$COBCRUN_DIRECT ./host], [0],
 AT_CLEANUP
 
 
+AT_SETUP([hosted runtime: STOP RUN in the main context])
+AT_KEYWORDS([runreentrant cob_set_hosted cob_call_with_exception_check STOP])
+
+# in a hosted runtime, the main context is a task as the others: its
+# STOP RUN ends its run unit and returns to the host, the runtime goes on;
+# the next run unit starts with the programs in their initial state
+
+AT_DATA([st.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      st.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OPTIONAL OUT-FILE ASSIGN TO "st.txt"
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9 VALUE 0.
+       PROCEDURE        DIVISION.
+           ADD 1 TO CNT
+           OPEN EXTEND OUT-FILE
+           MOVE "run" TO OUT-REC
+           WRITE OUT-REC
+           MOVE CNT TO RETURN-CODE
+           STOP RUN.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+   int i, ret;
+
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   ctx = cob_get_current_context ();
+   for (i = 0; i < 2; i++) {
+      ret = cob_call_with_exception_check_ctx (ctx, "st", 0, NULL);
+      printf ("return %d, exit code %d\n", ret, cob_last_exit_code_ctx (ctx));
+   }
+   printf ("host goes on\n");
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE st.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[return 1, exit code 1
+return 1, exit code 1
+host goes on
+], [])
+AT_CHECK([cat st.txt], [0],
+[run
+run
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
