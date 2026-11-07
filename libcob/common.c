@@ -7227,15 +7227,24 @@ check_valid_env_tmpdir (cob_context *ctx, const char *envname)
 }
 
 
+/* TMPDIR, checked once for the process (under tmpdir_lock) */
+static const char	*tmpdir_cache = NULL;
+COB_LOCK_DEFINE (tmpdir_lock);
+
 /* return pointer to TMPDIR without trailing slash */
 static const char *
 cob_gettmpdir (cob_context *ctx)
 {
-	static const char	*tmpdir = NULL;
+	const char	*tmpdir = cob_atomic_load_ptr (&tmpdir_cache);
 	char	*tmp;
 
 	if (tmpdir != NULL) {
 		return tmpdir;
+	}
+	cob_lock_acquire (&tmpdir_lock);
+	if (tmpdir_cache != NULL) {
+		cob_lock_release (&tmpdir_lock);
+		return tmpdir_cache;
 	}
 
 	tmp = NULL;
@@ -7282,6 +7291,8 @@ cob_gettmpdir (cob_context *ctx)
 	/* get the pointer to the environment copy - as this may point to a different place -
 	   store it for subsequent calls and finally return it to the caller */
 	tmpdir = getenv ("TMPDIR");
+	cob_atomic_store_ptr (&tmpdir_cache, tmpdir);
+	cob_lock_release (&tmpdir_lock);
 	return tmpdir;
 }
 
@@ -12323,11 +12334,11 @@ cob_get_dump_file (void)
 	}
 }
 
-static const char *sectname[] = {
+static const char *const sectname[] = {
 			"CONSTANT","FILE","WORKING-STORAGE",
 			"LOCAL","LINKAGE","SCREEN",
 			"REPORT","COMMUNICATION"};
-static unsigned char sectdump[] = {
+static const unsigned char sectdump[] = {
 	0, COB_DUMP_FD, COB_DUMP_WS, COB_DUMP_LO, COB_DUMP_LS,
 	COB_DUMP_SC, COB_DUMP_RD, COB_DUMP_RD};
 #define SYM_MAX_IDX 8
