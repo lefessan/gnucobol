@@ -363,6 +363,12 @@ struct cob_common_state {
 	/* READY TRACE / RESET TRACE, initialized from COB_SET_TRACE */
 	unsigned int		line_trace;
 
+#ifdef	COB_THREAD_LOCALES
+	/* locale of the context, set by cob_set_locale; (locale_t)0: the
+	   locale of the process; applied by cob_context_enter */
+	locale_t		locale;
+#endif
+
 	/* dump of the symbols (cob_dump_symbols) */
 #define SYM_MAX_IDX 8
 	int			dump_sym_idx;
@@ -788,6 +794,14 @@ cob_context_free (cob_context *ctx)
 		}
 		cob_free (ctx->units);
 	}
+#ifdef	COB_THREAD_LOCALES
+	if (ctx->common->locale != (locale_t)0) {
+		if (uselocale ((locale_t)0) == ctx->common->locale) {
+			(void)uselocale (LC_GLOBAL_LOCALE);
+		}
+		freelocale (ctx->common->locale);
+	}
+#endif
 	cob_free (ctx->common);
 	if (ctx->termio) {
 		cob_free (ctx->termio);
@@ -3921,11 +3935,24 @@ cob_get_current_context (void)
 }
 
 /* make 'ctx' the current context of the thread, returns the previous one */
+#ifdef	COB_THREAD_LOCALES
+/* make the locale of 'ctx' (NULL: none) the locale of the thread */
+static void
+apply_context_locale (cob_context *ctx)
+{
+	locale_t	loc = ctx && ctx->common ? ctx->common->locale : (locale_t)0;
+	(void)uselocale (loc != (locale_t)0 ? loc : LC_GLOBAL_LOCALE);
+}
+#endif
+
 cob_context *
 cob_context_enter (cob_context *ctx)
 {
 	cob_context	*prev = cob_current_context;
 	cob_current_context = ctx;
+#ifdef	COB_THREAD_LOCALES
+	apply_context_locale (ctx);
+#endif
 	return prev;
 }
 
@@ -3934,6 +3961,9 @@ void
 cob_context_leave (cob_context *prev)
 {
 	cob_current_context = prev;
+#ifdef	COB_THREAD_LOCALES
+	apply_context_locale (prev);
+#endif
 }
 
 /* Set switches of the context from the environment */
@@ -8868,10 +8898,99 @@ cob_sys_justify (void *p1, ...)
 	return 0;
 }
 
+#ifdef	COB_THREAD_LOCALES
+/* set the category 'mask' of the locale of the context to 'name',
+   without changing the locale of the process; returns 0 if the locale
+   is not available */
+static int
+set_context_locale (cob_context *ctx, const int mask, const char *name)
+{
+	locale_t	cur = common_state (ctx)->locale;
+	locale_t	base, loc;
+
+	base = duplocale (cur != (locale_t)0 ? cur : LC_GLOBAL_LOCALE);
+	if (base == (locale_t)0) {
+		return 0;
+	}
+	loc = newlocale (mask, name, base);
+	if (loc == (locale_t)0) {
+		freelocale (base);
+		return 0;
+	}
+	common_state (ctx)->locale = loc;
+	if (cob_current_context == ctx) {
+		(void)uselocale (loc);
+	}
+	if (cur != (locale_t)0) {
+		freelocale (cur);
+	}
+	return 1;
+}
+#endif
+
 void
 cob_set_locale_ctx (cob_context *ctx, cob_field *locale, const int category)
 {
-#ifdef	HAVE_SETLOCALE
+#if	defined (COB_THREAD_LOCALES)
+	/* the locale of the context only */
+	char	buff[COB_MINI_BUFF];
+	const char	*p;
+	int	ok = 0;
+
+	if (locale) {
+		int 	flen = cob_field_to_string (locale, buff,
+					COB_MINI_MAX, CCM_NONE);
+		if (flen < 1) {
+			return;
+		}
+		p = buff;
+	} else if (category != COB_LC_USER
+		&& category != COB_LC_CLASS) {
+		return;		/* only a query with setlocale */
+	} else {
+		p = NULL;
+	}
+
+	switch (category) {
+	case COB_LC_COLLATE:
+		ok = set_context_locale (ctx, LC_COLLATE_MASK, p);
+		break;
+	case COB_LC_CTYPE:
+		ok = set_context_locale (ctx, LC_CTYPE_MASK, p);
+		break;
+#ifdef	LC_MESSAGES
+	case COB_LC_MESSAGES:
+		ok = set_context_locale (ctx, LC_MESSAGES_MASK, p);
+		break;
+#endif
+	case COB_LC_MONETARY:
+		ok = set_context_locale (ctx, LC_MONETARY_MASK, p);
+		break;
+	case COB_LC_NUMERIC:
+		ok = set_context_locale (ctx, LC_NUMERIC_MASK, p);
+		break;
+	case COB_LC_TIME:
+		ok = set_context_locale (ctx, LC_TIME_MASK, p);
+		break;
+	case COB_LC_ALL:
+		ok = set_context_locale (ctx, LC_ALL_MASK, p);
+		break;
+	case COB_LC_USER:
+		if (ctx->glob.cob_locale_orig) {
+			ok = set_context_locale (ctx, LC_ALL_MASK, ctx->glob.cob_locale_orig)
+			  && set_context_locale (ctx, LC_NUMERIC_MASK, "C");
+		}
+		break;
+	case COB_LC_CLASS:
+		if (ctx->glob.cob_locale_ctype) {
+			ok = set_context_locale (ctx, LC_CTYPE_MASK, ctx->glob.cob_locale_ctype);
+		}
+		break;
+	}
+	if (!ok) {
+		cob_set_exception_ctx (ctx, COB_EC_LOCALE_MISSING);
+	}
+#elif	defined (HAVE_SETLOCALE)
 	char	buff[COB_MINI_BUFF];
 	char	*p;
 

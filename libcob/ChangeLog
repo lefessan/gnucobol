@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_context_free, cob_get_current_context,
+	  cob_context_enter, cob_context_leave, cob_sys_justify,
+	  cob_set_locale_ctx): locale of an execution context
 	* coblocal.h, common.c (cob_sys_printable), intrinsic.c
 	  (get_interval_and_current_year_from_args, locale_time,
 	  cob_intr_locale_date_ctx, cob_intr_lcl_time_from_secs,

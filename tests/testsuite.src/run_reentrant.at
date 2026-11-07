@@ -1598,6 +1598,80 @@ Program-Id:  trc                         RESET TRACE                     Line:  
 AT_CLEANUP
 
 
+AT_SETUP([locale of an execution context])
+AT_KEYWORDS([runreentrant cob_context_create cob_set_locale LOCALE])
+
+# the locale set in a context (cob_set_locale, also used by the
+# CLASSIFICATION clause) is not the one of the process: the other
+# contexts are not affected
+
+AT_SKIP_IF([locale -a 2>/dev/null | grep -q -i '^fr_FR\.utf-*8$'; test $? -ne 0])
+
+AT_DATA([ld.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ld.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           DISPLAY TAG ": " FUNCTION LOCALE-DATE (20261107)
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <string.h>
+#include <libcob.h>
+
+static void
+ld (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("ld", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2, *prev;
+   char name[] = "fr_FR.utf8";
+   cob_field_attr attr = {COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
+   cob_field f = {sizeof (name) - 1, (unsigned char *)name, &attr};
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   ld (ctx1, "ctx1");
+   prev = cob_context_enter (ctx1);
+   cob_set_locale_ctx (ctx1, &f, COB_LC_TIME);
+   cob_context_leave (prev);
+   ld (ctx1, "ctx1");
+   ld (ctx2, "ctx2");
+   ld (ctx1, "ctx1");
+   ld (cob_get_current_context (), "main");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ld.cob], [0], [], [])
+AT_CHECK([LC_ALL=C $COBCRUN_DIRECT ./host], [0],
+[ctx1: 11/07/26
+ctx1: 07/11/2026
+ctx2: 11/07/26
+ctx1: 07/11/2026
+main: 11/07/26
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 
