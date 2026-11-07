@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_stack_trace_internal, cob_get_dump_file), termio.c
+	  (cob_display_va_ctx): SYSPUNCH and dump files opened once under a
+	  lock
 	* common.c (cob_open_logfile, cob_check_trace_file,
 	  cob_rescan_env_vals, cob_trace_sect_ctx, cob_trace_para_ctx,
 	  cob_trace_entry_ctx, ...): READY TRACE per context, trace file opened

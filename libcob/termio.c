@@ -47,6 +47,7 @@
 
 
 static unsigned int no_syspunch_error_raised = 0;	/* once for the process */
+COB_LOCK_DEFINE (punch_file_lock);	/* opening of the SYSPUNCH file */
 #define MAX_PREV 256
 
 static const unsigned short	bin_digits[] =
@@ -395,7 +396,8 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 		}
 		break;
 	case 3:	/* SYSPCH */
-		/* open if not available but specified */
+		/* open if not available but specified (once for the process) */
+		cob_lock_acquire (&punch_file_lock);
 		if (!ctx->settings->cob_display_punch_file
 		 && ctx->settings->cob_display_punch_filename != NULL) {
 			const char* mode;
@@ -415,9 +417,11 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 				ctx->settings->cob_display_punch_file = fp;
 			}
 		}
+		fp = ctx->settings->cob_display_punch_file;
+		cob_lock_release (&punch_file_lock);
 		/* display to already opened punch file */
-		if (ctx->settings->cob_display_punch_file) {
-			fp = ctx->settings->cob_display_punch_file;
+		if (fp) {
+			/* fp set above */
 		} else {
 			cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);	/* come back to this later... */
 			if (!cob_atomic_load_uint (&no_syspunch_error_raised)) {

@@ -12337,24 +12337,38 @@ cob_stack_trace_internal (cob_context *ctx, FILE *target, int verbose, int count
 	write_until_fail (file_no, buff, pos);
 }
 
+
+/* the dump file is opened once for the process */
+COB_LOCK_DEFINE (dump_file_lock);
+
 FILE *
 cob_get_dump_file (void)
 {
-	if (cobsetptr->cob_dump_file != NULL) {	/* If DUMP active, use that */
-		return cobsetptr->cob_dump_file;
+	FILE	*fp;
+
+	/* the dump file is opened once for the process, in any context */
+	cob_lock_acquire (&dump_file_lock);
+	fp = cobsetptr->cob_dump_file;
+	if (fp == NULL
+	 && cobsetptr->cob_dump_filename != NULL
+	 && !cob_check_env_false (cobsetptr->cob_dump_filename)) {
+		fp = cobsetptr->cob_dump_file
+		   = cob_open_logfile (cobsetptr->cob_dump_filename);
+		if (fp == NULL) {
+			/* could not open the file
+			   unset the filename for not referencing it later */
+			cob_free (cobsetptr->cob_dump_filename);
+			cobsetptr->cob_dump_filename = NULL;
+		}
+	}
+	cob_lock_release (&dump_file_lock);
+
+	if (fp != NULL) {	/* If DUMP active, use that */
+		return fp;
 	} else if (cobsetptr->cob_dump_filename != NULL) {	/* DUMP file defined */
 		if (cob_check_env_false(cobsetptr->cob_dump_filename)) {
 			return NULL;
 		}
-		cobsetptr->cob_dump_file = cob_open_logfile (cobsetptr->cob_dump_filename);
-		if (cobsetptr->cob_dump_file != NULL) {
-			return cobsetptr->cob_dump_file;
-		}
-		/* could not open the file
-		   unset the filename for not referencing it later */
-		cob_free (cobsetptr->cob_dump_filename);
-		cobsetptr->cob_dump_filename = NULL;
-		/* Fall-through */
 	}
 	if (cobsetptr->cob_trace_file != NULL) {	/* If TRACE active, use that */
 		return cobsetptr->cob_trace_file;
