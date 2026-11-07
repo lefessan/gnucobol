@@ -378,15 +378,26 @@ Conséquences pour `cobc/codegen.c` :
         autres contextes reposés après un unlock ou un close ; attente
         RETRY par scrutation (plus de `SIGALRM`) ; corrige aussi UNLOCK,
         qui ne libérait pas les verrous d'enregistrements (amont).
-        Reste : le verrou de fichier à l'OPEN de LMDB (`fcntl` direct
-        dans `flmdb.c`), `prev_lock` jamais renseigné (amont, voir
+        Reste : `prev_lock` jamais renseigné (amont, voir
         BUGS-FOUND.md) ;
       - LMDB : pas de verrous d'enregistrements (déjà le cas en amont) ;
         `MDB_NOTLS` si un contexte peut passer d'un thread à l'autre avec
         une transaction de lecture ouverte ;
-      - V-ISAM et ODBC en multi-thread : non étudiés ;
-      - `cob_module_path` : écrit une fois sous le verrou de `call.c`,
-        lu sans verrou ;
+      - V-ISAM et ODBC en multi-thread : non étudiés (ODBC : connexion
+        `db` globale, `high_value` de `fsqlxfd.c` initialisé à la
+        première utilisation) ;
+      - **faits le 2026-11-07** : verrou de fichier à l'OPEN de LMDB par
+        la table des contextes (fonctions `cob_ctx_lock_try` /
+        `cob_ctx_lock_close` exportées pour les gestionnaires) ;
+        `cob_module_path` atomique ; constantes des fonctions
+        intrinsèques (PI, E, logarithmes) calculées sous verrou — course
+        réelle trouvée par TSan (deux `mpf_init2` du même nombre) ;
+        état du gestionnaire d'erreurs XML dans l'analyse ; données de
+        profilage `const` ou dans le contexte ; emplacement de la
+        dernière exception, état du dump des symboles dans le contexte ;
+        TMPDIR calculé une fois sous verrou. Variables globales
+        modifiables de libcob : 169 (réglages, signaux, STOP RUN,
+        `screenio.c`, verrous et tables de niveau processus) ;
   - code généré : caches `call_X` / `func_X` (écriture concurrente
     d'un pointeur, même valeur ; CANCEL les remet à NULL) et
     `cob_reference_count` (incréments atomiques) ;
