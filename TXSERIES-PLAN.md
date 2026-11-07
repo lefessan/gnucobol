@@ -70,6 +70,24 @@ Proposition, par étapes :
    avec le message d'erreur), appelé avant le retour à la frontière.
 5. Pas de fuite d'une tâche à l'autre (Valgrind / ASan sur le banc).
 
+État au 2026-11-07 : étapes 1 à 5 faites.
+1. frontière par contexte (`cob_call_with_exception_check_ctx`,
+   `end_context_run_unit`), code de retour par contexte ;
+2. CBL_EXIT_PROC / CBL_ERROR_PROC et dernier message d'erreur par
+   contexte (exécutées à la fin de la run unit du contexte) ;
+3. `cob_set_hosted` (avant `cob_init`) : aucun gestionnaire de signal ;
+4. `cob_context_set_end_handler` : fonction de l'hôte appelée à la fin
+   de la run unit (STOP RUN 1, erreur -1 / -2, code de sortie, message) ;
+5. fuites : banc de 50 tâches sous AddressSanitizer / LeakSanitizer sans
+   aucune fuite ; mémoire stable (~12 Mo) de 1 000 à 4 000 tâches.
+   Trouvé en passant : lecture hors limites dans `get_field_name` (cobc,
+   corrigé).
+Restent pour T2 : comportement des E/S console (DISPLAY / ACCEPT) dans
+un serveur ; STOP RUN dans le contexte principal d'un runtime hébergé
+(termine encore tout le runtime) ; `exit` des gestionnaires de signaux
+quand ils sont installés ; mémoire de LOCAL-STORAGE des programmes
+abandonnés par le retour à la frontière.
+
 ### T3 — Choix de version et étude de l'ABI TXSeries
 - Choisir version et plateforme (probablement Linux x86_64 ; 32 ou 64 bits ?).
 - Récupérer la sortie de `cicstcl` (COBOL IBM et Micro Focus) pour un
