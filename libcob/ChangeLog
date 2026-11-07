@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* termio.c (cob_display_va_ctx): warning once for SYSPUNCH set
+	  atomically
 	* common.h (cob_prof_init_module, cob_prof_init_module_ctx),
 	  profiling.c (prof_state, get_ns_time, prof_setup_clock,
 	  prof_init_static, cob_prof_init_module_ctx, cob_prof_realloc_arrays,

@@ -46,7 +46,7 @@
 /* Local variables */
 
 
-static char no_syspunch_error_raised = 0;
+static unsigned int no_syspunch_error_raised = 0;	/* once for the process */
 #define MAX_PREV 256
 
 static const unsigned short	bin_digits[] =
@@ -420,8 +420,8 @@ cob_display_va_ctx (cob_context *ctx, const int to_device, const int newline, co
 			fp = ctx->settings->cob_display_punch_file;
 		} else {
 			cob_set_exception_ctx (ctx, COB_EC_IMP_DISPLAY);	/* come back to this later... */
-			if (!no_syspunch_error_raised) {
-				no_syspunch_error_raised = 1;
+			if (!cob_atomic_load_uint (&no_syspunch_error_raised)) {
+				cob_atomic_store_uint (&no_syspunch_error_raised, 1);
 				cob_runtime_warning_ctx (ctx, _("COB_DISPLAY_PUNCH_FILE is invalid, output to SYSPUNCH skipped"));
 			}
 			return;
