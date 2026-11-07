@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md: first findings of T3 (COBOL-IT integration)
 	* TXSERIES-PLAN.md: T2 done, summary of the host API
 	* TXSERIES-PLAN.md: T2 status
 	* TXSERIES-PLAN.md: T2 progress

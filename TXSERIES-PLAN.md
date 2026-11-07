@@ -115,6 +115,30 @@ erreur ; `cob_last_exit_code_ctx`), `cob_context_leave`,
   du runtime COBOL MF, modèle de threads de `cicsas`.
 - Décider de la stratégie d'intégration (voir T5).
 
+#### T3 — premières constatations (2026-11-07, documentation publique)
+- Compilateurs COBOL pris en charge par TXSeries sur Linux x86 (9.1) :
+  IBM COBOL for Linux on x86, Micro Focus Visual COBOL, et **COBOL-IT**
+  (dérivé commercial d'OpenCOBOL, donc proche parent de GnuCOBOL) ; la
+  version 11.1 existe pour Linux x86-64 (y compris en conteneur).
+- Recherche d'un programme par `cicsas` (attribut PathName de la PD) :
+  C (sans extension), `.ibmcob`, `.gnt` / `.int` (Micro Focus),
+  `.ibmpli`, `.ibmcpp`, **`.so` (COBOL-IT)** ; nom relatif à la région,
+  puis `$CICSPATH/bin`, puis `CICS_PROGRAM_PATH`. `Resident=yes` garde
+  le programme chargé (« une copie fraîche des données statiques
+  seulement au chargement » : cohérent avec nos instances par contexte).
+- Intégration de COBOL-IT (dépôt IBM `txseries-samples`,
+  `TXSeries-COBOLIT-IVP`) : `cicsmkcobolit -lcobit -o
+  /opt/ibm/cics/bin` construit le module de prise en charge COBOL de
+  TXSeries, lié à la bibliothèque d'exécution de COBOL-IT (`libcobit`) ;
+  la région reçoit `COB_LIBRARY_PATH` (variable héritée d'OpenCOBOL) ;
+  programmes compilés en `.so`, traduits par `cicstcl -l COBOLIT`.
+- **Piste pour T5** : se présenter comme COBOL-IT : fournir l'API de
+  `libcobit` utilisée par le module de TXSeries, implantée sur libcob
+  (avec `cob_set_hosted`, un contexte par tâche, la frontière T2), et
+  compiler les programmes en `.so` avec `cobc`. À confirmer en examinant
+  `cicsmkcobolit` et les symboles qu'il attend (image `ibmcom/txseries`
+  sur Docker Hub, licence IBM à accepter).
+
 ### T4 — Dialecte du source traduit
 - Créer `config/txseries.conf` (dérivé de `mf.conf` ou `ibm.conf`).
 - Ordre des octets / troncature / taille des `COMP` et `COMP-5`
