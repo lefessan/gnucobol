@@ -252,6 +252,104 @@ AT_CHECK([for i in 01 02 03 04 05 06 07; do cmp f00.txt f$i.txt || exit 1; done]
 AT_CLEANUP
 
 
+AT_SETUP([intrinsic constants in several threads])
+AT_KEYWORDS([runreentrant cob_context_create FUNCTION PI thread])
+
+# the constants of the intrinsic functions (PI, E, logarithms) are
+# computed on first use, possibly by several threads at the same time
+
+AT_DATA([calc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      calc.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(8) VALUE 0.
+       01 X             PIC S9(10)V9(20).
+       LINKAGE          SECTION.
+       01 RES           PIC 9(8).
+       01 TID           PIC 9(2).
+       PROCEDURE        DIVISION USING RES TID.
+           ADD 1 TO CNT
+           COMPUTE X = FUNCTION PI + FUNCTION E
+                     + FUNCTION LOG (CNT + 1) + FUNCTION LOG10 (CNT + 1)
+                     + FUNCTION ACOS (0.5)
+           MOVE CNT TO RES
+           GOBACK.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <libcob.h>
+
+#define NTHREADS 8
+#define NCALLS 1000
+
+static int bads[NTHREADS];
+
+static void *
+task (void *arg)
+{
+   int *bad = (int *)arg;
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char res[9] = "00000000";
+   char tid[3];
+   void *argv[2];
+   int i;
+
+   snprintf (tid, sizeof tid, "%02d", (int)(bad - bads));
+   argv[0] = res;
+   argv[1] = tid;
+   for (i = 1; i <= NCALLS; i++) {
+      char expected[9];
+      (void)cob_call ("calc", 2, argv);
+      snprintf (expected, sizeof expected, "%08d", i);
+      if (memcmp (res, expected, 8)) {
+         (*bad)++;
+      }
+   }
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+
+int
+main (int argc, char **argv)
+{
+   pthread_t th[NTHREADS];
+   int i;
+
+   cob_init (argc, argv);
+   /* the module is loaded by the first CALL, in one of the threads */
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_create (&th[i], NULL, task, &bads[i]);
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_join (th[i], NULL);
+      printf ("thread %d: %d bad\n", i, bads[i]);
+   }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([$COMPILE_MODULE calc.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([INDEXED files in several threads])
 AT_KEYWORDS([runreentrant cob_context_create INDEXED thread])
 

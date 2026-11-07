@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* intrinsic.c (setup_cob_pi, setup_cob_sqrt_two, setup_cob_log_half,
+	  setup_cob_log_ten, cob_mpf_log, cob_mpf_log10, ...): constants of the
+	  intrinsic functions computed under a lock
 	* call.c (cob_set_cancel_ctx), coblocal.h, intrinsic.c
 	  (cob_intr_module_path_ctx): module path set and read atomically
 	* coblocal.h (cob_gmtime, cob_ctx_lock_try), flmdb.c (local_file,

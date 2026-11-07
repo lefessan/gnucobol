@@ -141,10 +141,17 @@ static mpf_t		cob_pi;
 static mpf_t		cob_sqrt_two;
 static mpf_t		cob_log_half;
 static mpf_t		cob_log_ten;
-static int		set_cob_pi;
-static int		set_cob_sqrt_two;
-static int		set_cob_log_half;
-static int		set_cob_log_ten;
+/* the constants are computed on first use, in any context: each one
+   under its own lock (log_ten uses log_half), the indicator is read
+   atomically */
+static unsigned int	set_cob_pi;
+static unsigned int	set_cob_sqrt_two;
+static unsigned int	set_cob_log_half;
+static unsigned int	set_cob_log_ten;
+COB_LOCK_DEFINE (cob_pi_lock);
+COB_LOCK_DEFINE (cob_sqrt_two_lock);
+COB_LOCK_DEFINE (cob_log_half_lock);
+COB_LOCK_DEFINE (cob_log_ten_lock);
 
 /* Constants for date/day calculations */
 static const int normal_days[] =
@@ -420,9 +427,15 @@ setup_cob_pi (void)
 		"817101";
 	const unsigned long COB_PI_LEN = 2820UL;
 
+	cob_lock_acquire (&cob_pi_lock);
+	if (set_cob_pi) {
+		cob_lock_release (&cob_pi_lock);
+		return;
+	}
 	mpf_init2 (cob_pi, COB_PI_LEN);
 	mpf_set_str (cob_pi, cob_pi_str, 10);
-	set_cob_pi = 1;
+	cob_atomic_store_uint (&set_cob_pi, 1);
+	cob_lock_release (&cob_pi_lock);
 }
 
 static COB_NOINLINE void
@@ -456,9 +469,15 @@ setup_cob_sqrt_two (void)
 		"78";
 	const unsigned long COB_SQRT_TWO_LEN = 3827UL;
 
+	cob_lock_acquire (&cob_sqrt_two_lock);
+	if (set_cob_sqrt_two) {
+		cob_lock_release (&cob_sqrt_two_lock);
+		return;
+	}
 	mpf_init2 (cob_sqrt_two, COB_SQRT_TWO_LEN);
 	mpf_set_str (cob_sqrt_two, cob_sqrt_two_str, 10);
-	set_cob_sqrt_two = 1;
+	cob_atomic_store_uint (&set_cob_sqrt_two, 1);
+	cob_lock_release (&cob_sqrt_two_lock);
 }
 
 static COB_NOINLINE void
@@ -485,18 +504,30 @@ setup_cob_log_half (void)
 		"94147295092931138971559982056543928717";
 	const unsigned long COB_LOG_HALF_LEN = 2784UL;
 
+	cob_lock_acquire (&cob_log_half_lock);
+	if (set_cob_log_half) {
+		cob_lock_release (&cob_log_half_lock);
+		return;
+	}
 	mpf_init2 (cob_log_half, COB_LOG_HALF_LEN);
 	mpf_set_str (cob_log_half, cob_log_half_str, 10);
-	set_cob_log_half = 1;
+	cob_atomic_store_uint (&set_cob_log_half, 1);
+	cob_lock_release (&cob_log_half_lock);
 }
 
 static COB_NOINLINE void
 setup_cob_log_ten (void)
 {
+	cob_lock_acquire (&cob_log_ten_lock);
+	if (set_cob_log_ten) {
+		cob_lock_release (&cob_log_ten_lock);
+		return;
+	}
 	mpf_init2 (cob_log_ten, COB_MPF_PREC);
 	mpf_set_ui (cob_log_ten, 10UL);
 	cob_mpf_log (cob_log_ten, cob_log_ten);
-	set_cob_log_ten = 1;
+	cob_atomic_store_uint (&set_cob_log_ten, 1);
+	cob_lock_release (&cob_log_ten_lock);
 }
 
 #define RETURN_IF_NOT_ZERO(expr)		\
@@ -975,7 +1006,7 @@ cob_mpf_log (mpf_t dst_val, const mpf_t src_val)
 	}
 
 	mpf_init2 (dst_temp, COB_MPF_PREC);
-	if (!set_cob_log_half) setup_cob_log_half ();
+	if (!cob_atomic_load_uint (&set_cob_log_half)) setup_cob_log_half ();
 
 	mpf_init2 (vf1, COB_MPF_PREC);
 	mpf_set (vf1, src_val);
@@ -1026,7 +1057,7 @@ cob_mpf_log10 (mpf_t dst_val, const mpf_t src_val)
 	mpf_t			dst_temp;
 
 	mpf_init2 (dst_temp, COB_MPF_PREC);
-	if (!set_cob_log_ten) setup_cob_log_ten ();
+	if (!cob_atomic_load_uint (&set_cob_log_ten)) setup_cob_log_ten ();
 
 	cob_mpf_log (dst_temp, src_val);
 	mpf_div (dst_temp, dst_temp, cob_log_ten);
@@ -1049,7 +1080,7 @@ cob_mpf_sin (mpf_t dst_val, const mpf_t src_val)
 	int			sign;
 
 	mpf_init2 (dst_temp, COB_MPF_PREC);
-	if (!set_cob_pi) setup_cob_pi ();
+	if (!cob_atomic_load_uint (&set_cob_pi)) setup_cob_pi ();
 
 	mpf_init2 (vf1, COB_MPF_PREC);
 	mpf_init2 (vf2, COB_MPF_PREC);
@@ -1125,7 +1156,7 @@ cob_mpf_cos (mpf_t dst_val, const mpf_t src_val)
 	mpf_t		vf1;
 
 	mpf_init2 (vf1, COB_MPF_PREC);
-	if (!set_cob_pi) setup_cob_pi ();
+	if (!cob_atomic_load_uint (&set_cob_pi)) setup_cob_pi ();
 
 	mpf_set (vf1, cob_pi);
 	mpf_div_2exp (vf1, vf1, 1UL);
@@ -1165,8 +1196,8 @@ cob_mpf_atan (mpf_t dst_val, const mpf_t src_val)
 	cob_uli_t		n;
 
 	mpf_init2 (dst_temp, COB_MPF_PREC);
-	if (!set_cob_pi) setup_cob_pi ();
-	if (!set_cob_sqrt_two) setup_cob_sqrt_two ();
+	if (!cob_atomic_load_uint (&set_cob_pi)) setup_cob_pi ();
+	if (!cob_atomic_load_uint (&set_cob_sqrt_two)) setup_cob_sqrt_two ();
 
 	mpf_init2 (vf1, COB_MPF_PREC);
 	mpf_init2 (vf2, COB_MPF_PREC);
@@ -1230,7 +1261,7 @@ cob_mpf_asin (mpf_t dst_val, const mpf_t src_val)
 	mpf_t			dst_temp;
 
 	mpf_init2 (dst_temp, COB_MPF_PREC);
-	if (!set_cob_pi) setup_cob_pi ();
+	if (!cob_atomic_load_uint (&set_cob_pi)) setup_cob_pi ();
 
 	if (!mpf_cmp_ui (src_val, 1UL) || !mpf_cmp_si (src_val, -1L)) {
 		mpf_set (dst_temp, cob_pi);
@@ -1278,7 +1309,7 @@ cob_mpf_acos (mpf_t dst_val, const mpf_t src_val)
 	mpf_t			dst_temp;
 
 	mpf_init2 (dst_temp, COB_MPF_PREC);
-	if (!set_cob_pi) setup_cob_pi ();
+	if (!cob_atomic_load_uint (&set_cob_pi)) setup_cob_pi ();
 
 	if (!mpf_sgn (src_val)) {
 		mpf_set (dst_temp, cob_pi);
@@ -5088,7 +5119,7 @@ cob_intr_e (void)
 cob_field *
 cob_intr_pi_ctx (cob_context *ctx)
 {
-	if (!set_cob_pi) setup_cob_pi ();
+	if (!cob_atomic_load_uint (&set_cob_pi)) setup_cob_pi ();
 
 	mpf_set (cob_mpft, cob_pi);
 	cob_decimal_set_mpf (ctx, &d1, cob_mpft);
