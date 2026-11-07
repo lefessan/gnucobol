@@ -2965,3 +2965,21 @@ AT_CHECK([$SHELL "$abs_top_srcdir/build_aux/list-mutable-globals.sh" progp.o \
 
 AT_CLEANUP
 
+
+
+AT_SETUP([cobc -fthread-safe (COBOL-IT compatibility)])
+AT_KEYWORDS([runreentrant txseries cobolit])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       PROCEDURE        DIVISION.
+           DISPLAY "OK"
+           GOBACK.
+])
+
+AT_CHECK([$COMPILE -fthread-safe prog.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [OK
+], [])
+
+AT_CLEANUP

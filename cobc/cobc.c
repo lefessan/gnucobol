@@ -289,6 +289,8 @@ int warn_opt_val[COB_WARNOPT_MAX];
 
 static char	cob_std_conf[64] = "";
 static int		num_std = 0;
+/* COBOL-IT -fthread-safe: generated code is always reentrant, ignored */
+static int		cb_flag_thread_safe = 1;
 static struct cb_define_struct	*cb_define_list = NULL;
 
 static struct cobc_mem_struct	*cobc_mainmem_base = NULL;
@@ -589,6 +591,9 @@ static const struct option long_options[] = {
 	/* alias for backwards-compatibility, removed with 4.x: */
 	{"fnotrunc",		CB_NO_ARG, &cb_flag_trunc, 0},
 	{"fno-notrunc",		CB_NO_ARG, &cb_flag_trunc, 1},
+
+	/* compatibility with COBOL-IT (used by TXSeries cicstcl) */
+	{"fthread-safe",	CB_NO_ARG, &cb_flag_thread_safe, 1},
 
 #define	CB_CONFIG_ANY(type,var,name,doc)	\
 	{"f" name,		CB_RQ_ARG, NULL, '%'},

@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* cobc.c: accept -fthread-safe (COBOL-IT compatibility)
 	* codegen.c (output_internal_function): LOCAL-STORAGE in the
 	  allocations of the context
 	* codegen.c (output_cob_prof_data): profiling data per context or const
