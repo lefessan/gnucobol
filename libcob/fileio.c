@@ -3071,6 +3071,19 @@ ranges_overlap (off_t s1, off_t l1, off_t s2, off_t l2)
 	return 1;
 }
 
+/* whether the range (s, l) is inside (start, len) */
+static int
+range_inside (off_t s, off_t l, off_t start, off_t len)
+{
+	if (len == 0) {
+		return s >= start;
+	}
+	if (l == 0) {
+		return 0;
+	}
+	return s >= start && s + l <= start + len;
+}
+
 /* whether another context holds a conflicting lock;
    called with ctx_locks_lock */
 static int
@@ -3115,7 +3128,7 @@ ctx_lock_add (cob_context *ctx, cob_file *f, const struct stat *st,
 	ctx_locks = l;
 }
 
-/* forget the locks of 'f' in the range (all of them if 'all');
+/* forget the locks of 'f' inside the range (all of them if 'all');
    called with ctx_locks_lock */
 static void
 ctx_lock_remove (cob_file *f, off_t start, off_t len, int all)
@@ -3125,7 +3138,7 @@ ctx_lock_remove (cob_file *f, off_t start, off_t len, int all)
 
 	while ((l = *pl) != NULL) {
 		if (l->f == f
-		 && (all || ranges_overlap (l->start, l->len, start, len))) {
+		 && (all || range_inside (l->start, l->len, start, len))) {
 			*pl = l->next;
 			cob_free (l);
 		} else {
@@ -3180,6 +3193,46 @@ ctx_unlock_range (cob_file *f, off_t start, off_t len)
 	}
 	cob_lock_release (&ctx_locks_lock);
 	return ret;
+}
+
+/* release all the record locks of 'f' (not its lock of the whole file),
+   for UNLOCK */
+static void
+ctx_unlock_records (cob_file *f)
+{
+	struct ctx_lock	*l;
+	struct stat	st;
+	struct flock	lck;
+	off_t		start, len;
+
+	cob_lock_acquire (&ctx_locks_lock);
+	if (fstat (f->fd, &st) != 0) {
+		cob_lock_release (&ctx_locks_lock);
+		return;
+	}
+	for (;;) {
+		for (l = ctx_locks; l; l = l->next) {
+			if (l->f == f && l->len != 0) {
+				break;
+			}
+		}
+		if (l == NULL) {
+			break;
+		}
+		start = l->start;
+		len = l->len;
+		memset (&lck, 0, sizeof (struct flock));
+		lck.l_type = F_UNLCK;
+		lck.l_whence = SEEK_SET;
+		lck.l_start = start;
+		lck.l_len = len;
+		(void)fcntl (f->fd, F_SETLK, &lck);
+		ctx_lock_remove (f, start, len, 0);
+		/* the other locks on the range, also the lock of the whole file
+		   of 'f' if any */
+		ctx_lock_reapply (st.st_dev, st.st_ino, start, len);
+	}
+	cob_lock_release (&ctx_locks_lock);
 }
 
 /* close the descriptor (or stream) of 'f': forget its locks, and set
@@ -6820,6 +6873,10 @@ cob_file_unlock (cob_context *ctx, cob_file *f)
 				fdcobsync (f->fd);
 			}
 #ifdef	HAVE_FCNTL
+			/* release the record locks */
+			if (f->fd >= 0) {
+				ctx_unlock_records (f);
+			}
 			if (f->flag_file_lock) {
 				/* Unlock the file */
 				if (f->fd >= 0) {

@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* fileio.c (ranges_overlap, ctx_lock_add, ctx_lock_remove,
+	  ctx_unlock_range, cob_file_unlock): UNLOCK releases the record locks
+	  of SEQUENTIAL and RELATIVE files
 	* fileio.c (cob_set_file_format, lock_record, unlock_record,
 	  set_file_lock, cob_file_close, cob_file_unlock): file and record
 	  locks between contexts
