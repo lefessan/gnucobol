@@ -410,6 +410,7 @@ static char	*env_get (cob_context *, const char *);
 static void	env_overlay_free (cob_context *);
 static void	rescan_context_setting (cob_context *, const char *, const char *);
 static void	free_context_settings (cob_context *);
+static cob_settings	*settings_of_context (cob_context *);
 
 #define cob_alloc_base		(common_state (ctx)->cob_alloc_base)
 #define cob_module_list		(common_state (ctx)->cob_module_list)
@@ -3249,9 +3250,9 @@ cob_accept_exception_status (cob_field *f)
 void
 cob_accept_user_name_ctx (cob_context *ctx, cob_field *f)
 {
-	if (cobsetptr->cob_user_name) {
-		cob_move_intermediate (ctx, f, cobsetptr->cob_user_name,
-			    strlen (cobsetptr->cob_user_name));
+	if (ctx->settings->cob_user_name) {
+		cob_move_intermediate (ctx, f, ctx->settings->cob_user_name,
+			    strlen (ctx->settings->cob_user_name));
 	} else {
 		cob_move_intermediate (ctx, f, " ", (size_t)1);
 	}
@@ -7330,7 +7331,7 @@ cob_display_environment_ctx (cob_context *ctx, const cob_field *f)
 	if (ret < 0) {
 		return;
 	}
-	if (cobsetptr->cob_env_mangle) {
+	if (ctx->settings->cob_env_mangle) {
 		const size_t len = ret;
 		size_t i;
 		for (i = 0; i < len; ++i) {
@@ -7425,7 +7426,7 @@ cob_get_environment_ctx (cob_context *ctx, const cob_field *envname, cob_field *
 		return;
 	}
 
-	if (cobsetptr->cob_env_mangle) {
+	if (ctx->settings->cob_env_mangle) {
 		const char *p_end = buff + flen;
 		for (p = buff; p < p_end; ++p) {
 			if (!isalnum ((int)*p)) {
@@ -8535,7 +8536,7 @@ cob_sys_x91 (void *p1, const void *p2, void *p3)
 		/* MF additionally sets the ANSI DEBUG module switch */
 		if (COB_MODULE_PTR->cob_procedure_params[0]->size >= 9) {
 			p++;
-			cobsetptr->cob_debugging_mode = (*p == 1);
+			settings_of_context (ctx)->cob_debugging_mode = (*p == 1);
 		}
 		*result = 0;
 		break;
@@ -8549,7 +8550,7 @@ cob_sys_x91 (void *p1, const void *p2, void *p3)
 		/* MF additionally passes the ANSI DEBUG module switch */
 		if (COB_MODULE_PTR->cob_procedure_params[0]->size >= 9) {
 			p++;
-			*p = (unsigned char)cobsetptr->cob_debugging_mode;
+			*p = (unsigned char)ctx->settings->cob_debugging_mode;
 		}
 		*result = 0;
 		break;
@@ -8565,11 +8566,11 @@ cob_sys_x91 (void *p1, const void *p2, void *p3)
 			}
 
 			if (i == 'D' - 'A' + 11) {
-				cobsetptr->cob_debugging_mode = cob_switch[i];
+				settings_of_context (ctx)->cob_debugging_mode = cob_switch[i];
 			} else if (i == 'N' - 'A' + 11) {
-				cobsetptr->cob_ls_nulls = cob_switch[i];
+				settings_of_context (ctx)->cob_ls_nulls = cob_switch[i];
 			} else if (i == 'T' - 'A' + 11) {
-				cobsetptr->cob_ls_instab = cob_switch[i];
+				settings_of_context (ctx)->cob_ls_instab = cob_switch[i];
 			}
 		}
 		*result = 0;
@@ -10153,6 +10154,14 @@ cob_process_settings (void)
 	return cobsetptr;
 }
 
+/* settings for the warnings: the ones of the context, or of the process
+   (possibly NULL before the initialization) without a context */
+static cob_settings *
+settings_of_warn (cob_context *ctx)
+{
+	return ctx && ctx->settings ? ctx->settings : cobsetptr;
+}
+
 /* Runtime settings of the contexts
 
    A context uses the settings of the process (ctx->settings == cobsetptr)
@@ -10866,7 +10875,7 @@ cob_runtime_warning_external_va_ctx (cob_context *ctx, const char *caller_name, 
 {
 	va_list args;
 
-	if (!cobsetptr->cob_display_warn) {
+	if (!settings_of_warn (ctx)->cob_display_warn) {
 		return;
 	}
 
@@ -10919,8 +10928,8 @@ cob_runtime_warning_external (const char *caller_name, const int cob_reference, 
 int
 cob_runtime_warning_ss (cob_context *ctx, const char *msg, const char *addition)
 {
-	if (!cobsetptr
-	 || cobsetptr->cob_display_warn) {
+	if (!settings_of_warn (ctx)
+	 || settings_of_warn (ctx)->cob_display_warn) {
 		char buff[COB_MEDIUM_BUFF];
 		size_t pos = 0;
 
@@ -10949,7 +10958,7 @@ cob_runtime_warning_va_ctx (cob_context *ctx, const char *fmt, va_list cob_va_ar
 {
 	va_list args;
 
-	if (cobsetptr && !cobsetptr->cob_display_warn) {
+	if (settings_of_warn (ctx) && !settings_of_warn (ctx)->cob_display_warn) {
 		return;
 	}
 

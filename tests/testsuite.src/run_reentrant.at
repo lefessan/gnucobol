@@ -2266,6 +2266,83 @@ ab
 AT_CLEANUP
 
 
+AT_SETUP([runtime warnings of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create COB_DISABLE_WARNINGS])
+
+# COB_DISABLE_WARNINGS set in the environment of a context only disables the
+# runtime warnings of this context
+
+AT_DATA([wn.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      wn.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 PNAME         PIC X(10) VALUE " sub".
+       LINKAGE          SECTION.
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING OP.
+           IF OP = "S"
+              DISPLAY "COB_DISABLE_WARNINGS" UPON ENVIRONMENT-NAME
+              DISPLAY "TRUE" UPON ENVIRONMENT-VALUE
+           END-IF
+           CALL PNAME
+           GOBACK.
+])
+
+AT_DATA([sub.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub.
+       PROCEDURE        DIVISION.
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static void
+wn (cob_context *ctx, const char *op)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)op;
+   fprintf (stderr, "%s\n", op);
+   (void)cob_call ("wn", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   wn (ctx1, "S");
+   wn (ctx2, "N");
+   wn (ctx1, "N");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE wn.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sub.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0], [],
+[S
+N
+libcob: wn.cob:14: warning: ' sub' literal includes leading spaces which are omitted
+N
+])
+
+AT_CLEANUP
+
+
 AT_SETUP([no mutable static data in the generated code])
 AT_KEYWORDS([runreentrant static])
 

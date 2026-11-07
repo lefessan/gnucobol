@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: runtime reads of the settings of the
+	  context in common.c
 	* testsuite.src/run_reentrant.at: runtime settings of the execution
 	  contexts
 	* testsuite.src/run_reentrant.at: ODBC in several threads

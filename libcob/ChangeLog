@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (free_context_settings, cob_accept_user_name_ctx,
+	  cob_display_environment_ctx, cob_get_environment_ctx, cob_sys_x91,
+	  cob_process_settings, ...): runtime reads of the settings of the
+	  context in common.c
 	* coblocal.h (cob_ctx_cwd), common.c (env_overlay_free,
 	  cob_exit_common_state, cob_putenv_ctx, cob_display_env_value_ctx,
 	  translate_boolean_to_int, set_config_val), fileio.c
