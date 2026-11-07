@@ -409,8 +409,14 @@ Conséquences pour `cobc/codegen.c` :
         `DD_`…, la relecture des réglages ; le contexte principal seul
         écrit toujours dans l'environnement du processus) ; CALL
         "SYSTEM" avec l'environnement du contexte (`posix_spawn`).
-        Restent : environnement des tubes (`popen`), répertoire courant
-        par contexte (§7.3 du DESIGN, CBL_CHANGE_DIR), réglages
+        Puis répertoire courant par contexte (§7.3 : CBL_CHANGE_DIR
+        garde un chemin absolu dans le contexte, résolution des noms de
+        fichiers après leur association, des routines CBL_ de
+        répertoires, CBL_GET_CURRENT_DIR ; le contexte principal seul
+        fait toujours `chdir`), tubes `<` / `>` et CALL "SYSTEM" lancés
+        dans le répertoire et l'environnement du contexte.
+        Restent : tube d'impression (`COB_DISPLAY_PRINT_PIPE`, unique
+        pour le processus, ouvert à la première utilisation), réglages
         modifiés par une relecture de l'environnement (partagés) ;
   - code généré : caches `call_X` / `func_X` (écriture concurrente
     d'un pointeur, même valeur ; CANCEL les remet à NULL) et
