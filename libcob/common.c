@@ -355,6 +355,9 @@ struct cob_common_state {
 	const char		*cob_last_sfile;
 	const char		*cob_last_progid;
 	int			last_exception_code;	/* Last exception: code */
+	char			excp_mod[COB_MAX_WORDLEN + 1];	/* and its location, */
+	char			excp_sec[COB_MAX_WORDLEN + 1];	/* pointed to by */
+	char			excp_para[COB_MAX_WORDLEN + 1];	/* ctx->glob */
 	unsigned int		last_runtime_error_line;
 	const char		*last_runtime_error_file;
 };
@@ -3074,9 +3077,9 @@ cob_set_exception_ctx (cob_context *ctx, const int id)
 	ctx->glob.last_exception_paragraph = NULL;
 
 	if (id) {
-		static char excp_mod[COB_MAX_WORDLEN + 1];
-		static char excp_sec[COB_MAX_WORDLEN + 1];
-		static char excp_para[COB_MAX_WORDLEN + 1];
+		char		*excp_mod = common_state (ctx)->excp_mod;
+		char		*excp_sec = common_state (ctx)->excp_sec;
+		char		*excp_para = common_state (ctx)->excp_para;
 		cob_module	*mod = COB_MODULE_PTR;
 		ctx->glob.cob_got_exception = 1;
 #if 0	/* consider addition for 4.x */

@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.c (cob_set_exception_ctx): location of the last exception in
+	  the context
 	* termio.c (cob_display_va_ctx): warning once for SYSPUNCH set
 	  atomically
 	* common.h (cob_prof_init_module, cob_prof_init_module_ctx),
