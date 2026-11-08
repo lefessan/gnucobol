@@ -164,6 +164,33 @@ Détails complets dans **`TXSERIES-COBOLIT-API.md`**. En résumé :
   au-dessus de libcob, une tâche CICS = un contexte, une région = un
   niveau de LINK, STOP RUN = `longjmp` vers le `jmp_buf` du rtd.
 
+#### T5 — premier jet (2026-11-08)
+- `cobc -fthread-safe` accepté (option de COBOL-IT passée par `cicstcl`).
+- libcob : `cob_context_set_return_point` (STOP RUN / erreurs fatales
+  d'un programme appelé directement par l'hôte : fin de la run unit du
+  contexte puis `longjmp` vers un `jmp_buf` de l'hôte) et
+  `cob_preload_module(_ctx)` (charger un module par son nom complet,
+  extension `.cld`).
+- `txseries/` : `libcobcld` (API du § 3 de `TXSERIES-COBOLIT-API.md`),
+  `libcobcld.a` à symboles cachés + `libcobcld.so` script d'éditeur de
+  liens (`GROUP (libcobcld.a libcob.so)`), pour que `cicsmkcobcld`
+  marche sans modification. Testé par une simulation fidèle de
+  `pinca_cobcld.o` (`run_reentrant.at`, mot-clé `cobcld`) : une région
+  par niveau de LINK, WORKING-STORAGE neuve à chaque chargement, LINK
+  imbriqué par `CALL LITLINK`, STOP RUN rendu à « TXSeries ».
+- Dans le conteneur TXSeries 11.1 (UBI 8) : GnuCOBOL construit dans
+  `/opt/gnucobol`, `cicsmkcobcld` produit `cicsprCOBCLD` lié à libcob
+  (les fonctions COBOL-IT restent internes).
+- **Bloqué** : la version d'évaluation s111-L241206 a une date
+  d'expiration intégrée, dépassée (« This Evaluation copy of TXSeries
+  has now expired »), même avec l'image IBM d'origine ; la région
+  s'arrête au démarrage. Il faut une version d'évaluation plus récente
+  ou une licence (IBM) pour la recette en région. Reste à vérifier en
+  région : visibilité des `CICSAPI*` au chargement d'un `.cld`, appels
+  de Load/Unload par tâche, comportement d'une erreur d'exécution.
+- Client 3270 de test : `tnz` (Python, IBM) ; il faut forcer
+  `terminal_type` (non vérifié, la région n'a pas pu démarrer).
+
 ### T4 — Dialecte du source traduit
 - Créer `config/txseries.conf` (dérivé de `mf.conf` ou `ibm.conf`).
 - Ordre des octets / troncature / taille des `COMP` et `COMP-5`

@@ -9,12 +9,24 @@ own context.
 
 **Status: experimental.** Validated with a simulation of the language
 method (test "TXSeries CobolCloud runtime API (simulation)" of
-`run_reentrant.at`); being tested in a real region.
+`run_reentrant.at`); `cicsmkcobcld` builds `cicsprCOBCLD` with it in the
+TXSeries 11.1 container. Not yet run in a region: the evaluation build
+of TXSeries 11.1 (s111-L241206) has expired.
 
 ## Build and install
 
 GnuCOBOL must be built for the system of TXSeries (UBI 8 / RHEL 8 for the
-container image, glibc 2.28):
+container image, glibc 2.28). In the container (as root):
+`microdnf install gcc make gmp-devel libtool-ltdl diffutils findutils`
+(repositories `ubi-8-baseos-rpms`, `ubi-8-appstream-rpms`), then
+`configure --prefix=/opt/gnucobol --without-db --without-lmdb
+--without-xml2 --without-json --without-curses --disable-nls` and
+`make install` in `lib libcob bin cobc config copy`. From a git tree,
+the generated parsers of `cobc` (`parser.[ch]`, `ppparse.[ch]`,
+`scanner.c`, `pplex.c`) and the man pages need bison, flex and help2man,
+which UBI 8 does not have: copy them from a build on another system.
+
+Then:
 
 ```sh
 make COB_CONFIG=/opt/gnucobol/bin/cob-config
