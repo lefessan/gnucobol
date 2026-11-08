@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* cobc.c (process_command_line): fix leak of the name of the dialect
+	  (option -std and WITH_STD), now in a static buffer
 	* codegen.c (get_field_name): fix read beyond the name of the field,
 	  compared with "FILLER " by memcmp even when shorter (strncmp)
 
