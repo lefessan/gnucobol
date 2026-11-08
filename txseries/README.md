@@ -87,10 +87,11 @@ CICS_COBCLD_CCFLAGS="-std=txseries -Wno-goto-section -Wno-goto-different-section
 - Each `EXEC CICS LINK` level (region 1 to 15 of the language method)
   runs in its own GnuCOBOL context; TXSeries cancels the region before
   each load, so a program starts in its initial state at each LINK.
-- `STOP RUN` and the fatal runtime errors end the run unit of the
-  context and return to TXSeries (to the `jmp_buf` that it arms before
-  the call), instead of ending the application server.
+- `STOP RUN` ends the run unit of the context and returns to TXSeries
+  (to the `jmp_buf` that it arms before the call), as `EXEC CICS
+  RETURN`, instead of ending the application server.
+- A runtime error ends the run unit of the context and calls the error
+  procedure that TXSeries installs (`CBL_ERROR_PROC`), with the message:
+  it abends the task, whose updates are rolled back, as with COBOL-IT.
 - Not yet done: reload of a module on NEWCOPY (the module files stay
-  loaded), the COBOL-IT debugger, abend of the task on a runtime error
-  (the error and exit procedures of TXSeries are recorded but not
-  called).
+  loaded), the COBOL-IT debugger.

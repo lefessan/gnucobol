@@ -385,3 +385,105 @@ AT_CHECK([COB_LIBRARY_PATH=. ./host], [0],
 ], [])
 
 AT_CLEANUP
+
+
+AT_SETUP([runtime error: error procedure of TXSeries])
+AT_KEYWORDS([runtxseries txseries cobcld CBL_ERROR_PROC])
+
+# TXSeries installs its error procedure with CBL_ERROR_PROC (flag '0');
+# a runtime error of a program calls it with the message (it abends the
+# task), STOP RUN does not; both return to the jmp_buf of the rtd
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      PROG.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 DFHEIBLK      PIC X(8).
+       01 DFHCOMMAREA   PIC X(4).
+       PROCEDURE        DIVISION USING DFHEIBLK DFHCOMMAREA.
+           DISPLAY "PROG " DFHCOMMAREA
+           IF DFHCOMMAREA = "FAIL"
+              CALL "notthere"
+           END-IF
+           STOP RUN.
+])
+
+AT_DATA([tx.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <setjmp.h>
+
+typedef struct cob_rtd cob_rtd;
+extern cob_rtd *cob_get_rtd (void);
+extern void cob_init (cob_rtd *, int, char **);
+extern cob_rtd *cob_enterprise_set_current_region (cob_rtd *, int);
+extern void cob_enterprise_cancel_region (cob_rtd *, int, int);
+extern void *cob_resolve (cob_rtd *, const char *);
+extern int CBL_ERROR_PROC (unsigned char *, void *);
+
+/* PinCA_CobolITErrorHandler */
+static int
+error_handler (char *msg)
+{
+   printf ("error procedure: %s\n", msg);
+   return 0;
+}
+
+static void
+run (const char *commarea_value)
+{
+   static char eib[8];
+   char commarea[4];
+   int (*entry) (char *, char *);
+   cob_rtd *rtd = cob_get_rtd ();
+   int ret;
+
+   memcpy (commarea, commarea_value, 4);
+   cob_enterprise_cancel_region (rtd, 1, 0);
+   entry = (int (*) (char *, char *))
+      cob_resolve (cob_enterprise_set_current_region (rtd, 1), "prog");
+   ret = setjmp (*(jmp_buf *)((char *)rtd + 0x40));
+   if (ret == 0) {
+      (void)entry (eib, commarea);
+      printf ("returned\n");
+   } else {
+      printf ("back to TXSeries with %d\n", ret);
+   }
+   cob_enterprise_set_current_region (rtd, 0);
+   fflush (stdout);
+}
+
+int
+main (void)
+{
+   unsigned char flag = '0';
+   int (*proc) (char *) = error_handler;
+   cob_rtd *rtd = cob_get_rtd ();
+
+   /* PinCA_InitLang */
+   (void)CBL_ERROR_PROC (&flag, &proc);
+   *(int *)rtd = 1;
+   cob_init (rtd, 0, NULL);
+
+   run ("STOP");
+   run ("FAIL");
+   run ("STOP");
+   return 0;
+}
+]])
+
+AT_CHECK([$COMPILE_MODULE -o prog.cld prog.cob], [0], [], [])
+AT_CHECK([$COBC -x -o tx tx.c "$abs_top_srcdir/txseries/cobcld.c"],
+         [0], [], [])
+AT_CHECK([COB_LIBRARY_PATH=. ./tx], [0],
+[PROG STOP
+back to TXSeries with 1
+PROG FAIL
+error procedure: prog.cob:11: module 'notthere' not found
+back to TXSeries with -1
+PROG STOP
+back to TXSeries with 1
+], [ignore])
+
+AT_CLEANUP

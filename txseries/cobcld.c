@@ -152,6 +152,25 @@ cob_init (struct cob_rtd *rtd, int argc, char **argv)
 	(void)pthread_once (&init_once, init_runtime);
 }
 
+/* end of the run unit of a region: a runtime error goes to the error
+   procedure of TXSeries (CBL_ERROR_PROC), which abends the task (its
+   updates are rolled back) as with COBOL-IT; if it returns, or for STOP
+   RUN, libcob returns to the jmp_buf of the rtd */
+static void
+end_of_run_unit (cob_context *ctx, int ret, int exit_code, const char *msg,
+		 void *data)
+{
+	(void)ctx;
+	(void)exit_code;
+	(void)data;
+	if (ret < 0 && error_proc != NULL) {
+		char	text[1024];
+		snprintf (text, sizeof (text), "%s",
+			  msg != NULL && *msg ? msg : "COBOL runtime error");
+		(void)error_proc (text);
+	}
+}
+
 /* the context of a region, created when needed */
 static cob_context *
 region_context (struct cob_rtd *rtd, int region)
@@ -189,7 +208,10 @@ cob_enterprise_set_current_region (struct cob_rtd *rtd, int region)
 	if (region == 0) {
 		cob_context_leave (rtd->outer);
 	} else {
-		(void)cob_context_enter (region_context (rtd, region));
+		cob_context	*ctx = region_context (rtd, region);
+		/* called once per run unit: registered again at each use */
+		cob_context_set_end_handler (ctx, end_of_run_unit, NULL);
+		(void)cob_context_enter (ctx);
 	}
 	rtd->current = region;
 	return rtd;
@@ -360,11 +382,12 @@ cob_dump_debug_info (struct cob_rtd *rtd)
 	(void)rtd;
 }
 
-/* the error and exit procedures of TXSeries: they abend the task and
-   end the application server; they are kept but not called, the
-   return point of the rtd brings STOP RUN and the fatal errors back to
-   TXSeries instead; TXSeries installs them with the flag '0' (not the
-   binary 0 of Micro Focus) */
+/* the error and exit procedures of TXSeries; the error procedure is
+   called on a runtime error (end_of_run_unit), the exit procedure is
+   kept but not called: STOP RUN returns to TXSeries (to the jmp_buf of
+   the rtd), as EXEC CICS RETURN, instead of ending the application
+   server; TXSeries installs them with the flag '0' (not the binary 0 of
+   Micro Focus) */
 static int
 install_flag (const unsigned char *flag)
 {

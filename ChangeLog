@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md, txseries/README.md, txseries/cobcld.c (cob_init,
+	  cob_enterprise_set_current_region, cob_dump_debug_info): runtime
+	  errors call the error procedure of TXSeries
 	* txseries/Dockerfile: new file, dockerfile of TXSeries with GnuCOBOL
 	* Makefile.am, TXSERIES-PLAN.md, txseries/README.md: dockerfile of
 	  TXSeries with GnuCOBOL

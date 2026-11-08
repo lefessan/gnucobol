@@ -181,6 +181,12 @@ Détails complets dans **`TXSERIES-COBOLIT-API.md`**. En résumé :
 - Dans le conteneur TXSeries 11.1 (UBI 8) : GnuCOBOL construit dans
   `/opt/gnucobol`, `cicsmkcobcld` produit `cicsprCOBCLD` lié à libcob
   (les fonctions COBOL-IT restent internes).
+- Erreur d'exécution d'un programme : `libcobcld` appelle la procédure
+  d'erreur installée par TXSeries (`CBL_ERROR_PROC`, drapeau `'0'`) avec
+  le message, ce qui provoque l'abend de la tâche (et l'annulation de
+  ses mises à jour) comme avec COBOL-IT ; STOP RUN revient à TXSeries
+  comme `EXEC CICS RETURN`. Le module de langage est rendu global
+  (`RTLD_GLOBAL`) pour les appels statiques `CICSAPI*` des programmes.
 - **Bloqué** : la version d'évaluation s111-L241206 a une date
   d'expiration intégrée, dépassée (« This Evaluation copy of TXSeries
   has now expired »), même avec l'image IBM d'origine ; la région
