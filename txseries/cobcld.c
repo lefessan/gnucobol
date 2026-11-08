@@ -37,6 +37,9 @@
      return to the jmp_buf of the rtd, armed by TXSeries before it calls
      the program (cob_context_set_return_point). */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE	/* dladdr */
+#endif
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,6 +48,7 @@
 #include <setjmp.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <dlfcn.h>
 
 /* hide the declarations of libcob for the names of the COBOL-IT API */
 #define cob_init		libcob_cob_init
@@ -115,9 +119,25 @@ cob_get_rtd (void)
 	return thread_rtd;
 }
 
+/* the programs call the CICS interface of the language method
+   (CICSAPIE...) by static calls: make the symbols of the shared object
+   that contains this code (cicsprCOBCLD) global, in case TXSeries loaded
+   it with RTLD_LOCAL, so that the dynamic linker finds them when libcob
+   loads a program */
+static void
+make_method_global (void)
+{
+	Dl_info	info;
+
+	if (dladdr ((void *)cob_get_rtd, &info) && info.dli_fname != NULL) {
+		(void)dlopen (info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_GLOBAL);
+	}
+}
+
 static void
 init_runtime (void)
 {
+	make_method_global ();
 	cob_set_hosted (1);
 	cob_init_nomain (init_argc, init_argv);
 }

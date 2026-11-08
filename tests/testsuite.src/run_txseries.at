@@ -284,3 +284,104 @@ AT_CHECK([$COMPILE_ONLY -std=txseries -Wno-goto-section -Wno-others \
 
 AT_CLEANUP
 
+
+AT_SETUP([language method loaded with RTLD_LOCAL])
+AT_KEYWORDS([runtxseries txseries cobcld dlopen])
+
+# TXSeries may load its language method (cicsprCOBCLD, which contains
+# libcobcld) with RTLD_LOCAL; the programs call the CICS interface of
+# the method (CICSAPIE...) by static calls: libcobcld makes the method
+# global so that the program can be loaded
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      PROG.
+       ENVIRONMENT      DIVISION.
+       SPECIAL-NAMES.
+           CALL-CONVENTION 8 IS LITLINK.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 DFHEIBLK      PIC X(8).
+       01 DFHCOMMAREA   PIC X(4).
+       PROCEDURE        DIVISION USING DFHEIBLK DFHCOMMAREA.
+           CALL LITLINK "CICSAPIX" USING DFHCOMMAREA
+           DISPLAY "PROG " DFHCOMMAREA
+           GOBACK.
+])
+
+AT_DATA([method.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <setjmp.h>
+
+typedef struct cob_rtd cob_rtd;
+extern cob_rtd *cob_get_rtd (void);
+extern void cob_init (cob_rtd *, int, char **);
+extern cob_rtd *cob_enterprise_set_current_region (cob_rtd *, int);
+extern void cob_enterprise_cancel_region (cob_rtd *, int, int);
+extern void *cob_resolve (cob_rtd *, const char *);
+extern char *cob_resolve_error (cob_rtd *);
+
+/* the CICS interface of the method */
+int
+CICSAPIX (char *commarea)
+{
+   memcpy (commarea, "DONE", 4);
+   return 0;
+}
+
+int
+method_run (const char *name)
+{
+   static char eib[8];
+   char commarea[4] = { 'I', 'N', 'I', 'T' };
+   int (*entry) (char *, char *);
+   cob_rtd *rtd = cob_get_rtd ();
+   cob_rtd *r;
+
+   *(int *)rtd = 1;
+   cob_init (rtd, 0, NULL);
+   cob_enterprise_cancel_region (rtd, 1, 0);
+   r = cob_enterprise_set_current_region (rtd, 1);
+   entry = (int (*) (char *, char *))cob_resolve (r, name);
+   if (entry == NULL) {
+      printf ("load %s: %s\n", name, cob_resolve_error (r));
+      return 1;
+   }
+   if (setjmp (*(jmp_buf *)((char *)rtd + 0x40)) == 0) {
+      (void)entry (eib, commarea);
+   }
+   cob_enterprise_set_current_region (rtd, 0);
+   fflush (stdout);
+   return 0;
+}
+]])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <dlfcn.h>
+
+int
+main (void)
+{
+   int (*run) (const char *);
+   void *h = dlopen ("./method.so", RTLD_NOW | RTLD_LOCAL);
+   if (h == NULL) {
+      printf ("%s\n", dlerror ());
+      return 1;
+   }
+   run = (int (*) (const char *))dlsym (h, "method_run");
+   return run ("prog");
+}
+]])
+
+AT_CHECK([$COMPILE_MODULE -std=txseries -Wno-others -o prog.cld prog.cob],
+         [0], [], [])
+AT_CHECK([$COBC -b -o method.so method.c \
+          "$abs_top_srcdir/txseries/cobcld.c"], [0], [], [])
+AT_CHECK([$COMPILE host.c -ldl], [0], [], [])
+AT_CHECK([COB_LIBRARY_PATH=. ./host], [0],
+[PROG DONE
+], [])
+
+AT_CLEANUP

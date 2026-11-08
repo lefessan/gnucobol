@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* txseries/Makefile, txseries/README.md, txseries/cobcld.c
+	  (cob_get_rtd, init_runtime): make the language method global for the
+	  programs
 	* TXSERIES-PLAN.md: txseries.conf, dialect of the programs translated
 	  by TXSeries
 	* TXSERIES-PLAN.md, txseries/README.md: build notes, status of T5

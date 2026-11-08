@@ -23,7 +23,7 @@ libcobcld.a: cobcld.o
 
 # linker script: -lcobcld brings the archive and libcob
 libcobcld.so: Makefile
-	echo "GROUP ( $(PREFIX)/lib/libcobcld.a $(PREFIX)/lib/libcob.so )" > $@
+	echo "GROUP ( $(PREFIX)/lib/libcobcld.a $(PREFIX)/lib/libcob.so ) INPUT ( -ldl -lpthread )" > $@
 
 install: all
 	install -d $(DESTDIR)$(PREFIX)/lib

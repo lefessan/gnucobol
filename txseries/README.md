@@ -45,11 +45,16 @@ COBOLCLDIR=/opt/gnucobol cicsmkcobcld -o $CICSPATH/bin
 ## Programs
 
 ```sh
-CICS_COBCLD_CCFLAGS="-std=mf" cicstcl -lCOBCLD prog.ccp    # gives prog.cld
+CICS_COBCLD_CCFLAGS="-std=txseries -Wno-goto-section -Wno-goto-different-section" \
+    cicstcl -lCOBCLD prog.ccp                              # gives prog.cld
 ```
 
-- `-std=mf` (or `-frelax-syntax-checks`): the translated source has
-  `SPECIAL-NAMES` without `CONFIGURATION SECTION`;
+- `-std=txseries` (`config/txseries.conf`): the default dialect, plus
+  `SPECIAL-NAMES` without `CONFIGURATION SECTION` (written by the
+  translator) and the effect of `-fnotrunc` (passed by `cicstcl`);
+- `-Wno-goto-section -Wno-goto-different-section`: the translator
+  writes `GO TO CICS-API-ERROR` (a section) after each command, and
+  `GO TO ... DEPENDING ON EIBLABEL` to the labels of `HANDLE CONDITION`;
 - the program definition (PD) has `PathName` = the file without its
   extension, for example `/work/prog/prog`;
 - `COB_LIBRARY_PATH` (in the environment file of the region) gives the
