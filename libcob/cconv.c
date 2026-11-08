@@ -133,6 +133,7 @@ cob_load_collation (const char *col_name,
 		    cob_u8_t *ebcdic_to_ascii,
 		    cob_u8_t *ascii_to_ebcdic)
 {
+	cob_context	*ctx = COB_CTX_TODO;
 	cob_u8_t	table[512];
 	char		hex[COB_SMALL_BUFF];
 	const char	*hexptr;
@@ -168,7 +169,7 @@ cob_load_collation (const char *col_name,
 	/* FIXME: use conf_runtime_error / adjusted cob_load_config_file later */
 	f = fopen (filename, "r");
 	if (f == NULL) {
-		cob_runtime_error (_("can't open translation table '%s'"), col_name);
+		cob_runtime_error_ctx (ctx, _("can't open translation table '%s'"), col_name);
 		return -1;
 	}
 
@@ -181,15 +182,15 @@ cob_load_collation (const char *col_name,
 			int c = cob_convert_hex_byte (hexptr);
 			if (c < 0) {
 				if (col_name != last_err_name) {
-					cob_runtime_error (_("errors in translation table '%s':"), col_name);
+					cob_runtime_error_ctx (ctx, _("errors in translation table '%s':"), col_name);
 					last_err_name = col_name;
 				}
-				cob_runtime_error (_("invalid hex byte on line %d: '%c%c'"), line, hexptr[0], hexptr[1]);
+				cob_runtime_error_ctx (ctx, _("invalid hex byte on line %d: '%c%c'"), line, hexptr[0], hexptr[1]);
 			}
 			if (i < 512) {
 				table[i++] = (unsigned char)c;
 			} else {
-				cob_runtime_error (_("too much data in translation table '%s'"), col_name);
+				cob_runtime_error_ctx (ctx, _("too much data in translation table '%s'"), col_name);
 				fclose (f);
 				return -1;
 			}
@@ -198,15 +199,15 @@ cob_load_collation (const char *col_name,
 	}
 
 	if (ferror (f)) {
-		cob_runtime_error (_("error reading translation table '%s'"), col_name);
+		cob_runtime_error_ctx (ctx, _("error reading translation table '%s'"), col_name);
 		fclose (f);
 		return -1;
 	}
 	if (feof (f) && i != 256 && i != 512) {
 		if (i < 256) {
-			cob_runtime_error (_("not enough data in translation table '%s'"), col_name);
+			cob_runtime_error_ctx (ctx, _("not enough data in translation table '%s'"), col_name);
 		} else {
-			cob_runtime_error (_("either not enough or too much data in translation table '%s'"), col_name);
+			cob_runtime_error_ctx (ctx, _("either not enough or too much data in translation table '%s'"), col_name);
 		}
 		fclose (f);
 		return -1;

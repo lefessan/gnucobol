@@ -67,6 +67,8 @@ m4_include([run_refmod.at])		# 8.4.2.3 Reference-modification
 m4_include([run_accept.at])		# 14.8.1  ACCEPT statement
 m4_include([run_initialize.at])		# 14.8.19 INITIALIZE statement
 m4_include([run_misc.at])		# Miscellaneous
+m4_include([run_reentrant.at])	# Several execution contexts, threads
+m4_include([run_txseries.at])	# Programs translated by IBM TXSeries cicstran
 m4_include([run_file.at])		# Files (SELECT, ASSIGN, ...) without RW
 m4_include([run_reportwriter.at])		# REPORT WRITER
 m4_include([run_returncode.at])

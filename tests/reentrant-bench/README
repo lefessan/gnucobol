@@ -1,0 +1,18 @@
+Benchmarks of the reentrant runtime (TXSERIES-PLAN.md, T1.7)
+
+compare.sh BUILD_A BUILD_B [N]
+    run time of single-thread programs with two builds (for example the
+    runtime before the reentrant work and the current one):
+    arith  arithmetic on DISPLAY, COMP-3 and COMP-5 fields
+    strs   MOVE, STRING, INSPECT
+    calls  dynamic CALL of a small program (csub)
+    seqf   LINE SEQUENTIAL file, write and read
+    idxf   INDEXED file, write and random read
+
+scale.sh BUILD [CPUS]
+    multi-thread scaling: each thread creates its own context and calls
+    'work' (arithmetic, intrinsic functions, STRING, INSPECT, dynamic
+    CALL of 'wsub') 300000 times.
+
+The builds should be configured with CFLAGS=-O2, without --enable-debug.
+Results of 2026-11-07 are in TXSERIES-PLAN.md (T1.7).

@@ -402,6 +402,9 @@ CB_CONFIG_SUPPORT (cb_numeric_value_for_edited_item, "numeric-value-for-edited-i
 CB_CONFIG_SUPPORT (cb_incorrect_conf_sec_order, "incorrect-conf-sec-order",
 	_("incorrect order of CONFIGURATION SECTION and its paragraphs")) /* MF extension */
 
+CB_CONFIG_SUPPORT (cb_missing_conf_section, "missing-conf-section",
+	_("paragraphs of CONFIGURATION SECTION without its header")) /* COBOL-IT, TXSeries translator */
+
 CB_CONFIG_SUPPORT (cb_define_constant_directive, "define-constant-directive",
 	_("allow >> DEFINE CONSTANT var AS literal")) /* OpenCOBOL/GnuCOBOL extension */
 

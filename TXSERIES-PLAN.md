@@ -1,0 +1,800 @@
+# Compatibilité GnuCOBOL 4 / IBM TXSeries — planification
+
+État : brouillon, 2026-10-28. Version de TXSeries non encore choisie.
+
+Objectif : pouvoir compiler avec GnuCOBOL des programmes COBOL CICS
+(traduits par `cicstcl`) et les exécuter dans les serveurs d'application
+(`cicsas`) d'une région TXSeries, avec la sémantique attendue par CICS.
+
+Principes généraux :
+- le runtime réentrant est **le seul mode** : pas d'option de
+  compilation spécifique ;
+- **pas de compatibilité ascendante** : l'ABI de libcob et le code
+  généré peuvent changer librement, les programmes compilés avec une
+  version antérieure n'ont pas à fonctionner (il faut les recompiler).
+
+## Vue d'ensemble des travaux
+
+| #  | Travail                                        | Dépend de | Bloqué par le choix de version ? |
+|----|------------------------------------------------|-----------|----------------------------------|
+| T1 | Runtime réentrant (contexte explicite, multi-thread) | —   | non                              |
+| T2 | Runtime « hébergé » (pas d'exit, signaux, erreurs) | (T1)  | non                              |
+| T3 | Choix de version TXSeries et étude de l'ABI    | —         | c'est le travail qui la fixe     |
+| T4 | Dialecte : compiler le source traduit par `cicstcl` | T3 (partiel) | partiellement            |
+| T5 | Intégration au chargement des programmes par `cicsas` | T1, T2, T3 | oui                    |
+| T6 | Chaîne de build et préprocesseurs (EXEC SQL)   | T4, T5    | oui                              |
+| T7 | Recette en région, performances, documentation | tous      | oui                              |
+
+T1, T2 et T3 peuvent avancer en parallèle. T1 est le plus gros et le
+seul qui ne dépend d'aucune information sur TXSeries : on le commence en
+premier.
+
+### T1 — Runtime réentrant
+Voir la sous-planification détaillée plus bas.
+
+### T2 — Runtime hébergé dans un processus serveur
+Le runtime ne doit jamais terminer ni perturber le processus hôte.
+- `STOP RUN`, `cob_stop_run` (`libcob/common.c:3520`), `cob_hard_failure`
+  (`common.c:3570`), `cob_runtime_error` : remplacer l'appel à `exit()`
+  par un retour contrôlé vers l'hôte (hook enregistré dans le contexte,
+  p. ex. pour produire un ABEND CICS).
+- Signaux : `cob_set_signal` (`common.c:1535`) installe des handlers qui
+  finissent par `exit(sig)` ; il faut pouvoir ne pas les installer
+  (CICS gère lui-même ses abends).
+- Initialisation sans `argc`/`argv`, une seule fois par processus ;
+  pas de `atexit` gênant.
+- E/S console (`DISPLAY`, `ACCEPT`, screenio) : comportement défini
+  (redirection, erreur propre) plutôt que blocage ou plantage.
+- Pas de fuite mémoire d'une tâche à l'autre (processus de longue durée).
+
+#### T2 — conception (2026-11-07)
+Existant amont : `cob_call_with_exception_check` appelle un programme
+après un `setjmp` ; STOP RUN, erreur d'exécution, erreur interne font un
+`longjmp` vers lui (1, -1, -2) au lieu de `exit`, mais après avoir
+terminé tout le runtime (`cob_terminate_routines`) et avec un tampon
+global.
+Proposition, par étapes :
+1. **Frontière par contexte** : `cob_call_with_exception_check_ctx (ctx,
+   …)` pose le point de retour dans le contexte. Dans un contexte autre
+   que le principal, STOP RUN et les erreurs fatales terminent la *run
+   unit du contexte* seulement (COMMIT ou ROLLBACK selon
+   `COB_STOP_RUN_COMMIT`, ROLLBACK sur erreur ; fermeture de ses
+   fichiers ; pile de programmes remise à zéro), puis reviennent à la
+   frontière (1 / -1 / -2) ; code de retour par contexte
+   (`cob_last_exit_code_ctx`). Le contexte principal garde le
+   comportement amont. Sans frontière : comportement actuel (`exit`).
+2. **Procédures de sortie** (CBL_EXIT_PROC) par contexte.
+3. **Signaux** : option pour ne pas installer les gestionnaires de
+   libcob (l'hôte gère les siennes), `sigaction` / `pthread_sigmask`.
+4. **Hook d'ABEND** enregistré par l'hôte (pour produire un ABEND CICS
+   avec le message d'erreur), appelé avant le retour à la frontière.
+5. Pas de fuite d'une tâche à l'autre (Valgrind / ASan sur le banc).
+
+État au 2026-11-07 : étapes 1 à 5 faites.
+1. frontière par contexte (`cob_call_with_exception_check_ctx`,
+   `end_context_run_unit`), code de retour par contexte ;
+2. CBL_EXIT_PROC / CBL_ERROR_PROC et dernier message d'erreur par
+   contexte (exécutées à la fin de la run unit du contexte) ;
+3. `cob_set_hosted` (avant `cob_init`) : aucun gestionnaire de signal ;
+4. `cob_context_set_end_handler` : fonction de l'hôte appelée à la fin
+   de la run unit (STOP RUN 1, erreur -1 / -2, code de sortie, message) ;
+5. fuites : banc de 50 tâches sous AddressSanitizer / LeakSanitizer sans
+   aucune fuite ; mémoire stable (~12 Mo) de 1 000 à 4 000 tâches.
+   Trouvé en passant : lecture hors limites dans `get_field_name` (cobc,
+   corrigé).
+Puis (2026-11-07) : LOCAL-STORAGE dans les allocations du contexte
+(libérée avec lui si le programme est abandonné) ; dans un runtime
+hébergé, le contexte principal est une tâche comme les autres (STOP RUN
+→ fin de sa run unit) ; fin de run unit d'une tâche : programmes remis à
+l'état initial (instances libérées) ; runtime hébergé : ACCEPT ne lit
+pas l'entrée standard (EC-IMP-ACCEPT), écran refusé proprement,
+CBL_GC_FORK refusé, SIGPIPE laissé à l'hôte ; enfant d'un tube
+bidirectionnel sûr après `fork` (`_exit`, bogue amont) ; STOP RUN sans
+contexte courant.
+Puis : stockage de la run unit (EXTERNAL, allocations) libéré à la fin
+de run unit d'une tâche ; `cob_context_set_display_handler` (DISPLAY
+UPON SYSOUT / SYSERR envoyés à une fonction de l'hôte).
+Reste (choix assumé) : les gestionnaires de signaux de libcob font
+`exit` dans un runtime non hébergé (processus autonome, comportement
+amont).
+
+API de l'hôte (résumé) : `cob_set_hosted (1)` puis `cob_init (0, NULL)` ;
+par tâche : `cob_context_create`, `cob_context_enter`,
+`cob_context_set_end_handler`, `cob_context_set_display_handler`,
+`cob_putenv_ctx` (environnement de la tâche),
+`cob_call_with_exception_check_ctx` (retour 0, 1 STOP RUN, -1 / -2
+erreur ; `cob_last_exit_code_ctx`), `cob_context_leave`,
+`cob_context_destroy`.
+
+### T3 — Choix de version et étude de l'ABI TXSeries
+- Choisir version et plateforme (probablement Linux x86_64 ; 32 ou 64 bits ?).
+- Récupérer la sortie de `cicstcl` (COBOL IBM et Micro Focus) pour un
+  jeu de programmes types.
+- Comprendre comment `cicsas` charge un programme : définition de
+  programme (PD, PathName), symbole d'entrée, rôle de `cicsmkcobol` /
+  du runtime COBOL MF, modèle de threads de `cicsas`.
+- Décider de la stratégie d'intégration (voir T5).
+
+#### T3 — premières constatations (2026-11-07, documentation publique)
+- Compilateurs COBOL pris en charge par TXSeries sur Linux x86 (9.1) :
+  IBM COBOL for Linux on x86, Micro Focus Visual COBOL, et **COBOL-IT**
+  (dérivé commercial d'OpenCOBOL, donc proche parent de GnuCOBOL) ; la
+  version 11.1 existe pour Linux x86-64 (y compris en conteneur).
+- Recherche d'un programme par `cicsas` (attribut PathName de la PD) :
+  C (sans extension), `.ibmcob`, `.gnt` / `.int` (Micro Focus),
+  `.ibmpli`, `.ibmcpp`, **`.so` (COBOL-IT)** ; nom relatif à la région,
+  puis `$CICSPATH/bin`, puis `CICS_PROGRAM_PATH`. `Resident=yes` garde
+  le programme chargé (« une copie fraîche des données statiques
+  seulement au chargement » : cohérent avec nos instances par contexte).
+- Intégration de COBOL-IT (dépôt IBM `txseries-samples`,
+  `TXSeries-COBOLIT-IVP`) : `cicsmkcobolit -lcobit -o
+  /opt/ibm/cics/bin` construit le module de prise en charge COBOL de
+  TXSeries, lié à la bibliothèque d'exécution de COBOL-IT (`libcobit`) ;
+  la région reçoit `COB_LIBRARY_PATH` (variable héritée d'OpenCOBOL) ;
+  programmes compilés en `.so`, traduits par `cicstcl -l COBOLIT`.
+- **Piste pour T5** : se présenter comme COBOL-IT : fournir l'API de
+  `libcobit` utilisée par le module de TXSeries, implantée sur libcob
+  (avec `cob_set_hosted`, un contexte par tâche, la frontière T2), et
+  compiler les programmes en `.so` avec `cobc`. À confirmer en examinant
+  `cicsmkcobolit` et les symboles qu'il attend (image `ibmcom/txseries`
+  sur Docker Hub, licence IBM à accepter).
+
+#### T3 — étude de la version d'évaluation 11.1 (2026-11-07)
+Détails complets dans **`TXSERIES-COBOLIT-API.md`**. En résumé :
+- L'image `ibmcom/txseries` n'existe plus ; l'essai de 90 jours d'IBM
+  (IBM ID) fournit TXSeries 11.1 **64 bits** pour Linux x86-64, en
+  conteneur (UBI 8) et en installeur.
+- La méthode COBOL-IT (`pinca_cobolit.o`, `-lcobit`) est inutilisable en
+  64 bits (résultats de `cob_resolve` tronqués à 32 bits, `-m32` dans
+  le script). Il existe une seconde méthode, **COBCLD (« CobolCloud »)**,
+  même code, même API, correcte en 64 bits : programmes `.cld` compilés
+  par `cobc`, runtime `-lcobcld`, variable `COBOLCLDIR`. **Cible
+  retenue : COBCLD.**
+- API attendue : 12 fonctions (`cob_get_rtd`, `cob_init (rtd, …)`,
+  `cob_resolve (rtd, name)`, `cob_resolve_error`,
+  `cob_enterprise_{set,get}_current_region`,
+  `cob_enterprise_cancel_region`, débogueur, `cob_dump_debug_info`,
+  `CBL_ERROR_PROC`, `CBL_EXIT_PROC`) ; un `rtd` avec un `jmp_buf` en
+  `0x40` armé par TXSeries avant chaque programme ; une « région »
+  COBOL-IT par niveau de LINK (au plus 15) ; programme appelé
+  directement `entry (eib, commarea)`.
+- Le source traduit compile avec notre `cobc` en `-std=mf` ;
+  `-fthread-safe` (passé par `cicstcl`) est encore refusé.
+- T5 se précise : bibliothèque `libcobcld` (statique, symboles cachés)
+  au-dessus de libcob, une tâche CICS = un contexte, une région = un
+  niveau de LINK, STOP RUN = `longjmp` vers le `jmp_buf` du rtd.
+
+#### T5 — premier jet (2026-11-08)
+- `cobc -fthread-safe` accepté (option de COBOL-IT passée par `cicstcl`).
+- libcob : `cob_context_set_return_point` (STOP RUN / erreurs fatales
+  d'un programme appelé directement par l'hôte : fin de la run unit du
+  contexte puis `longjmp` vers un `jmp_buf` de l'hôte) et
+  `cob_preload_module(_ctx)` (charger un module par son nom complet,
+  extension `.cld`).
+- `txseries/` : `libcobcld` (API du § 3 de `TXSERIES-COBOLIT-API.md`),
+  `libcobcld.a` à symboles cachés + `libcobcld.so` script d'éditeur de
+  liens (`GROUP (libcobcld.a libcob.so)`), pour que `cicsmkcobcld`
+  marche sans modification. Testé par une simulation fidèle de
+  `pinca_cobcld.o` (`run_reentrant.at`, mot-clé `cobcld`) : une région
+  par niveau de LINK, WORKING-STORAGE neuve à chaque chargement, LINK
+  imbriqué par `CALL LITLINK`, STOP RUN rendu à « TXSeries ».
+- Dans le conteneur TXSeries 11.1 (UBI 8) : GnuCOBOL construit dans
+  `/opt/gnucobol`, `cicsmkcobcld` produit `cicsprCOBCLD` lié à libcob
+  (les fonctions COBOL-IT restent internes).
+- Erreur d'exécution d'un programme : `libcobcld` appelle la procédure
+  d'erreur installée par TXSeries (`CBL_ERROR_PROC`, drapeau `'0'`) avec
+  le message, ce qui provoque l'abend de la tâche (et l'annulation de
+  ses mises à jour) comme avec COBOL-IT ; STOP RUN revient à TXSeries
+  comme `EXEC CICS RETURN`. Le module de langage est rendu global
+  (`RTLD_GLOBAL`) pour les appels statiques `CICSAPI*` des programmes.
+- NEWCOPY : `cob_unload_module_ctx` (libcob) retire les programmes d'un
+  fichier de module de la table et le ferme (refusé tant que d'autres
+  contextes existent, comme un CANCEL physique) ; `libcobcld` marque ses
+  modules à recharger en mode 1 (NEWCOPY, `CICS_DISABLE_COBCLD_CACHE`)
+  et les décharge dès qu'aucun contexte de région n'existe ; un
+  chargement au niveau n détruit aussi les régions au-dessus de n.
+- **Bloqué** : la version d'évaluation s111-L241206 a une date
+  d'expiration intégrée, dépassée (« This Evaluation copy of TXSeries
+  has now expired »), même avec l'image IBM d'origine ; la région
+  s'arrête au démarrage. Il faut une version d'évaluation plus récente
+  ou une licence (IBM) pour la recette en région. Reste à vérifier en
+  région : visibilité des `CICSAPI*` au chargement d'un `.cld`, appels
+  de Load/Unload par tâche, comportement d'une erreur d'exécution.
+- Client 3270 de test : `tnz` (Python, IBM) ; il faut forcer
+  `terminal_type` (non vérifié, la région n'a pas pu démarrer).
+
+### T4 — Dialecte du source traduit
+- Créer `config/txseries.conf` (dérivé de `mf.conf` ou `ibm.conf`).
+- Ordre des octets / troncature / taille des `COMP` et `COMP-5`
+  identiques à ce que TXSeries écrit dans l'EIB (`DFHEIBLK`).
+- Constructions générées par le traducteur : `CALL ... USING BY VALUE`,
+  `ADDRESS OF`, `SET ADDRESS OF`, `POINTER`, `GO TO ... DEPENDING ON`,
+  directives `$SET` éventuelles.
+- `PROCEDURE DIVISION USING DFHEIBLK DFHCOMMAREA`, COMMAREA de longueur
+  variable (`EIBCALEN`).
+- Tests autofonce sur des sources traduits réels.
+
+#### T4 — état (2026-11-08)
+- Corpus : les 7 programmes CICS COBOL des exemples de TXSeries sans
+  dépendance externe (IVP `dfhc*`, `CSKLTEST`, `EXCSRVR`), traduits par
+  `cicstran -lCOBCLD`, cartes BMS générées par `cicsmap` (les exemples
+  MQ et PostgreSQL demandent les copybooks MQ / un précompilateur SQL).
+- Le traducteur convertit lui-même les éléments binaires du programme
+  (`MOVE WS-LEN TO CICS-API-SWAP-SHORT(1)`, puis retour) : seules des
+  zones natives `COMP-5` de `CICS-ARGS` atteignent TXSeries ; l'ordre
+  des octets des `COMP` est libre (gardé gros-boutiste, comme COBOL-IT,
+  Micro Focus et le mainframe, pour les données brutes partagées).
+- `CICSAPIWSADDRE` reçoit les bornes de la WORKING-STORAGE : GnuCOBOL
+  les garde dans l'ordre de déclaration (vérifié).
+- `config/txseries.conf` (`-std=txseries`, `COB_DIALECT_TXSERIES`) :
+  `default.conf` + nouvelle option de dialecte `missing-conf-section:
+  ok` (SPECIAL-NAMES sans CONFIGURATION SECTION ; `error` dans tous les
+  autres dialectes, comportement inchangé : erreur, ou avertissement
+  avec `relax-syntax-checks`) + effet de `-fnotrunc`
+  (`binary-truncate: no`, `pretty-display: no`). Le dialecte `ibm`
+  refuse `CALL-CONVENTION ... IS LITLINK`.
+- Les 7 programmes compilent sans aucun message avec `-std=txseries
+  -Wno-goto-section -Wno-goto-different-section` (avertissements
+  « règles maison » sur les GO TO écrits par le traducteur).
+- Tests : `run_txseries.at` (programme de la forme produite par
+  `cicstran`, interface CICS simulée en C ; diagnostics).
+- Bug amont corrigé : plantage de `cobc` sur `ADDRESS OF` d'un élément
+  non défini (copybook BMS manquante), voir `BUGS-FOUND.md`.
+
+### T5 — Intégration au chargement
+Trois options, à trancher après T3 :
+1. Se présenter comme un programme C (stub C → module COBOL).
+2. Se présenter comme du Micro Focus (wrapper `cob` + runtime remplaçant
+   celui produit par `cicsmkcobol`).
+3. Compiler directement la sortie de `cicstcl -l COBOL` si les points
+   d'entrée appelés ne dépendent pas du runtime MF.
+Dans tous les cas, c'est le point d'entrée « frontière » (voir T1) qui
+associe la tâche CICS à un contexte GnuCOBOL.
+Sémantique `EXEC CICS LINK` / `XCTL` / `RETURN` vs `CALL` / `CANCEL`.
+
+### T6 — Chaîne de build
+Enchaînement `cicstcl` → (précompilateur SQL : GixSQL, ocesql…) → `cobc`
+→ installation dans la région. Wrapper ou Makefile type.
+
+#### T6 — état (2026-11-08)
+- `txseries/Dockerfile` : image TXSeries + GnuCOBOL construite à partir
+  de l'image IBM et d'une distribution de GnuCOBOL (`make dist`, qui
+  contient les analyseurs générés et la documentation : UBI 8 n'a ni
+  bison, ni flex, ni help2man, ni makeinfo, ni même tar) ; elle
+  construit `libcobcld`, `cicsprCOBCLD` et fixe `CICS_COBCLD_CCFLAGS`.
+- Chaîne validée sans région : l'IVP de TXSeries se construit tel quel
+  (`make COBCLD` : `cicsmap`, `cicstran`, puis notre `cobc` appelé par
+  `cicstcl`) ; chaque `.cld` exporte son point d'entrée (`DFHCALL`…) et
+  importe `CICSAPIE`, `CICSAPIEDFINIT`, `CICSAPIWSADDRE`.
+- SQL (2026-11-08) : chaîne `cicstran` → `gixpp` (GixSQL) → `cobc
+  -std=txseries`, validée sur l'exemple PostgreSQL d'IBM (`uxa1cob`).
+  Connexion XA : le fichier de commutation d'IBM pour PostgreSQL
+  (`postgresql1pc`, chemin `-D_PSQL_COBOLIT`) appelle les points
+  d'entrée COBOL d'un module `dbconnect` : `txseries/dbconnect.cob` les
+  fournit avec GixSQL (autocommit coupé ; `-fimplicit-init`) ;
+  `libcobcld` passe le runtime en mode hébergé dès son chargement
+  (constructeur), car `xa_open` peut précéder l'initialisation de la
+  méthode. Validé sans TXSeries contre PostgreSQL 16 : rollback et
+  commit des mises à jour d'une tâche. Bugs de GixSQL corrigés dans
+  `~/GIT/COBOL/gixsql-superbol` (instruction ESQL sur la dernière ligne
+  d'une section, BEGIN/END DECLARE SECTION sur plusieurs lignes, build
+  hors source, runtime sans MySQL).
+- Non fait : installation dans une région (`cicsivp -l COBCLD`,
+  `cicsadd -c pd`, `cicsadd -c xad`) : demande une région qui démarre.
+
+### T7 — Recette
+Programmes de démonstration en région réelle, charge concurrente,
+mesures de performance (comparaison avec la version non réentrante),
+documentation utilisateur.
+
+---
+
+## Sous-planification de T1 — Runtime réentrant
+
+### Le problème, constaté dans le code
+
+**Code généré.** Pour un programme simple, `cobc` produit (dans `prog.c.l.h`) :
+```c
+static unsigned int  initialized = 0;
+static cob_module   *module = NULL;
+static int           b_2;                 /* RETURN-CODE */
+static cob_u8_t      b_17[4];             /* X (WORKING-STORAGE) */
+static cob_field     f_17 = {4, b_17, &a_2};
+static cob_field     f_19 = {10, NULL, &a_1};  /* LINKAGE */
+```
+et le corps du programme accède à l'état global par
+`cob_module_global_enter (&module, &cob_glob_ptr, ...)` puis
+`cob_glob_ptr->...`. WORKING-STORAGE, `cob_field`, `cob_module` et
+l'indicateur d'initialisation sont des variables statiques du module :
+**une seule instance par processus**. Sous CICS, chaque tâche doit voir
+sa propre WORKING-STORAGE, et deux tâches peuvent s'exécuter en même
+temps.
+
+Existant réutilisable : LOCAL-STORAGE et `IS RECURSIVE` /
+`-fstack-on-heap` allouent déjà des données par invocation
+(`cobc/codegen.c` : `output_local_storage_pointer`, chemins
+`prog->flag_recursive` vers les lignes 2462, 2956-3053, 8342), et les
+`cob_field` y sont déjà non statiques.
+
+**libcob.** ~520 fonctions exportées (`COB_EXPIMP` dans `common.h`),
+qui accèdent presque toutes à un état global implicite. Nombre de
+variables `static` de fichier (approx.) : `common.c` 90, `fileio.c` 41,
+`intrinsic.c` 32, `numeric.c` 24, `screenio.c` 24, `call.c` 22,
+`move.c` 18, `termio.c` 13, `profiling.c` 11, `fbdb.c` 10, autres < 10.
+L'état central est `static cob_global *cobglobptr` (`common.c:310`) plus
+`cobsetptr`. Quelques variables utilisent déjà `COB_TLS`
+(`libcob/coblocal.h`) dans `common.c` (l. 325-343), `strings.c`,
+`fbdb.c` : elles seront déplacées dans le contexte.
+
+Points non réentrants repérés : `qsort` avec état global
+(`common.c:4655`, `screenio.c:3392`), `strtok` (`call.c`, `fileio.c`,
+`screenio.c`), `localtime` (`common.c:5062`, `fileio.c`).
+
+### Principes de conception
+
+- **Un seul mode** : tout le code généré et tout libcob sont réentrants.
+  Aucune option `cobc`, aucune préservation de l'ABI actuelle.
+- **Contexte explicite** : le contexte d'exécution est passé **en
+  premier argument** des fonctions, partout où c'est possible :
+  - toutes les fonctions exportées de libcob :
+    `cob_move (cob_context *ctx, cob_field *src, cob_field *dst)`,
+    `cob_add (ctx, ...)`, `cob_open (ctx, ...)`, etc. ;
+  - toutes les fonctions internes de libcob qui touchent un état ;
+  - les fonctions C générées pour les programmes COBOL ;
+  - les callbacks (tri : `qsort_r` ou tri interne recevant `ctx`).
+- **TLS minimal** : un seul pointeur « contexte courant » en TLS, utilisé
+  **uniquement aux frontières** où l'on ne peut pas recevoir `ctx` en
+  argument :
+  - point d'entrée appelé par du code non COBOL (C, hôte CICS, appels
+    COBOL → C → COBOL) ;
+  - handlers de signaux ;
+  - callbacks de bibliothèques tierces sans argument utilisateur.
+  Toute variable `COB_TLS` existante disparaît au profit du contexte.
+  Objectif mesurable : un nombre de variables TLS ≤ 1 (ou très proche),
+  vérifié par script.
+- **Deux niveaux d'état** :
+  - `cob_runtime` (processus) : réglages issus de runtime.cfg
+    (`cobsetptr`), caches partagés (modules chargés), en lecture seule
+    après initialisation ou protégés par verrou ;
+  - `cob_context` (tâche / run unit) : `cob_global`, instances des
+    programmes, fichiers ouverts, EXTERNAL, état CALL/CANCEL,
+    RETURN-CODE, états des modules de libcob (sous-structures par
+    fichier : `ctx->fileio`, `ctx->intrinsic`, …), pointeur vers le
+    `cob_runtime`.
+- **Instance de programme** : toutes les données mutables d'un programme
+  (storage WS, `cob_field` vers la WS, `cob_module`, `initialized`,
+  `last_b_*`…) sont regroupées dans une structure allouée par contexte
+  au premier appel. Les données immuables (attributs `a_*`, constantes,
+  tables de noms et de hash) restent `static const` partagées.
+- **Une tâche active dans un seul thread à la fois** : pas de verrou sur
+  le contexte lui-même.
+
+### Questions ouvertes (étape T1.0)
+
+| Question | Proposition |
+|----------|-------------|
+| Signature des points d'entrée générés | Un seul symbole `PROG`, signature inchangée ; le contexte est lu en TLS à l'entrée (dans `cob_module_global_enter`), puis passé explicitement. La détection « appelé par C ou COBOL » (`cob_call_name_hash`) est conservée. |
+| `CALL` dynamique | Inchangé (résolution de `NAME`, sous verrou de `rt`). |
+| `CALL` statique | Inchangé. |
+| `cob_field` vers la WS | Copies par instance (simple) ou base + offset calculé (moins de mémoire) — à mesurer. |
+| Accès à l'instance dans le code généré | Recherche dans `ctx` par clé de module à l'entrée du programme, puis pointeur local `inst` passé aux sections/paragraphes et programmes imbriqués. |
+| EXTERNAL | Par contexte (comme une run unit Micro Focus sous CICS) ; à confirmer en T3. |
+| CANCEL / IS INITIAL | Agissent sur l'instance du contexte courant uniquement. |
+| API C publique (`cobcapi.c`, `cob_resolve`, `cob_call`, `cob_get_*`…) | Toutes prennent `ctx` en premier argument. |
+| Programme principal (`cobc -x`) | `main` généré : `cob_runtime_init` + `cob_context_create`, appel du programme, `cob_context_destroy`. |
+| Plateformes | Linux/GCC en premier ; Windows et AIX à garder compilables (le peu de TLS restant passe par `COB_TLS`). |
+
+Décidé le 2026-10-28, puis révisé le même jour : on garde un seul point
+d'entrée par programme et le mécanisme actuel de détection C / COBOL
+(voir `TXSERIES-T1-DESIGN.md` §4.1). L'idée de deux points d'entrée
+`PROG__ctx` / `PROG` est abandonnée.
+
+### Impact sur le schéma de compilation
+
+La chaîne ne change pas (`cobc` → C → compilateur C → `.so` / exécutable,
+mêmes options), mais la forme du C généré change en profondeur. Aujourd'hui
+`prog.c.l.h` est inclus *dans* la fonction `PROG_` et toutes les données du
+programme y sont des `static` locales à la fonction ; `frame_stack` et
+`cob_procedure_params` sont déjà de vraies variables locales (pile).
+
+Schéma cible pour le programme d'exemple :
+
+```c
+/* prog.c.h : niveau fichier */
+static const cob_field_attr a_2 = {...};          /* inchangé : immuable */
+struct P_instance {                                /* NOUVEAU : état mutable */
+  cob_module      module;
+  unsigned int    initialized;
+  int             b_2;                             /* RETURN-CODE */
+  cob_u8_t        b_17[4] __attribute__((aligned));/* X */
+  cob_u8_t        b_18[10];                        /* Y */
+  cob_field       f_17, f_19;
+  unsigned char  *last_b_19;
+};
+static const cob_instance_key P_key = { "P", sizeof (struct P_instance),
+                                        P_instance_init, P_instance_free };
+
+/* prog.c */
+int P (cob_u8_t *b_19)                             /* inchangé */
+{ return P_ (0, b_19); }
+
+static int P_ (const int entry, cob_u8_t *b_19)
+{
+  cob_context *ctx;                                /* contexte du thread (TLS) */
+  struct P_instance *inst;
+  if (cob_module_global_enter (&ctx, &P_desc, &P_slot, &inst, entry, st_name_hash))
+    return -1;
+  if (ctx->glob.cob_call_name_hash != 0xE9F5BD10)  /* détection C/COBOL inchangée */
+  ...
+  cob_add_int (ctx, &inst->f_17, 1, 0);
+  memmove (inst->b_18, inst->f_19.data, 10);
+  cob_display (ctx, 0, 1, 1, &inst->f_17);
+}
+```
+
+Conséquences pour `cobc/codegen.c` :
+
+1. **Déclarations** : les données mutables (WS, FD, REPORT, SCREEN,
+   registres spéciaux, `cob_field` non constants, `module`,
+   `initialized`, `last_b_*`, pointeurs EXTERNAL) passent de `static`
+   locales à des membres de `struct PROG_instance` au niveau fichier ;
+   attributs, littéraux et tables restent `static const`.
+2. **Références** : `b_N` → `inst->b_N`, `&f_N` → `&inst->f_N`. Les
+   noms sont produits par quelques fonctions centrales de `codegen.c`
+   (`output_base`, `output_param`…), le changement y est concentré.
+3. **Initialisation** : les `cob_field` dont `data` pointe dans la WS ne
+   peuvent plus être initialisés statiquement : fonction
+   `PROG_instance_init` générée (ou table const de gabarits
+   {taille, offset, attr} recopiée à l'allocation).
+4. **Appels libcob** : `ctx` ajouté en premier argument de chaque appel
+   généré.
+5. **Points d'entrée** : inchangés (un symbole par `ENTRY`, même
+   signature). `cob_module_global_enter` obtient le contexte courant
+   (TLS) et l'instance ; la détection « appelé par C ou par COBOL » via
+   `cob_call_name_hash` / `cob_call_params` est conservée, sur
+   `ctx->glob`.
+6. **CALL** : inchangé (statique et dynamique) ; l'appelant positionne
+   `ctx->glob.cob_call_name_hash` / `cob_call_params` comme aujourd'hui.
+7. **CANCEL / IS INITIAL** : libère / réinitialise l'instance dans
+   `ctx` (le callback `PROG_ (-1)` actuel reste pour fermer les fichiers).
+8. **Programmes imbriqués** : les éléments GLOBAL du parent étaient des
+   `static` visibles directement ; il faut désormais le pointeur vers
+   l'instance du parent (passé en argument ou retrouvé dans `ctx`).
+9. **RECURSIVE / LOCAL-STORAGE** : déjà alloués par invocation, peu de
+   changement ; la WS d'un programme RECURSIVE est simplement dans
+   l'instance.
+10. **Programme principal (`cobc -x`)** : `main` crée runtime et
+    contexte. **Code C appelant du COBOL** (`cob_init` + `PROG (...)`) :
+    doit créer un contexte et le rendre courant — à documenter.
+11. **Version d'ABI** : `cob_check_version` (constructeur de module) doit
+    refuser les modules compilés avec l'ancien schéma.
+12. **Performance** : une indirection par `inst` (gardée en registre par
+    le compilateur C) et un argument de plus par appel ; à mesurer en
+    T1.7, comparé à l'alternative « base + offset » pour les champs.
+
+### Étapes
+
+**T1.0 — Conception (document court)**
+- Trancher les questions ci-dessus.
+- Spécifier l'API : `cob_runtime_init`, `cob_context_create`,
+  `cob_context_destroy`, `cob_context_set_current` (frontières),
+  structure des sous-états par fichier de libcob.
+- Livrable : section « design » ajoutée à ce fichier.
+
+**T1.1 — Inventaire classé de l'état global de libcob**
+- Lister chaque variable `static` / globale / `COB_TLS` de `libcob/*.c`
+  et la classer :
+  1. constante après initialisation → `cob_runtime`, lecture seule ;
+  2. état de tâche → `cob_context` (sous-structure du fichier) ;
+  3. cache partagé (modules chargés par `call.c`, handles dl, tables
+     de hash…) → `cob_runtime` + verrou ;
+  4. purement processus (signaux, atexit) → relève de T2.
+- Lister les appels libc non réentrants et les callbacks sans argument
+  utilisateur.
+- Livrable : tableau d'inventaire (fichier, variable, classe, action).
+- Outil : script `nm` sur `libcob.so` (symboles en `.data`, `.bss`,
+  `.tbss`) rejouable en CI ; il servira aussi à vérifier le résultat
+  final (aucune donnée mutable globale hors liste blanche).
+
+**T1.2 — Squelette : `cob_runtime`, `cob_context` et passage de `ctx`**
+- Créer les structures et l'API de T1.0.
+- Ajouter `cob_context *ctx` en premier argument des fonctions générées
+  et de toutes les fonctions exportées de libcob, avec mise à jour de
+  `codegen.c` dans le même commit. À ce stade `ctx` peut encore pointer
+  vers un état global unique : on change les signatures d'abord, l'état
+  ensuite.
+- Remplacer `cob_module_global_enter (&module, &cob_glob_ptr, ...)` par
+  une fonction qui prend `ctx`.
+- Toute la suite de tests doit passer.
+
+**T1.3 — Migration de l'état de libcob dans le contexte**
+- Fichier par fichier, déplacer les variables de classe 2 dans la
+  sous-structure de `ctx` et celles de classe 1 dans `cob_runtime` ;
+  propager `ctx` aux fonctions internes concernées.
+- Ordre : `common.c`, `call.c`, `numeric.c`, `move.c`, `intrinsic.c`,
+  `strings.c`, `fileio.c` (et backends), `termio.c`, `screenio.c`,
+  `reportio.c`, `mlio.c`, `profiling.c`, `cobcapi.c`.
+- Supprimer les `COB_TLS` existants.
+- Toute la suite de tests passe après chaque fichier.
+
+**T1.4 — Caches partagés et thread-safety**
+- Verrous autour des caches de classe 3, en particulier la résolution
+  dynamique des `CALL` et la table des modules dans `call.c`.
+- Remplacer `strtok` → `strtok_r`, `localtime` → `localtime_r`,
+  `qsort` → `qsort_r` (ou tri interne), revoir `getenv`/`setenv`,
+  `setlocale`, `rand`.
+- Bibliothèques tierces : GMP (ok si objets séparés), backends ISAM /
+  BDB / LMDB / ODBC, ncurses (déclaré non supporté en multi-thread).
+- Ajouts issus de l'inventaire (`TXSERIES-T1-INVENTORY.md`) :
+  - réglages runtime copiés par contexte (`ctx->set`), car réécrits en
+    cours d'exécution ;
+  - locale par contexte : `newlocale` / `uselocale` et variantes `_l` ;
+  - environnement COBOL par contexte (surcharges `setenv` dans `ctx`) ;
+  - verrous d'enregistrements : `F_OFD_SETLK` ou table de verrous
+    interne (les verrous `fcntl` classiques sont par processus) ;
+  - relevés par ThreadSanitizer (banc multi-thread de T1.6, 8 tâches en
+    parallèle : calculs, chaînes, intrinsèques, fichiers séquentiels et
+    LMDB, DISPLAY) :
+    - `call.c` : `cob_set_cancel_ctx` écrit `p->module` dans la table
+      des appels partagée, alors que `module` est maintenant propre au
+      contexte (instance) : verrou sur la table, et le module ne doit
+      plus y être rangé (le rappel CANCEL prend déjà l'instance du
+      contexte courant) ;
+    - `common.c` : cache statique de la dernière heure dans
+      `set_cob_time_from_localtime`, et `localtime` → `localtime_r` /
+      `localtime_s` (ces fonctions ne prennent pas encore `ctx`) ;
+    - `flmdb.c` : tampons statiques (`db_buff`, lecture de
+      `/proc/partitions`) ;
+    - **2026-11-04, faits** (banc à 8 threads sans aucun rapport TSan
+      sur 10 exécutions, procédure dans `HOWTO-TSAN.md`) : verrous de
+      processus (`COB_LOCK_DEFINE`, pthread / SRWLOCK, `coblocal.h`) ;
+      état de tâche de `call.c` dans `ctx->call` ; verrou de la table
+      des programmes et des listes de modules, que le module ne quitte
+      plus : CANCEL le cherche dans le contexte (corrige un CANCEL
+      inopérant dans un second contexte) ; slot des unités de
+      compilation (lecture atomique, écriture sous verrou) ;
+      `cob_localtime` / `cob_gmtime` réentrants partout ; cache de
+      l'heure sous verrou. Puis BDB (2026-11-05) : état de `fbdb.c` dans
+      le contexte, nouveau point d'entrée `ioexit_context` des
+      gestionnaires de fichiers ; un handle d'environnement BDB et un
+      locker par contexte (comme un processus ; `DB_THREAD` écarté car il
+      impose d'allouer la mémoire de chaque DBT) : corrige les plantages
+      à la première ouverture concurrente, et les verrous
+      d'enregistrements sont maintenant exclusifs entre contextes ;
+      chargement des routines d'E/S sous verrou ; tests « record locks
+      of INDEXED files between execution contexts » et « INDEXED files
+      in several threads » (BDB seulement). Puis (2026-11-05/06) :
+      CANCEL physique seulement s'il n'existe qu'un contexte (compteur
+      de contextes dans `cob_runtime`) ; caches `call_X` / `func_X` et
+      `cob_reference_count` dans l'instance de l'unité (le code généré
+      n'a plus que `cob_unit_slot` et `cob_module_path` en statique) ;
+      LMDB sans état statique (tampons de `local_file`, qui ne fermait
+      pas `/proc/partitions`) ; tests « physical CANCEL with several
+      execution contexts », « dynamic CALL and CANCEL in several
+      threads ». Restent :
+      - ~~verrous `fcntl` de `fileio.c`~~ **fait le 2026-11-07** (choix
+        de l'utilisateur : table interne) : table des verrous des
+        contextes dans `fileio.c`, consultée avant `fcntl` ; verrous des
+        autres contextes reposés après un unlock ou un close ; attente
+        RETRY par scrutation (plus de `SIGALRM`) ; corrige aussi UNLOCK,
+        qui ne libérait pas les verrous d'enregistrements (amont).
+        Reste : `prev_lock` jamais renseigné (amont, voir
+        BUGS-FOUND.md) ;
+      - LMDB : pas de verrous d'enregistrements (déjà le cas en amont) ;
+        `MDB_NOTLS` si un contexte peut passer d'un thread à l'autre avec
+        une transaction de lecture ouverte ;
+      - V-ISAM en multi-thread : non étudié ;
+      - **ODBC fait le 2026-11-07** (pilote SQLite, `libsqliteodbc`) :
+        une connexion (et un environnement ODBC) par contexte, établie
+        au premier OPEN avec les variables de son environnement
+        (`cob_ctx_getenv` dans `fsqlxfd.c`), fermée à la fin du contexte
+        (transaction ouverte annulée) ; connexions établies une à une
+        (gestionnaire unixODBC) ; `high_value` dans la connexion. Une
+        variable d'environnement posée par un contexte ne relit plus
+        les réglages partagés (course avec les autres threads) : il
+        faudra des réglages par contexte. OCI (`foci.c`) non traité ;
+      - **réglages par contexte faits le 2026-11-07** : copie à
+        l'écriture des réglages quand une variable de l'environnement du
+        contexte change un réglage (`set_config_val_in`,
+        `rescan_context_setting`) ; les membres de niveau processus
+        (fichiers de trace, dump, impression, SYSPUNCH) lus par
+        `cob_process_settings ()`. Reste : `common.c` lit encore
+        `cobsetptr` directement (~240 endroits, surtout init / config /
+        sortie) ; ~~les lectures à l'exécution~~ converties le
+        2026-11-07 (avertissements, mangling des noms, nom
+        d'utilisateur, interrupteurs de CALL X"91") ; le reste est de
+        niveau processus (init, configuration, API C
+        `cob_set_runtime_option`, fichiers de trace / dump, signaux,
+        sortie, date fixée de `COB_CURRENT_DATE`) ;
+      - **V-ISAM fait le 2026-11-07** : appels des bibliothèques x-ISAM
+        (API C-ISAM non thread-safe) sous un verrou de processus,
+        relâché pendant les attentes RETRY ; leurs verrous de fichiers
+        et d'enregistrements (`fcntl` internes) ne séparent toujours pas
+        les contextes d'un processus ;
+      - **tube d'impression fait le 2026-11-07** (`cob_ctx_popen`) ;
+      - restent pour T1 : OCI (`foci.c`, pas d'Oracle pour tester),
+        `screenio.c` (terminal unique, déclaré non supporté en
+        multi-thread) ;
+      - **faits le 2026-11-07** : verrou de fichier à l'OPEN de LMDB par
+        la table des contextes (fonctions `cob_ctx_lock_try` /
+        `cob_ctx_lock_close` exportées pour les gestionnaires) ;
+        `cob_module_path` atomique ; constantes des fonctions
+        intrinsèques (PI, E, logarithmes) calculées sous verrou — course
+        réelle trouvée par TSan (deux `mpf_init2` du même nombre) ;
+        état du gestionnaire d'erreurs XML dans l'analyse ; données de
+        profilage `const` ou dans le contexte ; emplacement de la
+        dernière exception, état du dump des symboles dans le contexte ;
+        TMPDIR calculé une fois sous verrou. Variables globales
+        modifiables de libcob : 169 (réglages, signaux, STOP RUN,
+        `screenio.c`, verrous et tables de niveau processus) ;
+      - **faits le 2026-11-07/08** : READY TRACE / RESET TRACE par
+        contexte (fichier de trace, de dump et SYSPUNCH ouverts une fois
+        sous verrou) ; fonctions LOCALE-DATE/TIME/COMPARE et
+        CBL_GC_PRINTABLE sans `setlocale` (`newlocale` + `*_l`),
+        `localeconv` sous verrou ; locale par contexte (`locale_t`,
+        `uselocale` dans `cob_context_enter`, `cob_set_locale` /
+        CLASSIFICATION) ; environnement par contexte (surcharges lues
+        par ACCEPT FROM ENVIRONMENT, l'association des noms de fichiers
+        `DD_`…, la relecture des réglages ; le contexte principal seul
+        écrit toujours dans l'environnement du processus) ; CALL
+        "SYSTEM" avec l'environnement du contexte (`posix_spawn`).
+        Puis répertoire courant par contexte (§7.3 : CBL_CHANGE_DIR
+        garde un chemin absolu dans le contexte, résolution des noms de
+        fichiers après leur association, des routines CBL_ de
+        répertoires, CBL_GET_CURRENT_DIR ; le contexte principal seul
+        fait toujours `chdir`), tubes `<` / `>` et CALL "SYSTEM" lancés
+        dans le répertoire et l'environnement du contexte.
+        Restent : tube d'impression (`COB_DISPLAY_PRINT_PIPE`, unique
+        pour le processus, ouvert à la première utilisation), réglages
+        modifiés par une relecture de l'environnement (partagés) ;
+  - code généré : caches `call_X` / `func_X` (écriture concurrente
+    d'un pointeur, même valeur ; CANCEL les remet à NULL) et
+    `cob_reference_count` (incréments atomiques) ;
+  - BDB `DB_THREAD` + un locker par tâche, cache d'environnements LMDB
+    par chemin, connexions ODBC/OCI par tâche, mutex global pour les
+    ISAM non thread-safe, libltdl sous verrou.
+
+**T1.5 — Code généré : instances de programme par contexte**
+- Générer une structure d'instance par programme, allouée dans `ctx` au
+  premier appel, et passer `inst` dans le code du programme.
+- `cob_module_global_enter` : obtenir le contexte courant et
+  l'instance ; garder la détection C / COBOL existante.
+- Partir des chemins `flag_recursive` / `cb_flag_stack_on_heap`
+  existants pour les `cob_field` non statiques.
+- Traiter : WORKING-STORAGE, FILE SECTION (FD), REPORT, SCREEN,
+  registres spéciaux, `initialized`, `module`, programmes imbriqués,
+  `ENTRY` multiples, `IS INITIAL`, `CANCEL`, EXTERNAL.
+
+**T1.6 — Banc de test réentrance (hôte simulé)**
+- Un petit hôte C (dans `tests/`) qui simule `cicsas` : crée N contextes,
+  appelle les mêmes programmes depuis plusieurs contextes en séquence
+  puis depuis plusieurs threads en parallèle, vérifie l'isolation des
+  WORKING-STORAGE, détruit les contextes.
+- Nouveaux tests autofonce : isolation WS, `IS INITIAL` / `CANCEL` par
+  contexte, fichiers ouverts dans deux contextes, `CALL` dynamique
+  concurrent, COBOL → C → COBOL (frontière TLS), EXTERNAL.
+- Exécution sous ThreadSanitizer et Valgrind/ASan (fuites à la
+  destruction d'un contexte).
+- Script de contrôle : pas de donnée mutable globale ni de TLS hors
+  liste blanche dans `libcob.so` et dans le code généré.
+
+**T1.7 — Performances**
+- Comparer avec la version actuelle (non réentrante) sur quelques
+  benchmarks ; optimiser les points chauds (accès à l'instance,
+  indirections).
+
+### Ordre et jalons
+
+1. **J1** : T1.0 + T1.1 (conception + inventaire) — pas de code de
+   production, permet de chiffrer précisément la suite.
+   T1.1 fait le 2026-10-28 : `TXSERIES-T1-INVENTORY.md`, script
+   `build_aux/list-mutable-globals.sh`.
+   T1.0 rédigé (brouillon à valider) le 2026-10-28 :
+   `TXSERIES-T1-DESIGN.md`, et `TXSERIES-T1-EXTERNALS.md` pour les
+   fonctions externes.
+2. **J2 (T1.2) fait le 2026-10-29** : `cob_runtime` / `cob_context`
+   (contexte courant en TLS, `cob_module_global_enter` le rend au
+   programme), ~400 fonctions exportées prennent `ctx` en premier
+   argument, `cobc` le passe (table `ctx_functions` dans codegen.c) ;
+   suite de tests sans régression. Exceptions listées dans
+   `TXSERIES-T1-DESIGN.md` §10 bis ; 882 `COB_CTX_TODO` restent pour
+   T1.3.
+   Puis, le même jour : les fonctions qui prennent le contexte sont
+   renommées `NOM_ctx`, les anciens noms restent pour la compatibilité
+   (sources, et binaire en mode un seul contexte ; DESIGN §5).
+   (J2 : T1.2 — `ctx` passé partout (changement d'ABI), état encore
+   unique.)
+3. **J3 (T1.3) en cours** : 2026-10-31, `ctx` propagé aux fonctions
+   internes de libcob (`COB_CTX_TODO` : 883 → 102, voir DESIGN §10 bis).
+   Puis : API interne des gestionnaires de fichiers avec `ctx`
+   (`COB_CTX_TODO` → 43) ; état de `strings.c` et état thread-local de
+   `common.c` dans le contexte ; collation BDB dans `app_private`.
+   **Le seul TLS restant dans libcob est `cob_current_context`.**
+   Puis : les copies par fichier du pointeur global (`cobglobptr`,
+   `file_globptr`…) remplacées par `ctx->glob`, et celles du pointeur
+   de réglages par `ctx->settings` (encore partagé : copie par contexte
+   à faire). Puis l'état de `numeric.c`, `intrinsic.c`, `reportio.c`,
+   `termio.c`, `cobcapi.c`, `fextfh.c`, `profiling.c` dans le contexte
+   (une structure opaque par fichier). Variables globales modifiables :
+   362 au départ, 247 restent (2026-11-01). Puis `fileio.c`, état de
+   « run unit » de `common.c` (modules, EXTERNAL, SWITCH, trace…),
+   constantes (tables de configuration, `fsqlxfd.c`…), et le script
+   ignore `.data.rel.ro` : 187 restent. Ce qui reste demande surtout des
+   décisions de T1.4 / T2 : table des modules (`call.c`, verrou),
+   backends (BDB, LMDB, ODBC), terminal (`screenio.c`), réglages par
+   contexte, état lié aux signaux et à STOP RUN, tampons de retour
+   statiques, constantes calculées → `cob_runtime`.
+   Reste : statiques de `common.c` (97), `fileio.c` (34), `screenio.c`
+   (27, terminal unique), `fsqlxfd.c` (20), `call.c` (14), `fbdb.c`… ; réglages par
+   contexte (et `cobsetptr` de `common.c`) ; callbacks de tri ; état
+   des fonctions de niveau processus → `cob_runtime`.
+3. **J3** : T1.3 + T1.4 — libcob sans état global mutable, thread-safe.
+4. **J4** : T1.5 + T1.6 — instances de programme par contexte, banc de
+   test multi-thread.
+   **T1.5 fait le 2026-11-01** (un seul contexte testé) : une instance
+   par unité de compilation et par contexte (`cob_unit_enter`,
+   `ctx->units`), données de chaque programme dans une sous-structure,
+   accès par macros (DESIGN §4.2). Convertis, une famille par commit :
+   écrans, arbres XML, décimaux, étiquettes, pointeurs sauvés ;
+   EXTERNAL / BASED / LINKAGE ; rapports ; champs ; zones de données ;
+   `initialized` / `module` ; paramètres de `-fsticky-linkage`. Les
+   constantes figuratives et les champs des tables de collation sont
+   devenus `const`. Restent `static` dans le code généré : constantes,
+   slot de l'unité, caches de résolution des `CALL` (`call_X`,
+   `func_X`), `cob_module_path`, `cob_reference_count` (compteur de
+   niveau processus pour le `dlclose` : à rendre atomique en T1.4).
+   **T1.6 commencé le 2026-11-01** : `cob_context_create` /
+   `cob_context_destroy` (DESIGN §3), test autofonce « CALL in from C,
+   several execution contexts » (isolation de WORKING-STORAGE, fichiers,
+   EXTERNAL ; fermeture des fichiers à la destruction). Banc multi-thread
+   hors suite (8 threads × 2000 à 20000 appels, un contexte par thread) :
+   résultats corrects ; sous ThreadSanitizer (libcob compilé à part avec
+   `-fsanitize=thread`, exécution sous `setarch -R` à cause de l'ASLR du
+   noyau), corrigés : utilisation après libération dans
+   `cob_exit_strings`, tampon statique de `cob_get_env_ctx` ; restent les
+   courses listées en T1.4.
+   **2026-11-04** : les tests du runtime réentrant sont regroupés dans
+   un fichier propre, `tests/testsuite.src/run_reentrant.at` (mot-clé
+   `runreentrant`) : plusieurs contextes ; 8 threads × 1000 appels, un
+   contexte par thread (ignoré sans pthread ; le module est chargé avant
+   les threads tant que la table de `call.c` n'a pas de verrou) ; contrôle
+   des statiques modifiables du code généré (`objdump` +
+   `build_aux/list-mutable-globals.sh`, liste blanche : `cob_unit_slot`,
+   `cob_module_path`, `cob_reference_count`, `call_X`, `func_X`). Ce
+   contrôle, appliqué aux ~1270 programmes de la suite, a trouvé trois
+   données jamais modifiées et passées `const` : champs des alphabets
+   personnalisés, `st_source_files`, `PROG_num_sym`. Suite complète
+   avec BDB (gestionnaire par défaut) : aucun échec.
+   Reste pour T1.6 : test COBOL → C → COBOL entre contextes, `CANCEL` /
+   `IS INITIAL` par contexte, `CALL` dynamique concurrent (après le
+   verrou de T1.4).
+5. **J5** : T1.7 — mesures et optimisations.
+   **Mesures du 2026-11-07** (`tests/reentrant-bench/`, builds `-O2`
+   sans debug ; référence : `587dc493^`, juste avant le travail
+   réentrant ; i7-1260P) :
+   | banc | rapport réentrant / référence |
+   |------|------|
+   | arith (DISPLAY, COMP-3, COMP-5) | 1,02 (bruit) |
+   | strs (MOVE, STRING, INSPECT) | 0,63 (les anciens `COB_TLS` de `strings.c` coûtaient `__tls_get_addr`) |
+   | calls (CALL dynamique, 20 M) | 1,035 (1,12 avant de ne lire le contexte courant qu'une fois à l'entrée) |
+   | seqf, idxf (fichiers) | 1,00 à 1,03 |
+   Montée en charge (`scale.sh`, même travail par thread, un contexte
+   par thread) : sur les cœurs E, 1 → 8 threads, temps écoulé 1,10 →
+   1,21 s (+10 %) ; sur les cœurs P, +23 % à 4 threads (baisse de la
+   fréquence turbo). Pas de contention notable sur les verrous de
+   libcob (`pthread_mutex_lock` 1,9 % du profil, table des programmes
+   lors des `cob_call` depuis C). Pistes si besoin : modèle TLS
+   `initial-exec` pour le contexte courant (risque si libcob est chargé
+   par `dlopen`), recherche sans verrou dans la table des programmes.
+
+### Risques
+
+- Volume du changement de signature (~520 fonctions exportées + tous les
+  appels générés) → le faire tôt (J2), de manière mécanique, et séparé
+  de la migration d'état.
+- Volume de l'état global plus grand que prévu (backends de fichiers,
+  screenio) → limiter le périmètre multi-thread au début (screenio exclu).
+- Extensions et code C utilisateur appelant libcob (`cobcapi.c`, C
+  appelé par `CALL`) : tous doivent être adaptés au nouveau `ctx`.
+- Divergence forte avec l'amont GnuCOBOL (changement d'ABI) → découper
+  en commits mécaniques et lisibles, pour faciliter les fusions.

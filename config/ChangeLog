@@ -1,4 +1,15 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* acu-strict.conf, bs2000-strict.conf, cobol2002.conf, cobol2014.conf,
+	  cobol85.conf, default.conf, gcos-strict.conf, ibm-strict.conf,
+	  mf-strict.conf, mvs-strict.conf, realia-strict.conf, rm-strict.conf,
+	  txseries.conf, xopen.conf: dialect option missing-conf-section
+	* txseries.conf: new file, txseries.conf, dialect of the programs
+	  translated by TXSeries
+	* Makefile.am: txseries.conf, dialect of the programs translated by
+	  TXSeries
+
 2025-04-22  Chuck Haatvedt  <chuck.haatvedt+cobol@gmail.com>
 
 	* runtime.cfg: add runtime configuration COB_HEAP_MEMORY and

@@ -1,4 +1,101 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* TXSERIES-COBOLIT-API.md: API document, what is implemented
+	* txseries/dbconnect.cob: new file, dbconnect.cob, PostgreSQL through
+	  GixSQL
+	* Makefile.am, TXSERIES-PLAN.md, txseries/README.md: dbconnect.cob,
+	  PostgreSQL through GixSQL
+	* txseries/cobcld.c (make_method_global): hosted runtime as soon as
+	  libcobcld is loaded
+	* TXSERIES-PLAN.md, txseries/README.md: dialect option
+	  missing-conf-section
+	* TXSERIES-PLAN.md, txseries/README.md, txseries/cobcld.c
+	  (cob_enterprise_get_current_region, cob_enterprise_cancel_region,
+	  cob_resolve): NEWCOPY of the programs
+	* TXSERIES-PLAN.md, txseries/README.md, txseries/cobcld.c (cob_init,
+	  cob_enterprise_set_current_region, cob_dump_debug_info): runtime
+	  errors call the error procedure of TXSeries
+	* txseries/Dockerfile: new file, dockerfile of TXSeries with GnuCOBOL
+	* Makefile.am, TXSERIES-PLAN.md, txseries/README.md: dockerfile of
+	  TXSeries with GnuCOBOL
+	* txseries/Makefile, txseries/README.md, txseries/cobcld.c
+	  (cob_get_rtd, init_runtime): make the language method global for the
+	  programs
+	* TXSERIES-PLAN.md: txseries.conf, dialect of the programs translated
+	  by TXSeries
+	* TXSERIES-PLAN.md, txseries/README.md: build notes, status of T5
+	* txseries/Makefile, txseries/README.md, txseries/cobcld.c: new files,
+	  libcobcld, the CobolCloud runtime API of TXSeries on libcob
+	* Makefile.am: libcobcld, the CobolCloud runtime API of TXSeries on
+	  libcob
+	* TXSERIES-COBOLIT-API.md: new file, API of the COBOL-IT and CobolCloud
+	  language methods
+	* TXSERIES-PLAN.md: API of the COBOL-IT and CobolCloud language methods
+	* TXSERIES-PLAN.md: first findings of T3 (COBOL-IT integration)
+	* TXSERIES-PLAN.md: T2 done, summary of the host API
+	* TXSERIES-PLAN.md: T2 status
+	* TXSERIES-PLAN.md: T2 progress
+	* TXSERIES-PLAN.md: status with "libcob: STOP RUN and fatal errors
+	  return to the host from a context (T2)"
+	* TXSERIES-PLAN.md: T1.4 settings in common.c, V-ISAM, printer pipe
+	* TXSERIES-PLAN.md: runtime settings per context
+	* TXSERIES-PLAN.md: status with "TXSeries plan, HOWTO-TSAN: ODBC per
+	  context"
+	* TXSERIES-PLAN.md: T1.4 current directory and pipes per context
+	* TXSERIES-PLAN.md: T1.4 progress (trace, locale, environment)
+	* TXSERIES-PLAN.md: status with "tests/reentrant-bench: benchmarks of
+	  the reentrant runtime (T1.7)"
+	* TXSERIES-PLAN.md: T1.4 progress (LMDB lock, intrinsic constants,
+	  common.c state)
+	* TXSERIES-PLAN.md: T1.4 locks of the files between contexts
+	* TXSERIES-PLAN.md: T1.4 progress (physical CANCEL, CALL caches, LMDB)
+	* TXSERIES-PLAN.md: status with "TXSeries plan, HOWTO-TSAN: BDB in
+	  several threads (T1.4)"
+	* TXSERIES-PLAN.md: status with "TXSeries plan: T1.4 progress (locks,
+	  call.c, time), bug in cob_call"
+	* TXSERIES-PLAN.md: status with "tests: no mutable static data in the
+	  generated code (T1.6)"
+	* TXSERIES-PLAN.md: status with "TXSeries plan: T1.6 contexts API,
+	  ThreadSanitizer findings for T1.4"
+	* TXSERIES-PLAN.md: status with "TXSeries plan: T1.5 done, statics left
+	  in the generated code"
+	* TXSERIES-PLAN.md: status of T1.3 (187 mutable globals left)
+	* TXSERIES-PLAN.md: status of T1.3 (state of 7 more files in the
+	  context)
+	* TXSERIES-PLAN.md: status of T1.3 (global and settings pointers)
+	* TXSERIES-PLAN.md: status of T1.3 (single thread-local variable left)
+	* TXSERIES-PLAN.md: status with "TXSERIES docs: status of the context
+	  propagation (T1.3)"
+	* TXSERIES-PLAN.md: status with "TXSERIES-T1-DESIGN.md: _ctx names and
+	  compatibility functions"
+	* TXSERIES-PLAN.md: new file, status with "TXSeries compatibility: plan
+	  and design of the reentrant runtime"
+	* configure.ac: DISPLAY handler of the host
+	* HOWTO-TSAN.md: ODBC per context
+	* configure.ac: current directory of the execution contexts
+	* configure.ac: CALL "SYSTEM" with the environment of the context
+	* configure.ac: locale functions without changing the locale of the
+	  process
+	* HOWTO-TSAN.md: BDB in several threads
+	* HOWTO-TSAN.md: new file, finding and fixing data races with
+	  ThreadSanitizer
+	* configure.ac: reentrant localtime and gmtime
+	* configure.ac: process-level locks
+	* TXSERIES-T1-DESIGN.md: T1.6 contexts API, ThreadSanitizer findings
+	  for T1.4
+	* TXSERIES-T1-DESIGN.md: T1.5 done, statics left in the generated code
+	* TXSERIES-T1-DESIGN.md: design of the program instances
+	* TXSERIES-T1-INVENTORY.md: TERMINATE / GENERATE statics are resume
+	  state
+	* TXSERIES-T1-DESIGN.md: file handler API done, EXTFH interface open
+	  point
+	* TXSERIES-T1-DESIGN.md: status of the context propagation
+	* TXSERIES-T1-DESIGN.md: _ctx names and compatibility functions
+	* TXSERIES-T1-DESIGN.md, TXSERIES-T1-EXTERNALS.md,
+	  TXSERIES-T1-INVENTORY.md: new files, plan and design of the reentrant
+	  runtime
+
 2025-11-20  Simon Sobisch <simonsobisch@gnu.org>
 
 	* configure.ac: fix linking order for PANEL_LIBS

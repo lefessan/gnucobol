@@ -895,6 +895,14 @@ check_relaxed_syntax (const enum cobc_hd lev)
 		break;
 	/* LCOV_EXCL_STOP */
 	}
+	/* CONFIGURATION SECTION: according to the dialect, the
+	   default (error) being the check of the other headers */
+	if (lev == COBC_HD_CONFIGURATION_SECTION
+	 && cb_missing_conf_section != CB_ERROR) {
+		(void)cb_verify (cb_missing_conf_section,
+			_("paragraphs of CONFIGURATION SECTION without its header"));
+		return;
+	}
 	if (cb_syntax_check (_("%s header missing"), s)) {
 		cb_note (COBC_WARN_FILLER, 0, _("%s header assumed"), s);
 	}
@@ -2125,6 +2133,11 @@ check_not_88_level (cb_tree x)
 
 	if (!CB_REF_OR_FIELD_P(x)) {
 		/* note: this also applies to cb_error_node */
+		return x;
+	}
+	/* a reference to an undefined item (already reported) */
+	if (CB_REFERENCE_P (x)
+	 && !CB_FIELD_P (cb_ref (x))) {
 		return x;
 	}
 

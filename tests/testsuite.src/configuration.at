@@ -523,6 +523,7 @@ test.conf: missing definitions:
 	no definition of 'call-convention-linkage'
 	no definition of 'numeric-value-for-edited-item'
 	no definition of 'incorrect-conf-sec-order'
+	no definition of 'missing-conf-section'
 	no definition of 'define-constant-directive'
 	no definition of 'free-redefines-position'
 	no definition of 'records-mismatch-record-clause'

@@ -136,6 +136,8 @@ enum compile_level {
 
 const char		*cb_source_file = NULL;
 const char		*cb_dialect = NULL;
+/* name of the dialect given by -std or WITH_STD, in upper case */
+static char		dialect_name[COB_MINI_BUFF];
 const char		*cb_cobc_build_stamp = NULL;
 const char		*demangle_name = NULL;
 const char		*cb_storage_file_name = NULL;
@@ -287,6 +289,8 @@ int warn_opt_val[COB_WARNOPT_MAX];
 
 static char	cob_std_conf[64] = "";
 static int		num_std = 0;
+/* COBOL-IT -fthread-safe: generated code is always reentrant, ignored */
+static int		cb_flag_thread_safe = 1;
 static struct cb_define_struct	*cb_define_list = NULL;
 
 static struct cobc_mem_struct	*cobc_mainmem_base = NULL;
@@ -587,6 +591,9 @@ static const struct option long_options[] = {
 	/* alias for backwards-compatibility, removed with 4.x: */
 	{"fnotrunc",		CB_NO_ARG, &cb_flag_trunc, 0},
 	{"fno-notrunc",		CB_NO_ARG, &cb_flag_trunc, 1},
+
+	/* compatibility with COBOL-IT (used by TXSeries cicstcl) */
+	{"fthread-safe",	CB_NO_ARG, &cb_flag_thread_safe, 1},
 
 #define	CB_CONFIG_ANY(type,var,name,doc)	\
 	{"f" name,		CB_RQ_ARG, NULL, '%'},
@@ -3348,7 +3355,8 @@ process_command_line (const int argc, char **argv)
 			for (n=0; cob_optarg[n] != 0 && cob_optarg[n] != '-'; n++)
 				ext[n] = toupper(cob_optarg[n]);
 			ext[n] = 0;
-			cb_dialect = cobc_strdup (ext);
+			strcpy (dialect_name, ext);
+			cb_dialect = dialect_name;
 			snprintf (cob_std_conf, sizeof(cob_std_conf), "%s.conf", cob_optarg);
 			num_std++;
 			break;
@@ -3504,7 +3512,8 @@ process_command_line (const int argc, char **argv)
 		for (n=0; ext[n] != 0; n++)
 			ext[n] = toupper(ext[n]);
 		ext[n] = 0;
-		cb_dialect = cobc_strdup (ext);
+		strcpy (dialect_name, ext);
+		cb_dialect = dialect_name;
 		if (verbose_output) {
 			fprintf(stderr, _("loading default configuration file '%s.conf'\n"),WITH_STD);
 		}

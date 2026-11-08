@@ -704,7 +704,7 @@ dnl AC_CHECK_HEADERS([whcar.h malloc.h])
 AC_CHECK_HEADERS([sys/types.h stddef.h fcntl.h], [],
 	[AC_MSG_ERROR([mandatory header could not be found or included])])
 # optional:
-AC_CHECK_HEADERS([sys/time.h locale.h dlfcn.h stdint.h inttypes.h sys/wait.h sys/sysmacros.h signal.h])
+AC_CHECK_HEADERS([sys/time.h locale.h dlfcn.h stdint.h inttypes.h sys/wait.h sys/sysmacros.h signal.h pthread.h])
 
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -745,7 +745,9 @@ AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([memmove memset setlocale fcntl strerror strcasecmp
 	strchr strrchr strdup strstr atol strtol atoll strtoll gettimeofday localeconv
 	getexecname canonicalize_file_name popen raise readlink realpath
-	setenv strcoll flockfile])
+	setenv strcoll flockfile localtime_r gmtime_r \
+	newlocale duplocale freelocale uselocale nl_langinfo_l strcoll_l isprint_l \
+	posix_spawn posix_spawn_file_actions_addchdir_np open_memstream])
 
 # more things to save...
 AC_CACHE_SAVE
@@ -858,6 +860,20 @@ else
 	  *" $MATH_LIBS "*) ;;
 	  *) LIBCOB_LIBS="$LIBCOB_LIBS $MATH_LIBS" ;;
 	esac
+fi
+
+# Checks for the locks of the reentrant runtime (POSIX threads,
+# Win32 uses its native locks)
+if test "x$ac_cv_header_pthread_h" = xyes; then
+	curr_libs="$LIBS"
+	LIBS=""
+	AC_SEARCH_LIBS([pthread_mutex_lock], [pthread], [
+		AC_DEFINE([COB_HAVE_PTHREAD_LOCKS], [1],
+			[Define to 1 if libcob uses POSIX mutexes for its process-level locks])
+		if test "x$LIBS" != x; then
+			LIBCOB_LIBS="$LIBCOB_LIBS $LIBS"
+		fi])
+	LIBS="$curr_libs"
 fi
 
 
