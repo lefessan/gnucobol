@@ -30,21 +30,21 @@
 
 /* Local variables */
 
-static int lmdb_open	(cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
-static int lmdb_close	(cob_file_api *, cob_file *, const int);
-static int lmdb_start	(cob_file_api *, cob_file *, const int, cob_field *);
-static int lmdb_read	(cob_file_api *, cob_file *, cob_field *, const int);
-static int lmdb_read_next(cob_file_api *, cob_file *, const int);
-static int lmdb_write	(cob_file_api *, cob_file *, const int);
-static int lmdb_delete	(cob_file_api *, cob_file *);
-static int lmdb_rewrite	(cob_file_api *, cob_file *, const int);
-static int lmdb_file_delete  (cob_file_api *, cob_file *, char *filename);
-static void cob_lmdb_exit_fileio (cob_file_api *a);
-static int cob_lmdb_fork (cob_file_api *a);
-static int ix_lmdb_file_unlock(cob_file_api *, cob_file *);
+static int lmdb_open	(cob_context *, cob_file_api *, cob_file *, char *, const enum cob_open_mode, const int);
+static int lmdb_close	(cob_context *, cob_file_api *, cob_file *, const int);
+static int lmdb_start	(cob_context *, cob_file_api *, cob_file *, const int, cob_field *);
+static int lmdb_read	(cob_context *, cob_file_api *, cob_file *, cob_field *, const int);
+static int lmdb_read_next(cob_context *, cob_file_api *, cob_file *, const int);
+static int lmdb_write	(cob_context *, cob_file_api *, cob_file *, const int);
+static int lmdb_delete	(cob_context *, cob_file_api *, cob_file *);
+static int lmdb_rewrite	(cob_context *, cob_file_api *, cob_file *, const int);
+static int lmdb_file_delete  (cob_context *, cob_file_api *, cob_file *, char *filename);
+static void cob_lmdb_exit_fileio (cob_context *, cob_file_api *a);
+static int cob_lmdb_fork (cob_context *, cob_file_api *a);
+static int ix_lmdb_file_unlock(cob_context *, cob_file_api *, cob_file *);
 static char * lmdb_version (void);
 
-void cob_lmdb_init_fileio (cob_file_api *a);
+void cob_lmdb_init_fileio (cob_context *, cob_file_api *a);
 
 static int ix_lmdb_dummy () { return 0; }
 
@@ -68,8 +68,6 @@ static const struct cob_fileio_funcs lmdb_funcs = {
 	lmdb_version
 };
 
-static char		*db_buff = NULL;
-static const char	**db_data_dir = NULL;
 
 #define INTTYPES_H_MISSING
 #include <lmdb.h>
@@ -82,7 +80,7 @@ static const char	**db_data_dir = NULL;
 #define MDB_MAX_MAP_INC 1073741824
 
 #define WARN(format, ...)  {						\
-   cob_runtime_warning("%s:%d: " format "\n",				\
+   cob_runtime_warning_ctx(COB_CTX_TODO, "%s:%d: " format "\n",				\
 		       __FILE__, __LINE__, ## __VA_ARGS__);		\
 }
 
@@ -299,13 +297,13 @@ struct indexed_file {
 
 /* Local functions */
 
-static int cob_lmdb_fork (cob_file_api *a)
+static int cob_lmdb_fork (cob_context *ctx, cob_file_api *a)
 {
 	COB_UNUSED(a);
 	return 0;
 }
 
-static int ix_lmdb_file_unlock (cob_file_api *a, cob_file *f)
+static int ix_lmdb_file_unlock (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED(a);
 	COB_UNUSED(f);
@@ -359,12 +357,12 @@ db_nofile (const char *filename)
 
 /* check for local file, returns 1 if "yes" (unimplemented for WIN32) */
 static int
-local_file( dev_t device, char **pname /*output*/ )
+local_file( dev_t device )
 {
 	int n, maj, min, nblock;
 	char *s;
-	static char line[128];
-	static char devname[128];
+	char line[128];
+	char devname[128];
 	static const char filename[] = "/proc/partitions";
 	FILE *file;
 
@@ -391,17 +389,46 @@ local_file( dev_t device, char **pname /*output*/ )
 		}
 		if( n == 4 ) {
 			if( maj == major(device) && min == minor(device) ) {
-				*pname = devname;
+				fclose (file);
 				return 1;
 			}
 		}
 	}
 
+	fclose (file);
 	return 0;
 }
 
 
 /* INDEXED */
+
+static void
+env_close_cb (void *env)
+{
+	mdb_env_close ((MDB_env *)env);
+}
+
+/* close the environment of a file: its descriptor may hold the locks of
+   other contexts on the file (any close releases all the fcntl locks of
+   the process on the file), see cob_ctx_lock_close */
+static void
+lmdb_env_close (struct indexed_file *p)
+{
+#ifdef	HAVE_FCNTL
+	mdb_filehandle_t	fd;
+#endif
+	if (p->db_env == NULL) {
+		return;
+	}
+#ifdef	HAVE_FCNTL
+	if (mdb_env_get_fd (p->db_env, &fd) == MDB_SUCCESS
+	 && fd >= 0) {
+		cob_ctx_lock_close (p, fd, env_close_cb, p->db_env);
+	} else
+#endif
+	mdb_env_close (p->db_env);
+	p->db_env = NULL;
+}
 
 /* Get the next number in a set of duplicates */
 static unsigned int
@@ -414,8 +441,6 @@ get_dupno (cob_file *f, const cob_u32_t i)
 	/* Using a nested transaction so we don't mess up the write transacion in lmdb_write */
 	MDB_txn    *txn;
 	MDB_cursor *cursor;
-	txn    = cob_malloc(sizeof(MDB_txn *));
-	cursor = cob_malloc(sizeof(MDB_cursor *));
 
 	db_setkey(f, i);
 	memcpy (p->temp_key, p->key.mv_data, (size_t)p->maxkeylen);
@@ -434,7 +459,7 @@ get_dupno (cob_file *f, const cob_u32_t i)
 /* read file with all alternate keys that don't allow duplicates
    to check if records exist already, returns 1 if true */
 static int
-check_alt_keys (cob_file *f, const int rewrite)
+check_alt_keys (cob_context *ctx, cob_file *f, const int rewrite)
 {
 	struct indexed_file  *p = f->file;
 	int i;
@@ -447,7 +472,7 @@ check_alt_keys (cob_file *f, const int rewrite)
 			ret = mdb_get(p->txn,*p->db[i],&p->key,&p->data);
 			if (ret == 0) {
 				if (rewrite) {
-					if (db_cmpkey(f, p->data.mv_data, f->record->data, 0, 0)) {
+					if (db_cmpkey(ctx, f, p->data.mv_data, f->record->data, 0, 0)) {
 						return 1;
 					}
 				} else {
@@ -496,7 +521,7 @@ mdb_cob_status( int mdb_error )
 }
 
 static int
-lmdb_write_internal (cob_file *f, const int rewrite, const int opt, unsigned int ds)
+lmdb_write_internal (cob_context *ctx, cob_file *f, const int rewrite, const int opt, unsigned int ds)
 {
 	struct indexed_file	*p = f->file;
 	cob_u32_t	i, len;
@@ -525,7 +550,7 @@ lmdb_write_internal (cob_file *f, const int rewrite, const int opt, unsigned int
 
 	/* Check duplicate alternate keys */
 	if (f->nkeys > 1 && !rewrite) {
-		if (check_alt_keys (f, 0)) {
+		if (check_alt_keys (ctx, f, 0)) {
 			mdb_txn_abort(p->txn);
 			return MDB_KEYEXIST;
 		}
@@ -600,7 +625,7 @@ lmdb_write_internal (cob_file *f, const int rewrite, const int opt, unsigned int
 }
 
 static int
-lmdb_start_internal (cob_file *f, const int cond, cob_field *key,
+lmdb_start_internal (cob_context *ctx, cob_file *f, const int cond, cob_field *key,
 			const int read_opts, const int test_lock)
 {
 	struct indexed_file	*p = f->file;
@@ -653,7 +678,7 @@ lmdb_start_internal (cob_file *f, const int cond, cob_field *key,
 	switch (cond) {
 	case COB_EQ:
 		if (ret == MDB_SUCCESS) {
-			ret = db_cmpkey (f, p->key.mv_data, f->record->data, p->key_index, partlen);
+			ret = db_cmpkey (ctx, f, p->key.mv_data, f->record->data, p->key_index, partlen);
 		}
 		break;
 	case COB_LT:
@@ -666,7 +691,7 @@ lmdb_start_internal (cob_file *f, const int cond, cob_field *key,
 	case COB_LE:
 		if (ret != MDB_SUCCESS) {
 			ret = mdb_cursor_get(p->cursor[p->key_index], &p->key, &p->data, MDB_LAST);
-		} else if (db_cmpkey(f, p->key.mv_data, f->record->data, p->key_index, partlen) !=0) {
+		} else if (db_cmpkey(ctx, f, p->key.mv_data, f->record->data, p->key_index, partlen) !=0) {
 			ret = mdb_cursor_get(p->cursor[p->key_index], &p->key, &p->data, MDB_PREV);
 		} else if (f->keys[p->key_index].tf_ascending == COB_ASCENDING) {
 			ret = mdb_cursor_get(p->cursor[p->key_index], &p->key, &p->data, MDB_NEXT_NODUP);
@@ -678,7 +703,7 @@ lmdb_start_internal (cob_file *f, const int cond, cob_field *key,
 		}
 		break;
 	case COB_GT:
-		while (ret == MDB_SUCCESS && db_cmpkey (f, p->key.mv_data, f->record->data, p->key_index, partlen)  == MDB_SUCCESS) {
+		while (ret == MDB_SUCCESS && db_cmpkey (ctx, f, p->key.mv_data, f->record->data, p->key_index, partlen)  == MDB_SUCCESS) {
 			ret = mdb_cursor_get(p->cursor[p->key_index], &p->key, &p->data, MDB_NEXT);
 		}
 		break;
@@ -733,7 +758,7 @@ lmdb_start_internal (cob_file *f, const int cond, cob_field *key,
 }
 
 static int
-lmdb_delete_internal (cob_file *f, const int rewrite)
+lmdb_delete_internal (cob_context *ctx, cob_file *f, const int rewrite)
 {
 	struct indexed_file	*p = f->file;
 	size_t			i, len;
@@ -797,7 +822,7 @@ lmdb_delete_internal (cob_file *f, const int rewrite)
 		p->key.mv_data = (char *)p->key.mv_data;
 		/* rewrite: no delete if secondary key is unchanged */
 		if (rewrite) {
-			p->rewrite_sec_key[i] = db_cmpkey (f, p->suppkey, f->record->data, i, 0);
+			p->rewrite_sec_key[i] = db_cmpkey (ctx, f, p->suppkey, f->record->data, i, 0);
 			if (!p->rewrite_sec_key[i]) {
 				continue;
 			}
@@ -851,7 +876,7 @@ mdb_resize_env (MDB_env* e)
 
 /* Delete file */
 static int
-lmdb_file_delete (cob_file_api *a, cob_file *f, char *filename)
+lmdb_file_delete (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename)
 {
 	COB_UNUSED(a);
 	COB_UNUSED (f);
@@ -869,8 +894,9 @@ indexed_file_free (struct indexed_file* p)
 }
 
 static int
-lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
+lmdb_open (cob_context *ctx, cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mode mode, const int sharing)
 {
+	char		db_buff[COB_SMALL_BUFF];	/* path of the file */
 	/* Note filename points to file_open_name */
 	/* cob_chk_file_mapping manipulates file_open_name directly */
 
@@ -882,12 +908,11 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 	int nonexistent = 0;
 	int lock_mode;
 
-	a->chk_file_mapping (f, NULL);
+	a->chk_file_mapping (ctx, f, NULL);
 
 	/* TODO: this variable should be moved to common.c as binary config */
 	if (getenv("MDB_NO_SHARED_FS_CHK") == NULL) {
 		struct stat sb;
-		char *devname;
 		char dir[ COB_FILE_MAX ];
 		int	is_local;
 
@@ -896,9 +921,9 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
 
-		is_local = local_file(sb.st_dev, &devname);
+		is_local = local_file (sb.st_dev);
 		if (!is_local) {
-			cob_runtime_warning("file %s - shared filesystem detected!", filename);
+			cob_runtime_warning_ctx(ctx, "file %s - shared filesystem detected!", filename);
 			return COB_STATUS_30_PERMANENT_ERROR;
 		}
 	}
@@ -926,8 +951,8 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		break;
 	/* LCOV_EXCL_START */
 	default:
-		cob_runtime_error (_("invalid internal call of %s"), "indexed_open");
-		cob_fatal_error (COB_FERROR_CODEGEN);
+		cob_runtime_error_ctx (ctx, _("invalid internal call of %s"), "indexed_open");
+		cob_fatal_error_ctx (ctx, COB_FERROR_CODEGEN);
 	/* LCOV_EXCL_STOP */
 	}
 
@@ -944,12 +969,12 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 	}
 	p->maxkeylen = maxsize;
 
-	snprintf (db_buff, (size_t)COB_SMALL_MAX, "%s%c%s",file_setptr->lmdb_home, SLASH_CHAR, filename);
+	snprintf (db_buff, (size_t)COB_SMALL_MAX, "%s%c%s",ctx->settings->lmdb_home, SLASH_CHAR, filename);
 	if (mode != COB_OPEN_OUTPUT) {
 		if (db_nofile (filename) == 0) {
-			ret = a->cob_read_dict (f, db_buff, !f->flag_keycheck);
+			ret = a->cob_read_dict (ctx, f, db_buff, !f->flag_keycheck);
 		} else {
-			ret = a->cob_read_dict (f, filename, !f->flag_keycheck);
+			ret = a->cob_read_dict (ctx, f, filename, !f->flag_keycheck);
 		}
 		if (ret == -1) {
 			/* no .dd found - just go on */
@@ -965,7 +990,7 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 
 	if (f->nkeys > 1) {
 		if ((ret = mdb_env_set_maxdbs(p->db_env,f->nkeys)) != MDB_SUCCESS ) {
-			mdb_env_close(p->db_env);
+			lmdb_env_close (p);
 			p->db_env = NULL;
 			indexed_file_free(p);
 			return mdb_cob_status(ret);
@@ -996,7 +1021,7 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 	}
 
 	if ((ret = mdb_env_open(p->db_env, filename, p->env_flags, 0770)) != MDB_SUCCESS) {
-		mdb_env_close(p->db_env);
+		lmdb_env_close (p);
 		p->db_env = NULL;
 		indexed_file_free(p);
 		return mdb_cob_status(ret);
@@ -1013,24 +1038,20 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 		}
 
 		if ((ret = mdb_env_get_fd(p->db_env, &p->fd)) != MDB_SUCCESS) {
-			mdb_env_close(p->db_env);
+			lmdb_env_close (p);
 			p->db_env = NULL;
 			indexed_file_free(p);
 			return mdb_cob_status(ret);
 		}
 
-		memset((void *)&p->lock, 0, sizeof (struct flock));
-		p->lock.l_type = lock_mode;
-		p->lock.l_whence = SEEK_SET;
-		p->lock.l_start = 0;
-		p->lock.l_len = 0;
-		p->lock.l_pid = getpid();
-		errno = 0;
-		int fcd = 0;
-		fcd = fcntl(p->fd, F_SETLK, &p->lock);
-		if (fcd < 0) {
+		/* lock of the whole file, also against the other contexts of the
+		   process */
+		if (!cob_ctx_lock_try (ctx, p, p->fd, 0, 0, (short)lock_mode,
+				       &f->blockpid)) {
 			ret = errno;
+			lmdb_env_close (p);
 			p->fd = -1;
+			indexed_file_free (p);
 			switch (ret) {
 			case EACCES:
 			case EAGAIN:
@@ -1044,7 +1065,7 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 	}
 
 	if ((ret = mdb_txn_begin(p->db_env, NULL, p->txn_flags, &p->txn)) != MDB_SUCCESS) {
-		mdb_env_close(p->db_env);
+		lmdb_env_close (p);
 		p->db_env = NULL;
 		indexed_file_free(p);
 		return mdb_cob_status(ret);
@@ -1065,7 +1086,7 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 			for (j = 0; j < i; ++j) {
 				mdb_dbi_close(p->db_env,*p->db[j]);
 			}
-			mdb_env_close(p->db_env);
+			lmdb_env_close (p);
 			p->db_env = NULL;
 			indexed_file_free(p);
 			return mdb_cob_status(ret);
@@ -1114,7 +1135,7 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 			for (j = 0; j < i; ++j) {
 				mdb_dbi_close(p->db_env,*p->db[j]);
 			}
-			mdb_env_close(p->db_env);
+			lmdb_env_close (p);
 			p->db_env = NULL;
 			indexed_file_free(p);
 			return mdb_cob_status(ret);
@@ -1122,7 +1143,7 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 
 	f->open_mode = (enum cob_open_mode)mode;
 	if (mode == COB_OPEN_OUTPUT ) {
-		a->cob_write_dict(f, db_buff);
+		a->cob_write_dict(ctx, f, db_buff);
 	}
 
 	if (f->flag_optional
@@ -1137,7 +1158,7 @@ lmdb_open (cob_file_api *a, cob_file *f, char *filename, const enum cob_open_mod
 /* Close the INDEXED file */
 
 static int
-lmdb_close (cob_file_api *a, cob_file *f, const int opt)
+lmdb_close (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexed_file *p = f->file;
 	int i;
@@ -1147,7 +1168,7 @@ lmdb_close (cob_file_api *a, cob_file *f, const int opt)
 	for (i = 0; i < f->nkeys; i++) {
 		mdb_close(p->db_env, *p->db[i]);
 	}
-	mdb_env_close(p->db_env);
+	lmdb_env_close (p);
 	p->db_env = NULL;
 	if (p) cob_free(p);
 	return COB_STATUS_00_SUCCESS;
@@ -1156,16 +1177,16 @@ lmdb_close (cob_file_api *a, cob_file *f, const int opt)
 /* START INDEXED file with positioning */
 
 static int
-lmdb_start (cob_file_api *a, cob_file *f, const int cond, cob_field *key)
+lmdb_start (cob_context *ctx, cob_file_api *a, cob_file *f, const int cond, cob_field *key)
 {
 	COB_UNUSED (a);
-	return lmdb_start_internal (f, cond, key, 0, 0);
+	return lmdb_start_internal (ctx, f, cond, key, 0, 0);
 }
 
 /* Random READ of the INDEXED file  */
 
 static int
-lmdb_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
+lmdb_read (cob_context *ctx, cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 {
 	struct indexed_file	*p = f->file;
 	int			ret;
@@ -1175,7 +1196,7 @@ lmdb_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 	COB_UNUSED (a);
 	db_opts = read_opts;
 
-	if ((ret = lmdb_start_internal (f, COB_EQ, key, db_opts, test_lock)) != COB_STATUS_00_SUCCESS) {
+	if ((ret = lmdb_start_internal (ctx, f, COB_EQ, key, db_opts, test_lock)) != COB_STATUS_00_SUCCESS) {
 		return ret;
 	}
 
@@ -1194,7 +1215,7 @@ lmdb_read (cob_file_api *a, cob_file *f, cob_field *key, const int read_opts)
 /* Sequential READ of the INDEXED file */
 
 static int
-lmdb_read_next (cob_file_api *a, cob_file *f, const int read_opts)
+lmdb_read_next (cob_context *ctx, cob_file_api *a, cob_file *f, const int read_opts)
 {
 	struct		indexed_file  *p = f->file;
 	int		ret;
@@ -1477,7 +1498,7 @@ lmdb_read_next (cob_file_api *a, cob_file *f, const int read_opts)
 /* WRITE to the INDEXED file  */
 
 static int
-lmdb_write (cob_file_api *a, cob_file *f, const int opt)
+lmdb_write (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexed_file	*p = f->file;
 	int rc = 0;
@@ -1497,7 +1518,7 @@ lmdb_write (cob_file_api *a, cob_file *f, const int opt)
 		return COB_STATUS_21_KEY_INVALID;
 	}
 	memcpy (p->last_key, p->key.mv_data, (size_t)p->key.mv_size);
-	while ((rc = lmdb_write_internal(f, 0, opt, cs)) != MDB_SUCCESS) {
+	while ((rc = lmdb_write_internal(ctx, f, 0, opt, cs)) != MDB_SUCCESS) {
 		if (rc == MDB_MAP_FULL) {
 			mdb_resize_env(p->db_env);
 		} else {
@@ -1510,19 +1531,19 @@ lmdb_write (cob_file_api *a, cob_file *f, const int opt)
 /* DELETE record from the INDEXED file  */
 
 static int
-lmdb_delete (cob_file_api *a, cob_file *f)
+lmdb_delete (cob_context *ctx, cob_file_api *a, cob_file *f)
 {
 	COB_UNUSED (a);
 	if (f->flag_nonexistent) {
 		return COB_STATUS_49_I_O_DENIED;
 	}
-	return lmdb_delete_internal (f, 0);
+	return lmdb_delete_internal (ctx, f, 0);
 }
 
 /* REWRITE record to the INDEXED file  */
 
 static int
-lmdb_rewrite (cob_file_api *a, cob_file *f, const int opt)
+lmdb_rewrite (cob_context *ctx, cob_file_api *a, cob_file *f, const int opt)
 {
 	struct indexed_file	*p = f->file;
 	int			ret;
@@ -1534,18 +1555,18 @@ lmdb_rewrite (cob_file_api *a, cob_file *f, const int opt)
 		return COB_STATUS_49_I_O_DENIED;
 	}
 	/* Check duplicate alternate keys */
-	if (check_alt_keys (f, 1)) {
+	if (check_alt_keys (ctx, f, 1)) {
 		return COB_STATUS_22_KEY_EXISTS;
 	}
 
 	/* Delete the current record */
-	if ((ret = lmdb_delete_internal (f, 1)) != COB_STATUS_00_SUCCESS) {
+	if ((ret = lmdb_delete_internal (ctx, f, 1)) != COB_STATUS_00_SUCCESS) {
 		return ret;
 	}
 
 	/* Write data */
 	db_setkey (f, 0);
-	while ((ret = lmdb_write_internal (f, 1, opt, cs)) != MDB_SUCCESS) {
+	while ((ret = lmdb_write_internal (ctx, f, 1, opt, cs)) != MDB_SUCCESS) {
 		if (ret == MDB_MAP_FULL) {
 			mdb_resize_env(p->db_env);
 		} else {
@@ -1561,25 +1582,18 @@ lmdb_rewrite (cob_file_api *a, cob_file *f, const int opt)
 */
 
 static void
-cob_lmdb_exit_fileio (cob_file_api *a)
+cob_lmdb_exit_fileio (cob_context *ctx, cob_file_api *a)
 {
+	COB_UNUSED (ctx);
 	COB_UNUSED (a);
-	if(db_buff)
-		cob_free (db_buff);
-	db_buff = NULL;
-	return;
 }
 
 void
-cob_lmdb_init_fileio (cob_file_api *a)
+cob_lmdb_init_fileio (cob_context *ctx, cob_file_api *a)
 {
 	a->io_funcs[COB_IO_LMDB] = (void*)&lmdb_funcs;
-	cobglobptr = a->glbptr;
-	cobsetptr = a->setptr;
-	db_data_dir = NULL;
-	db_buff = cob_malloc (COB_SMALL_BUFF);
-	if (cobsetptr->lmdb_home == NULL) {
-		cobsetptr->lmdb_home = cob_strdup(".");
+	if (ctx->settings->lmdb_home == NULL) {
+		ctx->settings->lmdb_home = cob_strdup(".");
 	}
 }
 

@@ -110,7 +110,7 @@ db_savekey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx)
 /* Compare key for given index 'keyarea' to 'record'.
    returns compare status */
 int
-db_cmpkey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, int partlen)
+db_cmpkey (cob_context *ctx, cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, int partlen)
 {
 	int sts, part, totlen;
 	size_t	cl;
@@ -119,7 +119,7 @@ db_cmpkey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, 
 		partlen = db_keylen(f, idx);
 		/* LCOV_EXCL_START */
 		if (partlen <= 0) {
-			cob_runtime_error (_("invalid internal call of %s"), "db_cmpkey");
+			cob_runtime_error_ctx (ctx, _("invalid internal call of %s"), "db_cmpkey");
 			cob_hard_failure_internal ("libcob");
 		}
 		/* LCOV_EXCL_STOP */
@@ -149,8 +149,10 @@ db_cmpkey (cob_file *f, unsigned char *keyarea, unsigned char *record, int idx, 
 /* Routines common to both ODBC and OCI interfaces */
 #if defined(WITH_ODBC) || defined(WITH_OCI)
 
-static char	high_value[6];	/* value to replace HIGH-VALUES in index */
-static int	len_high_value = 0;
+/* value to replace HIGH-VALUES in index: in the state of the connection
+   (it depends on the type of the data base) */
+#define high_value	(db->high_value)
+#define len_high_value	(db->len_high_value)
 
 /* Is fld all the given character */
 static int
@@ -308,7 +310,7 @@ new_xfd (struct file_xfd *fx, int cmd)
 }
 
 static cob_pic_symbol *
-bld_picture (cob_pic_symbol *pic, int sign, int digits, int scale)
+bld_picture (cob_context *ctx, cob_pic_symbol *pic, int sign, int digits, int scale)
 {
 	cob_pic_symbol *p = pic;
 	if (sign == 0
@@ -349,7 +351,7 @@ bld_picture (cob_pic_symbol *pic, int sign, int digits, int scale)
 }
 
 static void
-bld_fields (struct map_xfd *mx, cob_file *fl)
+bld_fields (cob_context *ctx, struct map_xfd *mx, cob_file *fl)
 {
 	int		numsz;
 	if (fl->organization == COB_ORG_RELATIVE
@@ -359,7 +361,7 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 		if (mx->sqlsize > 13)
 			mx->sqlsize = 13;
 		mx->sqlattr.type = COB_TYPE_NUMERIC_DISPLAY;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, 12, 0);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, 12, 0);
 		mx->sqlfld.size = mx->sqlsize-1;
 		mx->sqlfld.data = mx->sdata;
 		mx->sqlfld.attr = &mx->sqlattr;
@@ -387,7 +389,7 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 #endif
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMPU:
 		mx->recattr.type = COB_TYPE_NUMERIC_BINARY;
@@ -395,7 +397,7 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 		mx->recattr.flags |= COB_FLAG_BINARY_SWAP;
 #endif
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_ALNUM : COB_TYPE_NUMERIC_EDITED;
-		mx->sqlattr.pic = mx->scale == 0 ? NULL : bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = mx->scale == 0 ? NULL : bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMPX:
 		mx->recattr.type = COB_TYPE_NUMERIC_BINARY;
@@ -409,45 +411,45 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_REAL_BINARY;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMP5U:
 		mx->recattr.type = COB_TYPE_NUMERIC_BINARY;
 		mx->recattr.flags = COB_FLAG_REAL_BINARY;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMP5IDX:
 	case COB_XFDT_COMP5REL:
 		mx->recattr.type = COB_TYPE_NUMERIC_BINARY;
 		mx->recattr.flags = COB_FLAG_REAL_BINARY;
 		mx->sqlattr.type = COB_TYPE_NUMERIC_DISPLAY;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_FLOAT:
 		mx->recattr.type = mx->size < 7 ? COB_TYPE_NUMERIC_FLOAT : COB_TYPE_NUMERIC_DOUBLE;
 		mx->sqlattr.type = COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PACKS:
 		mx->recattr.type = COB_TYPE_NUMERIC_PACKED;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PACKU:
 		mx->recattr.type = COB_TYPE_NUMERIC_PACKED;
 		mx->recattr.flags = COB_FLAG_REAL_BINARY;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_COMP6:
 		mx->recattr.type = COB_TYPE_NUMERIC_PACKED;
 		mx->recattr.flags = COB_FLAG_NO_SIGN_NIBBLE;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PICA:
 	case COB_XFDT_PICX:
@@ -465,42 +467,42 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_LEADING;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9LS:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9T:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9TS:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9S:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = COB_FLAG_HAVE_SIGN;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = COB_FLAG_HAVE_SIGN|COB_FLAG_SIGN_SEPARATE|COB_FLAG_SIGN_LEADING;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 1, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 1, mx->digits, mx->scale);
 		break;
 	case COB_XFDT_PIC9U:
 		mx->recattr.type = COB_TYPE_NUMERIC_DISPLAY;
 		mx->recattr.flags = 0;
 		mx->sqlattr.type = mx->scale == 0 ? COB_TYPE_NUMERIC_DISPLAY : COB_TYPE_NUMERIC_EDITED;
 		mx->sqlattr.flags = 0;
-		mx->sqlattr.pic = bld_picture (mx->sqlpic, 0, mx->digits, mx->scale);
+		mx->sqlattr.pic = bld_picture (ctx, mx->sqlpic, 0, mx->digits, mx->scale);
 		break;
 	}
 	if (mx->dtfrm) {
@@ -527,7 +529,7 @@ bld_fields (struct map_xfd *mx, cob_file *fl)
 #define MAXVAL 16
 /*static const char vop[10][5] = {".",">=",">","<=","<","=","!=","&&","||","!"}; */
 static int
-eval_expr (struct file_xfd *fx, int  pos)
+eval_expr (cob_context *ctx, struct file_xfd *fx, int  pos)
 {
 	int		kdata,col,rslt;
 	int		val[MAXVAL];
@@ -557,11 +559,11 @@ eval_expr (struct file_xfd *fx, int  pos)
 			memset(buf,0,temp.size+1);
 			if (fx->map[pos].valnum) {
 				COB_ATTR_INIT (COB_TYPE_NUMERIC_DISPLAY, 0, 0, 0, NULL);                 
-				cob_move (&fx->map[col].recfld, &temp);
+				cob_move_ctx (ctx, &fx->map[col].recfld, &temp);
 				rslt = atoi(fx->map[pos].value) - atoi(buf);
 			} else {
 				COB_ATTR_INIT (COB_TYPE_ALNUM, 0, 0, 0, NULL);                 
-				cob_move (&fx->map[col].recfld, &temp);
+				cob_move_ctx (ctx, &fx->map[col].recfld, &temp);
 				rslt = strcasecmp(fx->map[pos].value, buf);
 			}
 			if (rslt < 0) rslt = -1;
@@ -668,7 +670,7 @@ putNum(char *data, int pos, int len, int val)
 	memcpy(data+pos,wrk,len);
 }
 
-static short daysinmonth[] = {
+static const short daysinmonth[] = {
 	31, 28, 31, 30, 31, 30,
 	31, 31, 30, 31, 30, 31
 };
@@ -1022,7 +1024,7 @@ convert_from_date(
  * 'indsize' is the size of the SQL Indicator field
  */
 struct file_xfd *
-cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, int skiprid)
+cob_load_xfd (cob_context *ctx, struct db_state *db, cob_file *fl, char *alt_name, int indsize, int skiprid)
 {
 	char	xfdbuf[COB_NORMAL_BUFF],*sdir,*fname,*p,*mp;
 	char	colname[80], tblname[80], asgname[256];
@@ -1042,7 +1044,7 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 		indsize = sizeof(long);
 	if (fl->xfdschema != NULL)
 		sdir = (char*)fl->xfdschema;
-	else if ((sdir = getenv("COB_SCHEMA_DIR")) == NULL)
+	else if ((sdir = cob_ctx_getenv (ctx, "COB_SCHEMA_DIR")) == NULL)
 		sdir = (char*)COB_SCHEMA_DIR;
 	if (alt_name != NULL) {
 		fname = alt_name;
@@ -1085,7 +1087,7 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 		fi = fopen (xfdbuf,"r");
 	}
 	if (fi == NULL) {
-		cob_runtime_warning (_("Error '%s' opening '%s'"),cob_get_strerror (),xfdbuf);
+		cob_runtime_warning_ctx (ctx, _("Error '%s' opening '%s'"),cob_get_strerror (),xfdbuf);
 		return NULL;
 	}
 	sprintf(rowcol,"rid_%s",tblname);
@@ -1231,9 +1233,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 		if (xfdbuf[0] == 'K') {		/* Key definition */
 			p = getNum (&xfdbuf[2], &keyn);
 			if (keyn >= MAXNUMKEYS) {
-				cob_runtime_error (_("%s XFD has more than %d indexes!"),
+				cob_runtime_error_ctx (ctx, _("%s XFD has more than %d indexes!"),
 								fl->select_name,MAXNUMKEYS-1);
-				cob_stop_run (1);
+				cob_stop_run_ctx (ctx, 1);
 			}
 			p = getPrm (p, dups);
 			if (dups[0] == 'R') {		/* Used for unique record number */
@@ -1253,9 +1255,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 				supch = supchar[0];
 			}
 			if (fx->key[keyn] != NULL) {
-				cob_runtime_error (_("%s XFD has duplicate index %d !"),
+				cob_runtime_error_ctx (ctx, _("%s XFD has duplicate index %d !"),
 								fl->select_name,keyn);
-				cob_stop_run (1);
+				cob_stop_run_ctx (ctx, 1);
 			}
 			fx->key[keyn] = cob_malloc (sizeof (struct key_xfd));
 			if (dups[0] == 'Y')
@@ -1277,9 +1279,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 				 && strcmp (colname,rowcol) == 0)
 					continue;
 				if ((k = cob_find_xfd_col (fx, colname)) < 0) {
-					cob_runtime_error (_("%s XFD index %d has %s undefined!"),
+					cob_runtime_error_ctx (ctx, _("%s XFD index %d has %s undefined!"),
 									fl->select_name,keyn,colname);
-					cob_stop_run (1);
+					cob_stop_run_ctx (ctx, 1);
 				}
 				fx->key[keyn]->col[fx->key[keyn]->ncols] = k;
 				fx->key[keyn]->ncols++;
@@ -1287,9 +1289,9 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 				fx->map[k].notnull = TRUE;
 				fx->map[k].iskey = TRUE;
 				if (fx->key[keyn]->ncols >= MAXKEYCOLS) {
-					cob_runtime_error (_("%s XFD index %d has too many columns!"),
+					cob_runtime_error_ctx (ctx, _("%s XFD index %d has too many columns!"),
 									fl->select_name,keyn);
-					cob_stop_run (1);
+					cob_stop_run_ctx (ctx, 1);
 				}
 			} while(*p > ' ');
 			continue;
@@ -1357,13 +1359,13 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
 			memset(mp,0,indsize);
 			fx->map[i].ind = (void*)mp;
 			mp += indsize;
-			bld_fields (&fx->map[i],fl);
+			bld_fields (ctx, &fx->map[i],fl);
 		} else if (fx->map[i].cmd == XC_WHEN) {
 			if (fx->map[i].colname) {
 				if ((lbl = cob_find_xfd_col (fx, fx->map[i].colname)) < 0) {
-					cob_runtime_error (_("%s XFD index %d has %s undefined!"),
+					cob_runtime_error_ctx (ctx, _("%s XFD index %d has %s undefined!"),
 									fl->select_name,keyn,colname);
-					cob_stop_run (1);
+					cob_stop_run_ctx (ctx, 1);
 				}
 				fx->map[i].colpos = lbl;
 			}
@@ -1377,7 +1379,7 @@ cob_load_xfd (struct db_state *db, cob_file *fl, char *alt_name, int indsize, in
  * Read the 'file.ddl' and save CREATE TABLE/INDEX
  */
 void 
-cob_load_ddl (struct db_state  *db, struct file_xfd *fx)
+cob_load_ddl (cob_context *ctx, struct db_state  *db, struct file_xfd *fx)
 {
 	char	xfdbuf[COB_NORMAL_BUFF],*sdir,*p;
 	int		j,k, idx, ctsz, cisz;
@@ -1386,7 +1388,7 @@ cob_load_ddl (struct db_state  *db, struct file_xfd *fx)
 	if (fx->create_table)
 		cob_free (fx->create_table);
 	fx->create_table = NULL;
-	if ((sdir = getenv("COB_SCHEMA_DIR")) == NULL)
+	if ((sdir = cob_ctx_getenv (ctx, "COB_SCHEMA_DIR")) == NULL)
 		sdir = (char*)COB_SCHEMA_DIR;
 	k = sprintf (xfdbuf, "%s%s%s.ddl",sdir,SLASH_STR,fx->tablename);
 	fi = fopen (xfdbuf,"r");
@@ -1397,7 +1399,7 @@ cob_load_ddl (struct db_state  *db, struct file_xfd *fx)
 		fi = fopen (xfdbuf,"r");
 	}
 	if (fi == NULL) {
-		cob_runtime_warning (_("Error '%s' opening '%s'"),cob_get_strerror (),xfdbuf);
+		cob_runtime_warning_ctx (ctx, _("Error '%s' opening '%s'"),cob_get_strerror (),xfdbuf);
 		return;
 	}
 	sprintf (xfdbuf, "%s%s%s.",sdir,SLASH_STR,fx->tablename);
@@ -1815,7 +1817,7 @@ chrtohex ( char x )
 	as an environment variable. Return the correct one
 **************************************************************************/
 char *
-getSchemaEnvName(
+getSchemaEnvName(cob_context *ctx,
 	struct db_state	*db,
 	char		*envname,		/* Resulting Env Name last matched */
 	const char	*suffix,
@@ -1826,8 +1828,8 @@ getSchemaEnvName(
 	char	sch[48];
 
 	if (len_high_value == 0) {
-		if( (env = cob_get_env ("SQL_HIGH_VALUE", NULL)) == NULL) 
-			env = cob_get_env ("SQL_HIGH_VALUES", NULL);
+		if( (env = cob_get_env_ctx (ctx, "SQL_HIGH_VALUE", NULL)) == NULL) 
+			env = cob_get_env_ctx (ctx, "SQL_HIGH_VALUES", NULL);
 		if( env != NULL) {
 			for (k=0; *env != 0x00 && k < 6; env++) {
 				if (isxdigit (*env)) {
@@ -1844,7 +1846,7 @@ getSchemaEnvName(
 	}
 
 	if (db->dbSchema[0] <= ' ') {
-		if( (env = getenv("COB_SCHEMA_NAME")) != NULL)
+		if( (env = cob_ctx_getenv (ctx, "COB_SCHEMA_NAME")) != NULL)
 			snprintf(db->dbSchema,sizeof(db->dbSchema),"%s",env);
 	}
 	env = NULL;
@@ -1852,7 +1854,7 @@ getSchemaEnvName(
 		*out = 0;
 	if (db->dbSchema[0] > ' ') {
 		sprintf(envname,"%s%s",db->dbSchema,suffix);
-		if( (env = getenv(envname)) != NULL) 
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL) 
 			goto gotit;
 
 		for(k=0; db->dbSchema[k] != 0; k++) {
@@ -1863,17 +1865,17 @@ getSchemaEnvName(
 		sch[k] = 0;
 
 		sprintf(envname,"%s%s",sch,suffix);
-		if( (env = getenv(envname)) != NULL)
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL)
 			goto gotit;
 	}
 
 	sprintf(envname,"%s%s","COB_SCHEMA",suffix);
-	if( (env = getenv(envname)) != NULL)
+	if( (env = cob_ctx_getenv (ctx, envname)) != NULL)
 		goto gotit;
 
 	if (db->mysql) {
 		sprintf(envname,"%s%s","MYSQL",suffix);
-		if( (env = getenv(envname)) != NULL) {
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL) {
 			if (out)
 				strcpy(out,env);
 			goto gotit;
@@ -1881,22 +1883,22 @@ getSchemaEnvName(
 	}
 	if (db->oracle || db->isoci) {
 		sprintf(envname,"%s%s","ORACLE",suffix);
-		if( (env = getenv(envname)) != NULL) 
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL) 
 			goto gotit;
 	}
 	sprintf(envname,"%s%s","SQL",suffix);
-	if( (env = getenv(envname)) != NULL)
+	if( (env = cob_ctx_getenv (ctx, envname)) != NULL)
 		goto gotit;
 
 	if (db->db2) {
 		sprintf(envname,"%s%s","DB2",suffix);
-		if( (env = getenv(envname)) != NULL)
+		if( (env = cob_ctx_getenv (ctx, envname)) != NULL)
 			goto gotit;
 	}
 
 	if (db->isodbc) {
 		sprintf(envname,"%s%s","ODBC",suffix);
-		env = getenv(envname);
+		env = cob_ctx_getenv (ctx, envname);
 	}
 
 gotit:
@@ -1911,7 +1913,7 @@ gotit:
 	Log the <schema>suffix env variable value
 **************************************************************************/
 void
-logSchemaEnvName(
+logSchemaEnvName(cob_context *ctx,
 	struct db_state	*db,
 	const char		*suffix)
 {
@@ -1919,7 +1921,7 @@ logSchemaEnvName(
 	char	*env;
 	char	envname[64];
 
-	if ((env=getSchemaEnvName (db, envname, suffix, NULL)) != NULL) {
+	if ((env=getSchemaEnvName (ctx, db, envname, suffix, NULL)) != NULL) {
 		DEBUG_LOG("db",("~%s is %s\n",envname,env));
 	} else {
 		DEBUG_LOG("db",("~Env: xxxx%s is %s\n",suffix,"undefined!"));
@@ -1932,7 +1934,7 @@ logSchemaEnvName(
 static const char *condname[20] = {"0","EQ","LT","LE","GT","GE","NE","FI","LA",
 				"9","10","11","12","13","14","15","COUNT","NDUP","PDUP","19"};
 #endif
-static const char *condstr[9] = {"?","=","<","<=",">",">=","<>",">","<"};
+static const char *const condstr[9] = {"?","=","<","<=",">",">=","<>",">","<"};
 
 static int
 bld_where (struct db_state *db, struct file_xfd *fx, int idx, int cond, int pos, char *sbuf)
@@ -1973,7 +1975,7 @@ bld_where (struct db_state *db, struct file_xfd *fx, int idx, int cond, int pos,
  * Build SQL Statement and return as malloced string
  */
 char *
-cob_sql_stmt (
+cob_sql_stmt (cob_context *ctx,
 	struct db_state *db, 
 	struct file_xfd *fx, 
 	char	*stmt, 
@@ -1989,7 +1991,7 @@ cob_sql_stmt (
 	int		waitsecs = 0;
 
 	if (idx >= fx->nkeys) {
-		cob_runtime_error (_("SQL Index %d incorrect: %d max!"),idx,fx->nkeys);
+		cob_runtime_error_ctx (ctx, _("SQL Index %d incorrect: %d max!"),idx,fx->nkeys);
 		return NULL;
 	}
 	sbuf = NULL;
@@ -2301,7 +2303,7 @@ cob_sql_stmt (
 		}
 
 	} else {
-		cob_runtime_error (_("Unknown SQL statement: %.20s!"),stmt);
+		cob_runtime_error_ctx (ctx, _("Unknown SQL statement: %.20s!"),stmt);
 		return NULL;
 	}
 	if (strncasecmp(stmt,"SELECT",6) == 0) {
@@ -2316,7 +2318,7 @@ cob_sql_stmt (
 }
 
 SQL_STMT *
-cob_sql_select ( 
+cob_sql_select (cob_context *ctx,  
 	struct db_state *db, 
 	struct file_xfd *fx, 
 	int		ky, 
@@ -2353,26 +2355,26 @@ cob_sql_select (
 
 	if (s->text == NULL) {
 		if (cond == COB_COUNT)
-			s->text = cob_sql_stmt (db, fx, (char*)"COUNT", ky, cond, read_opts);
+			s->text = cob_sql_stmt (ctx, db, fx, (char*)"COUNT", ky, cond, read_opts);
 		else
-			s->text = cob_sql_stmt (db, fx, (char*)"SELECT", ky, cond, read_opts);
+			s->text = cob_sql_stmt (ctx, db, fx, (char*)"SELECT", ky, cond, read_opts);
 		if (fx->fl
 		 && (fx->fl->flag_read_chk_dups || fx->fl->limitreads > 0)
 		 && fx->key[ky]->dups) {
 			if (fx->key[ky]->where_ndup.text == NULL)
-				fx->key[ky]->where_ndup.text = cob_sql_stmt (db, fx, 
+				fx->key[ky]->where_ndup.text = cob_sql_stmt (ctx, db, fx, 
 											(char*)"DUPAHEAD", ky, COB_NDUP, 0);
 			if (fx->key[ky]->where_pdup.text == NULL)
-				fx->key[ky]->where_pdup.text = cob_sql_stmt (db, fx, 
+				fx->key[ky]->where_pdup.text = cob_sql_stmt (ctx, db, fx, 
 											(char*)"DUPAHEAD", ky, COB_PDUP, 0);
 		}
 	} else if (s->readopts != read_opts) {
 		DEBUG_LOG ("db",("Free %s Statement\n",condname[cond]));
 		freeit (s);
 		if (cond == COB_COUNT)
-			s->text = cob_sql_stmt (db, fx, (char*)"COUNT", ky, cond, read_opts);
+			s->text = cob_sql_stmt (ctx, db, fx, (char*)"COUNT", ky, cond, read_opts);
 		else
-			s->text = cob_sql_stmt (db, fx, (char*)"SELECT", ky, cond, read_opts);
+			s->text = cob_sql_stmt (ctx, db, fx, (char*)"SELECT", ky, cond, read_opts);
 	}
 	s->readopts = read_opts;
 	if (cond == COB_LT
@@ -2401,7 +2403,7 @@ cob_xfd_swap_data (char *p1, char *p2, int len)
  * Copy data from File index fields to SQL data field(s)
  */
 void 
-cob_index_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl, int idx, int cond)
+cob_index_to_xfd (cob_context *ctx, struct db_state *db, struct file_xfd *fx, cob_file *fl, int idx, int cond)
 {
 	int	i,k,nx,dl;
 	char		sqlbuf[48];
@@ -2440,7 +2442,7 @@ cob_index_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl, int id
 				memcpy(&sqlwrk,&fx->map[k].sqlfld,sizeof(cob_field));
 				sqlwrk.data = (unsigned char *)sqlbuf;
 				sqlwrk.size = fx->map[k].dtfrm->digits;
-				cob_move (&fx->map[k].recfld, &sqlwrk);
+				cob_move_ctx (ctx, &fx->map[k].recfld, &sqlwrk);
 				sqlbuf[sqlwrk.size] = 0;
 				dl = convert_to_date (db, fx->map[k].dtfrm, (char*)sqlbuf, (int)sqlwrk.size, 
 								(char*)fx->map[k].sqlfld.data, (int)fx->map[k].sqlfld.size, &nx);
@@ -2528,7 +2530,7 @@ cob_index_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl, int id
 								k,idx,fx->map[k].colname,(int)fx->map[k].size));
 				DEBUG_DUMP("db",fx->map[k].sqlfld.data,fx->map[k].sqlfld.size);
 			} else {
-				cob_move (&fx->map[k].recfld, &fx->map[k].sqlfld);
+				cob_move_ctx (ctx, &fx->map[k].recfld, &fx->map[k].sqlfld);
 				fx->map[k].sqlfld.data[fx->map[k].sqlfld.size] = 0;
 				DEBUG_LOG("db",("%3d: Index %d %s type:%02d \n",k,idx,
 							fx->map[k].colname,fx->map[k].type));
@@ -2564,7 +2566,7 @@ cob_index_clear (struct db_state *db, struct file_xfd *fx, cob_file *fl, int idx
  * Copy data from File record area to SQL data field(s)
  */
 void 
-cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
+cob_file_to_xfd (cob_context *ctx, struct db_state *db, struct file_xfd *fx, cob_file *fl)
 {
 	int	k,nx,dl;
 	char		sqlbuf[48];
@@ -2582,7 +2584,7 @@ cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 				memcpy(&sqlwrk,&fx->map[k].sqlfld,sizeof(cob_field));
 				sqlwrk.data = (unsigned char *)sqlbuf;
 				sqlwrk.size = fx->map[k].dtfrm->digits;
-				cob_move (&fx->map[k].recfld, &sqlwrk);
+				cob_move_ctx (ctx, &fx->map[k].recfld, &sqlwrk);
 				sqlbuf[sqlwrk.size] = 0;
 				nx = 0;
 				if (!fx->map[k].notnull
@@ -2664,7 +2666,7 @@ cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 						strcpy((char*)fx->map[k].sqlfld.data, "0");
 						DEBUG_LOG("db",("%3d: Copy '%s' SPACES; set ZERO\n",k,fx->map[k].colname));
 					} else {
-						cob_move (&fx->map[k].recfld, &fx->map[k].sqlfld);
+						cob_move_ctx (ctx, &fx->map[k].recfld, &fx->map[k].sqlfld);
 						fx->map[k].sqlfld.data[fx->map[k].sqlfld.size] = 0;
 						DEBUG_LOG("db",("%3d: Copy %s type:%02d %dv%d ht:%d st:%d d:%d z:%d\n",k,
 									fx->map[k].colname,fx->map[k].type,
@@ -2675,7 +2677,7 @@ cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 											fx->map[k].recfld.data));
 					}
 				} else {
-					cob_move (&fx->map[k].recfld, &fx->map[k].sqlfld);
+					cob_move_ctx (ctx, &fx->map[k].recfld, &fx->map[k].sqlfld);
 					fx->map[k].sqlfld.data[fx->map[k].sqlfld.size] = 0;
 					DEBUG_LOG("db",("%3d: Copy %s type:%02d %dv%d ht:%d st:%d d:%d z:%d\n",k,
 								fx->map[k].colname,fx->map[k].type,
@@ -2698,7 +2700,7 @@ cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 			fx->map[k].jumpto = k;
 			continue;
 		} else if (fx->map[k].cmd == XC_WHEN) {
-			nx = eval_expr (fx, k);
+			nx = eval_expr (ctx, fx, k);
 			if (nx < k)
 				break;
 			k = nx;
@@ -2712,7 +2714,7 @@ cob_file_to_xfd (struct db_state *db, struct file_xfd *fx, cob_file *fl)
  * Copy data from SQL data field(s) to File Record area
  */
 void 
-cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl)
+cob_xfd_to_file (cob_context *ctx, struct db_state *db, struct file_xfd *fx, cob_file *fl)
 {
 	int	k,nx,i,j,slen,flen;
 	unsigned char	*sptr,*fptr;
@@ -2735,12 +2737,12 @@ cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 				memcpy(&sqlwrk,&fx->map[k].sqlfld,sizeof(cob_field));
 				sqlwrk.data = (unsigned char *)sqlbuf;
 				sqlwrk.size = fx->map[k].dtfrm->digits;
-				cob_move (&fx->map[k].sqlfld, &sqlwrk);
+				cob_move_ctx (ctx, &fx->map[k].sqlfld, &sqlwrk);
 				sqlbuf[sqlwrk.size] = 0;
 				convert_from_date (db, fx->map[k].dtfrm, 
 								(char*)fx->map[k].sqlfld.data, (int)fx->map[k].sqlfld.size, 
 								(char*)sqlbuf, (int)sqlwrk.size);
-				cob_move (&sqlwrk, &fx->map[k].recfld);
+				cob_move_ctx (ctx, &sqlwrk, &fx->map[k].recfld);
 #ifdef COB_DEBUG_LOG
 				DEBUG_LOG("db",("%3d: Read date '%s' %s type: %02d \n",k,
 							fx->map[k].dtfrm->format,fx->map[k].colname,fx->map[k].type));
@@ -2780,7 +2782,7 @@ cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 				continue;
 			} else if (fx->map[k].digits > 0) {
 				fx->map[k].sqlfld.size = fx->map[k].sqlinlen;
-				cob_move (&fx->map[k].sqlfld, &fx->map[k].recfld);
+				cob_move_ctx (ctx, &fx->map[k].sqlfld, &fx->map[k].recfld);
 #ifdef COB_DEBUG_LOG
 				if (fx->map[k].type == COB_XFDT_PIC9L
 				 || fx->map[k].type == COB_XFDT_PIC9LS
@@ -2802,7 +2804,7 @@ cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 #endif
 			} else {
 				fx->map[k].sqlfld.size = fx->map[k].sqlinlen;
-				cob_move (&fx->map[k].sqlfld, &fx->map[k].recfld);
+				cob_move_ctx (ctx, &fx->map[k].sqlfld, &fx->map[k].recfld);
 #ifdef COB_DEBUG_LOG
 				DEBUG_LOG("db",("%3d: Read %s type: %02d len:%d\n",k,
 							fx->map[k].colname,fx->map[k].type,
@@ -2824,7 +2826,7 @@ cob_xfd_to_file (struct db_state *db, struct file_xfd *fx, cob_file *fl)
 			} while (k < nx);
 			continue;
 		} else if (fx->map[k].cmd == XC_WHEN) {
-			nx = eval_expr (fx, k);
+			nx = eval_expr (ctx, fx, k);
 			if (nx < k)
 				break;
 			k = nx;

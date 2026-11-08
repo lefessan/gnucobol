@@ -1,4 +1,97 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* testsuite.src/run_reentrant.at: DISPLAY handler of the host
+	* testsuite.src/run_reentrant.at: storage of the run unit freed at the
+	  end of a task
+	* testsuite.src/run_reentrant.at: location of the warning in the
+	  CBL_GC_FORK test
+	* testsuite.src/run_reentrant.at: no CBL_GC_FORK in a hosted runtime
+	* testsuite.src/run_reentrant.at: console input and screen I/O of a
+	  hosted runtime
+	* testsuite.src/run_reentrant.at: STOP RUN of a hosted runtime ends the
+	  run unit of the context
+	* testsuite.src/run_reentrant.at: end handler of the host for the run
+	  unit of a context
+	* testsuite.src/run_reentrant.at: hosted runtime without signal
+	  handlers
+	* testsuite.src/run_reentrant.at: exit and error procedures per
+	  execution context
+	* testsuite.src/run_reentrant.at: STOP RUN and fatal errors return to
+	  the host from a context
+	* testsuite.src/run_reentrant.at: printer pipe in the environment and
+	  directory of the context
+	* testsuite.src/run_reentrant.at: runtime reads of the settings of the
+	  context in common.c
+	* testsuite.src/run_reentrant.at: runtime settings of the execution
+	  contexts
+	* testsuite.src/run_reentrant.at: ODBC in several threads
+	* testsuite.src/run_reentrant.at: path of the SQLite ODBC driver in the
+	  ODBC test
+	* testsuite.src/run_reentrant.at: one ODBC connection per execution
+	  context
+	* testsuite.src/run_reentrant.at: pipes with the environment and
+	  directory of the context
+	* testsuite.src/run_reentrant.at: current directory of the execution
+	  contexts
+	* testsuite.src/run_reentrant.at: CALL "SYSTEM" with the environment of
+	  the context
+	* testsuite.src/run_reentrant.at: environment of the execution contexts
+	* testsuite.src/run_reentrant.at: locale of an execution context
+	* testsuite.src/run_reentrant.at: READY TRACE per context, trace file
+	  opened once
+	* reentrant-bench/README, reentrant-bench/arith.cob,
+	  reentrant-bench/calls.cob, reentrant-bench/compare.sh,
+	  reentrant-bench/csub.cob, reentrant-bench/idxf.cob,
+	  reentrant-bench/scale.c, reentrant-bench/scale.sh,
+	  reentrant-bench/seqf.cob, reentrant-bench/strs.cob,
+	  reentrant-bench/work.cob, reentrant-bench/wsub.cob: new files,
+	  benchmarks of the reentrant runtime
+	* testsuite.src/run_reentrant.at: COBOL to C to COBOL and IS INITIAL in
+	  several contexts
+	* testsuite.src/run_reentrant.at: profiling data per context or const
+	* testsuite.src/run_reentrant.at: constants of the intrinsic functions
+	  computed under a lock
+	* testsuite.src/run_reentrant.at: lock at OPEN of LMDB files between
+	  contexts
+	* testsuite.src/run_reentrant.at: UNLOCK releases the record locks of
+	  SEQUENTIAL and RELATIVE files
+	* testsuite.src/run_reentrant.at: file and record locks between
+	  contexts
+	* testsuite.src/run_reentrant.at: dynamic CALL and CANCEL in several
+	  threads
+	* testsuite.src/run_reentrant.at: resolved CALL entries and reference
+	  count in the instance
+	* testsuite.src/run_reentrant.at: no physical CANCEL while other
+	  contexts exist
+	* testsuite.src/run_reentrant.at: INDEXED files in several threads
+	* testsuite.src/run_reentrant.at: one BDB environment handle and locker
+	  per context
+	* testsuite.src/run_reentrant.at: lock of the table of the resolved
+	  programs
+	* testsuite.src/run_reentrant.at: CANCEL finds the module in the
+	  context
+	* testsuite.src/run_reentrant.at: no mutable static data in the
+	  generated code
+	* testsuite.src/run_reentrant.at: new file, move the tests of execution
+	  contexts to run_reentrant.at
+	* Makefile.am, testsuite.at, testsuite.src/run_misc.at: move the tests
+	  of execution contexts to run_reentrant.at
+	* testsuite.src/run_misc.at: execution contexts in several threads
+	* testsuite.src/run_misc.at: cob_context_create and cob_context_destroy
+	* testsuite.src/run_misc.at: suffix _ctx for functions taking the
+	  context, old names kept
+	* testsuite.src/run_misc.at: runtime support functions take the context
+	* testsuite.src/run_misc.at: CALL / CANCEL / resolve functions take the
+	  context
+	* atlocal.in: portable test of COB_ENABLE_DEBUG ('=' instead of the
+	  bashism '==', an error in each test under dash)
+	* testsuite.src/syn_set.at: new test for ADDRESS OF an undefined item
+	* testsuite.src/run_file.at: new test for the file descriptors of
+	  the OPEN of LMDB files
+	* testsuite.src/run_file.at: new test for a bidirectional pipe to a
+	  missing command
+
 2025-11-17  Simon Sobisch <simonsobisch@gnu.org>
 
 	* atlocal.in, atlocal_win: adjusted return_path function and its use

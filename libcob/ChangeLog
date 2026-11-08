@@ -1,4 +1,531 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* coblocal.h (cob_ctx_cwd), common.c (cob_context_set_end_handler),
+	  common.h (cob_context_set_end_handler), termio.c
+	  (cob_display_va_ctx): DISPLAY handler of the host
+	* common.c (cob_context_free, cob_exit_common_state,
+	  end_context_run_unit): storage of the run unit freed at the end of a
+	  task
+	* fileio.c (cob_file_open): SIGPIPE left to the host of a hosted
+	  runtime
+	* common.c (cob_sys_fork): no CBL_GC_FORK in a hosted runtime
+	* screenio.c (cob_screen_init), termio.c (cob_accept_ctx): console
+	  input and screen I/O of a hosted runtime
+	* common.c (cob_stop_run_ctx): STOP RUN without current context ends
+	  the main run unit
+	* common.c (call_end_handler, context_returns, end_context_run_unit,
+	  cob_stop_run_ctx, cob_hard_failure, cob_hard_failure_internal, ...):
+	  STOP RUN of a hosted runtime ends the run unit of the context
+	* common.c (call_exit_handlers_and_terminate, end_context_run_unit,
+	  cob_stop_run_ctx, cob_hard_failure, cob_hard_failure_internal),
+	  common.h (cob_context_destroy): end handler of the host for the run
+	  unit of a context
+	* common.c (cob_set_signal, cob_real_put_sign), common.h
+	  (cob_common_init): hosted runtime without signal handlers
+	* common.c (settings_of_context, cob_exit_common_state,
+	  call_exit_handlers_and_terminate, end_context_run_unit,
+	  cob_last_runtime_error_ctx, cob_context_destroy, ...): exit and error
+	  procedures per execution context
+	* common.c (call_exit_handlers_and_terminate, cob_stop_run_ctx,
+	  cob_hard_failure, cob_hard_failure_internal, cob_last_exit_code_ctx,
+	  cob_call_with_exception_check_ctx): STOP RUN and fatal errors return
+	  to the host from a context
+	* termio.c (cob_display_va_ctx): printer pipe in the environment and
+	  directory of the context
+	* fisam.c (isam_dummy, isopen_retry, isread_retry): calls of the x-ISAM
+	  libraries under a lock
+	* common.c (free_context_settings, cob_accept_user_name_ctx,
+	  cob_display_environment_ctx, cob_get_environment_ctx, cob_sys_x91,
+	  cob_process_settings, ...): runtime reads of the settings of the
+	  context in common.c
+	* coblocal.h (cob_ctx_cwd), common.c (env_overlay_free,
+	  cob_exit_common_state, cob_putenv_ctx, cob_display_env_value_ctx,
+	  translate_boolean_to_int, set_config_val), fileio.c
+	  (cob_trace_record, cob_trace_record_key, cob_trace_record_number,
+	  cob_file_save_status), termio.c (cob_display_va_ctx): runtime
+	  settings of the execution contexts
+	* fileio.h, fodbc.c (fodbc_state, odbc_file_delete, odbc_open),
+	  fsqlxfd.c (db_cmpkey): ODBC connections established one at a time
+	* common.c (cob_putenv_ctx, cob_display_env_value_ctx): no rescan of
+	  the shared settings from a context's environment
+	* common.h, fodbc.c (odbc_version, odbc_commit, odbc_rollback,
+	  odbc_sync, odbcCheckDups, join_environment, ...): one ODBC connection
+	  per execution context
+	* coblocal.h (cob_ctx_lock_close), common.c (cob_unsetenv_process),
+	  fsqlxfd.c (cob_load_xfd, cob_load_ddl, getSchemaEnvName): SQL
+	  backends read the environment of the context
+	* coblocal.h (cob_ctx_chdir), common.c (env_child_free,
+	  cob_ctx_system), common.h, fileio.c (cob_chk_file_mapping,
+	  cob_file_open, cob_file_close): pipes with the environment and
+	  directory of the context
+	* coblocal.h (cob_find_module_ctx), common.c (cob_exit_common_state,
+	  env_overlay_free, cob_ctx_system), fileio.c (apply_file_paths,
+	  cob_chk_file_mapping, cob_param_no_quotes, cob_sys_get_current_dir,
+	  cob_sys_create_dir, cob_sys_change_dir, ...): current directory of
+	  the execution contexts
+	* common.c (env_overlay_free, cob_sys_system, cob_sys_x91): CALL
+	  "SYSTEM" with the environment of the context
+	* common.c (common_state, cob_exit_common_state, cob_rescan_env_vals,
+	  unsetenv, cob_setenv, cob_unsetenv_ctx, ...): environment of the
+	  execution contexts
+	* common.c (cob_context_free, cob_get_current_context,
+	  cob_context_enter, cob_context_leave, cob_sys_justify,
+	  cob_set_locale_ctx): locale of an execution context
+	* coblocal.h, common.c (cob_sys_printable), intrinsic.c
+	  (get_interval_and_current_year_from_args, locale_time,
+	  cob_intr_locale_date_ctx, cob_intr_lcl_time_from_secs,
+	  cob_intr_mon_decimal_point_ctx, cob_intr_num_decimal_point_ctx, ...):
+	  locale functions without changing the locale of the process
+	* common.c (cob_stack_trace_internal, cob_get_dump_file), termio.c
+	  (cob_display_va_ctx): SYSPUNCH and dump files opened once under a
+	  lock
+	* common.c (cob_open_logfile, cob_check_trace_file,
+	  cob_rescan_env_vals, cob_trace_sect_ctx, cob_trace_para_ctx,
+	  cob_trace_entry_ctx, ...): READY TRACE per context, trace file opened
+	  once
+	* common.c (cob_module_global_enter_ctx, cob_module_global_enter,
+	  cob_module_enter_ctx, cob_module_enter), common.h
+	  (cob_module_global_enter): one read of the current context at the
+	  entry of a program
+	* common.c (cob_dump_symbols): state of the dump of the symbols in the
+	  context
+	* common.c (check_valid_env_tmpdir, cob_gettmpdir, cob_get_dump_file):
+	  temporary directory checked once under a lock
+	* common.c (cob_set_exception_ctx): location of the last exception in
+	  the context
+	* termio.c (cob_display_va_ctx): warning once for SYSPUNCH set
+	  atomically
+	* common.h (cob_prof_init_module, cob_prof_init_module_ctx),
+	  profiling.c (prof_state, get_ns_time, prof_setup_clock,
+	  prof_init_static, cob_prof_init_module_ctx, cob_prof_realloc_arrays,
+	  ...): profiling data per context or const
+	* mlio.c (xml_error_handler, xml_parse, xml_generate): no static state
+	  in the XML error handler
+	* intrinsic.c (setup_cob_pi, setup_cob_sqrt_two, setup_cob_log_half,
+	  setup_cob_log_ten, cob_mpf_log, cob_mpf_log10, ...): constants of the
+	  intrinsic functions computed under a lock
+	* call.c (cob_set_cancel_ctx), coblocal.h, intrinsic.c
+	  (cob_intr_module_path_ctx): module path set and read atomically
+	* coblocal.h (cob_gmtime, cob_ctx_lock_try), flmdb.c (local_file,
+	  lmdb_open, lmdb_close): lock at OPEN of LMDB files between contexts
+	* coblocal.h (cob_gmtime), fileio.c (ctx_lock_add, ctx_lock_remove,
+	  ctx_lock_reapply, ctx_unlock_records, ctx_lock_close, try_lock_range,
+	  ...): lock table of the contexts usable by the file backends
+	* fileio.c (ranges_overlap, ctx_lock_add, ctx_lock_remove,
+	  ctx_unlock_range, cob_file_unlock): UNLOCK releases the record locks
+	  of SEQUENTIAL and RELATIVE files
+	* fileio.c (cob_set_file_format, lock_record, unlock_record,
+	  set_file_lock, cob_file_close, cob_file_unlock): file and record
+	  locks between contexts
+	* flmdb.c (local_file, lmdb_open, cob_lmdb_exit_fileio,
+	  cob_lmdb_init_fileio): LMDB in several threads
+	* call.c (do_cancel_module), coblocal.h, common.c (cob_init_switches,
+	  cob_context_create, cob_context_destroy): no physical CANCEL while
+	  other contexts exist
+	* fileio.c (cob_put_qbl, cob_load_module, output_io_module_error,
+	  cob_open_ctx, cob_delete_file_ctx, cob_exit_fileio_backends_context):
+	  loading of the I/O routines under a lock
+	* fbdb.c (fbdb_state, bdb_err_event, join_environment, bdb_lock_file,
+	  bdb_lock_record, bdb_test_record_lock, ...): one BDB environment
+	  handle and locker per context
+	* common.h, fbdb.c (ix_bdb_fork, bdb_lock_record, bdb_test_record_lock,
+	  bdb_nofile, ix_bdb_exit_fileio, cob_bdb_init_fileio), fileio.c
+	  (cob_exit_fileio_msg_only, cob_exit_fileio_closeall,
+	  cob_exit_fileio_context), fileio.h: state of fbdb.c in the context,
+	  end of a context for the backends
+	* common.c (cob_gmtime, set_cob_time_from_localtime): cache of the last
+	  local time under a lock
+	* coblocal.h (cob_find_module_ctx), common.c
+	  (get_function_ptr_for_precise_time, set_cob_time_from_localtime,
+	  cob_get_current_datetime, check_current_date), fileio.c
+	  (write_mf_header, cob_sys_check_file_exist, cob_sys_file_info),
+	  intrinsic.c (get_interval_and_current_year_from_args,
+	  cob_intr_year_to_yyyy_va_ctx, get_seconds_past_midnight): reentrant
+	  localtime and gmtime
+	* coblocal.h, common.c (cob_context_destroy, cob_unit_enter): slot of a
+	  compilation unit set under a lock
+	* call.c (cob_set_library_path, do_cancel_module, cache_preload,
+	  cob_encode_program_id, cob_resolve_internal, cob_set_cancel_ctx,
+	  ...): lock of the table of the resolved programs
+	* coblocal.h: process-level locks
+	* call.c (cob_set_library_path, do_cancel_module, insert,
+	  cob_resolve_internal, cob_set_cancel_ctx, cob_call_field), coblocal.h
+	  (cob_print_field), common.c (cob_module_leave, cob_module_free_ctx):
+	  CANCEL finds the module in the context
+	* call.c (cache_preload, cob_resolve_internal, cob_call_field_ctx,
+	  cob_cancel_field_ctx, close_and_free_module_list, cob_exit_call,
+	  ...), coblocal.h (cob_exit_call), common.c (cob_context_destroy),
+	  common.h: state of call.c in the context
+	* common.h: constant data of the generated code are const
+	* common.c (cob_get_env_ctx): no static scratch buffer in
+	  cob_get_env_ctx
+	* common.c (cob_init_switches), common.h (cob_context_leave):
+	  cob_context_create and cob_context_destroy
+	* common.c (cob_context_free, cob_exit_common, cob_context_leave,
+	  cob_init): cob_exit_common_state and cob_init_switches
+	* coblocal.h (cob_init_numeric, cob_exit_numeric, cob_exit_intrinsic),
+	  intrinsic.c (cob_intr_standard_compare, cob_exit_intrinsic),
+	  numeric.c (cob_s64_pow, cob_exit_numeric, cob_init_numeric): separate
+	  the context and process parts of numeric/intrinsic init
+	* coblocal.h (cob_exit_fileio), fileio.c (cob_exit_fileio_closeall,
+	  cob_exit_fileio): cob_exit_fileio_context, end of fileio for one
+	  context
+	* common.c (conf_runtime_error, cob_exit_common): cob_context_free,
+	  freeing the memory of a context
+	* coblocal.h, common.c (cob_exit_common, cob_context_leave), common.h
+	  (cob_context_leave): instances of compilation units in the context
+	* coblocal.h, common.c: runtime configuration value tables are constant
+	* coblocal.h (cob_settings_screenio), common.c (common_state,
+	  cob_terminate_routines, cob_external_addr_ctx, cob_init), intrinsic.c
+	  (cob_intr_exception_status_ctx): run unit state in the context
+	* fsqlxfd.c (putNum): constant tables
+	* common.h, fileio.c (cob_put_qbl, do_acu_hyphen_translation,
+	  apply_file_paths, cob_chk_file_mapping, cob_sys_copy_file,
+	  cob_exit_fileio, ...): state of the file I/O in the context
+	* fileio.c (set_file_pos, cob_file_write_opt): constant tables
+	* common.c (cob_exit_common), common.h, profiling.c: state of the
+	  profiling in the context
+	* common.h, fextfh.c (free_extfh_fcd, cob_extfh_open_ctx,
+	  update_key_from_fcd): state of the external file handler in the
+	  context
+	* cobcapi.c (cob_exit_cobcapi, cob_get_field_str_buffered,
+	  cob_watch_check), coblocal.h (cob_exit_call), common.c
+	  (cob_terminate_routines, cob_call_with_exception_check_ctx),
+	  common.h: state of the C API in the context
+	* common.c (cob_exit_common), common.h, termio.c (display_alnum_dump,
+	  cob_dump_output_ctx, cob_dump_file_ctx, cob_dump_file,
+	  setup_lvlwrk_and_dump_null_adrs, cob_dump_field_va_ctx): state of the
+	  DUMP output in the context
+	* strings.c (strings_state, cob_update_low_value, inspect_common,
+	  cob_inspect_converting_intern, cob_init_strings): LOW-VALUE field in
+	  the state of the context
+	* move.c (cob_move_all, cob_set_llcon, cob_get_u64_comp6): constant
+	  tables and local scratch field
+	* coblocal.h (cob_exit_fileio), common.c (cob_terminate_routines),
+	  common.h, reportio.c (free_control_fields, cob_init_reportio,
+	  cob_exit_reportio, cob_report_initiate_ctx, cob_report_terminate_ctx,
+	  cob_report_generate_ctx): state of the report writer in the context
+	* common.h, intrinsic.c (cob_alloc_set_field_int,
+	  cob_alloc_set_field_uint, cob_alloc_set_field_pretty,
+	  cob_alloc_field, cob_mod_or_rem, substitute, ...): state of the
+	  intrinsic functions in the context
+	* numeric.c (cob_move_bcd): h2b and b2h tables are constant
+	* coblocal.h (cob_init_cobcapi, cob_exit_screen_from_signal,
+	  cob_exit_cobcapi, cob_decimal_init2), common.c
+	  (cob_terminate_routines, cob_init), common.h, intrinsic.c
+	  (cob_decimal_pow_ctx, cob_intr_e_ctx, cob_intr_pi_ctx,
+	  cob_intr_exp_ctx, cob_intr_log_ctx, cob_intr_log10_ctx, ...),
+	  numeric.c (shift_decimal, align_decimal, cob_decimal_set_ieee64dec,
+	  cob_decimal_set_ieee128dec, cob_decimal_set_mpf_core,
+	  cob_decimal_set_mpf, ...): state of the arithmetic in the context
+	* call.c (cob_set_library_path, do_cancel_module, add_to_preload,
+	  cache_preload, cob_resolve_internal, cob_cancel_ctx, ...), cobcapi.c
+	  (cob_init_cobcapi), coblocal.h (cob_exit_reportio), common.c
+	  (cob_terminate_routines, cob_call_with_exception_check_ctx,
+	  cob_init), common.h, fbdb.c (join_environment, bdb_lock_file,
+	  bdb_lock_record, bdb_test_record_lock, bdb_nofile, ix_bdb_open),
+	  fextfh.c (copy_fcd_to_file), fileio.c (cob_write_dict, cob_read_dict,
+	  cob_chk_file_env, cob_set_ls_defaults, cob_set_file_defaults,
+	  cob_set_file_format, ...), fileio.h, fisam.c (isopen_retry,
+	  isread_retry, isam_read, isam_read_next, isam_write, isam_delete,
+	  ...), flmdb.c (lmdb_open, cob_lmdb_init_fileio), move.c
+	  (cob_init_move), profiling.c (prof_init_static, cob_init_prof,
+	  cob_prof_init_module_ctx, cob_prof_realloc_arrays,
+	  cob_prof_print_line, cob_prof_end), reportio.c (print_field,
+	  copy_line_fields, cob_init_reportio), screenio.c (cob_screen_attr,
+	  cob_screen_init, refresh_field, cob_screen_get_all, cob_prep_input,
+	  field_accept, ...), termio.c (cob_display_va_ctx,
+	  cob_dump_field_va_ctx, cob_init_termio): per-file copies of the
+	  settings pointer replaced by ctx->settings
+	* call.c (cob_resolve_internal, cob_resolve_ctx, cob_resolve_cobol_ctx,
+	  cob_resolve_func_ctx, cob_call_field_ctx, cob_cancel_ctx, ...),
+	  cobcapi.c (cob_init_cobcapi, cob_get_param_field, cob_get_num_params,
+	  cob_put_field_str, cob_setup_field, cob_get_field_value, ...),
+	  coblocal.h (cob_init_prof, free_extfh_fcd, cob_create_tmpfile,
+	  cob_check_numval_f, cob_decimal_move_temp, cob_screen_set_mode),
+	  common.c (cob_exit_common, ss_terminate_routines,
+	  cob_terminate_routines, cob_get_source_line, set_source_location,
+	  cob_sig_handler, ...), fextfh.c (cob_sys_extfh, EXTFH3), fileio.c
+	  (cob_set_file_format, cob_file_save_status, lineseq_read,
+	  cob_file_external_addr_ctx, cob_pre_open_ctx, cob_pre_open_def_ctx,
+	  ...), fileio.h, fisam.c (cob_isam_init_fileio), flmdb.c
+	  (cob_lmdb_init_fileio), fsqlxfd.c (bld_fields, cob_load_xfd),
+	  intrinsic.c (get_seconds_past_midnight, cob_mod_or_rem, locale_time,
+	  format_time, cob_intr_binop_ctx, cob_intr_exception_file_ctx, ...),
+	  mlio.c (get_num, cob_xml_parse_ctx, xml_error_handler, xml_parse,
+	  xml_process_next_event, cob_init_mlio), move.c (cob_move_ctx,
+	  cob_get_int_ctx, cob_get_llint_ctx, cob_init_move,
+	  cob_put_s64_pic9_ctx), numeric.c (cob_decimal_get_ieee64dec,
+	  cob_decimal_get_ieee128dec, cob_add_packed, cob_decimal_get_packed,
+	  cob_decimal_get_display, cob_decimal_set_field_ctx, ...), profiling.c
+	  (cob_init_prof), reportio.c (cob_add_fields, cob_init_reportio),
+	  screenio.c (init_cob_screen_if_needed, cob_screen_init,
+	  field_is_zero_or_no_zero_suppression, satisfied_full_clause,
+	  satisfied_required_clause, finalize_field_input, ...), strings.c
+	  (inspect_common, cob_inspect_init_common_intern,
+	  cob_inspect_init_intern, cob_inspect_init_ctx,
+	  cob_inspect_init_converting_intern, cob_inspect_init_converting_ctx,
+	  ...), termio.c (cob_display_va_ctx, cob_accept_ctx, cob_init_termio):
+	  per-file copies of the global pointer replaced by ctx->glob
+	* fbdb.c (bdb_dupswap, bdb_setkey, bdb_bt_compare,
+	  ix_bdb_start_internal, ix_bdb_delete_internal, ix_bdb_open, ...):
+	  collating sequence of BDB keys in the DB handle
+	* coblocal.h (cob_strjoin), common.c (cob_debug_open, cob_exit_common,
+	  cob_terminate_routines, cob_get_source_line, set_source_location,
+	  get_source_location, ...), common.h, fileio.c
+	  (cob_exit_fileio_msg_only): thread-local state of common.c in the
+	  context
+	* coblocal.h (cob_exit_intrinsic), common.c (cob_terminate_routines,
+	  cob_cleanup_thread), common.h, strings.c (alloc_figurative,
+	  inspect_common, cob_inspect_init_ctx,
+	  cob_inspect_init_converting_ctx, cob_inspect_start_ctx,
+	  cob_inspect_before_ctx, ...): state of the string statements in the
+	  context
+	* coblocal.h (cob_check_trace_file, cob_exit_numeric), common.c
+	  (ss_terminate_routines, cob_terminate_routines, cob_sig_handler,
+	  cob_sys_fork, cob_fatal_error_ctx), fbdb.c (cob_bdb_init_fileio,
+	  ix_bdb_open, ix_bdb_close, ix_bdb_start, ix_bdb_read,
+	  ix_bdb_read_next, ...), fextfh.c (copy_fcd_to_file), fileio.c
+	  (cob_savekey, cob_index_init_fileio, cob_load_module, cob_read_dict,
+	  cob_chk_file_mapping, cob_file_sync, ...), fileio.h
+	  (indexed_file_type, cob_file_sync, cob_bdb_init_fileio,
+	  cob_sql_dump_index, cob_odbc_init_fileio, cob_oci_init_fileio),
+	  fisam.c (isam_version, cob_isam_exit_fileio, isam_open, isam_read,
+	  isam_read_next), flmdb.c (lmdb_version, cob_lmdb_fork, lmdb_open,
+	  lmdb_start, lmdb_read, lmdb_write, ...), focextfh.c (get_io_ptr,
+	  cob_index_init_fileio, extfh_cob_init_fileio, indexed_open,
+	  extfh_relative_delete, seqra_open, ...), foci.c (cob_oci_init_fileio,
+	  oci_create_table, oci_file_delete, oci_open, oci_close, oci_start,
+	  ...), fodbc.c (odbcStmt, odbc_create_table, odbc_file_delete,
+	  odbc_open, odbc_close, odbc_start, ...): pass the context through the
+	  internal file handler API
+	* coblocal.h (cob_move_display_to_packed), move.c
+	  (cob_move_display_to_display, cob_move_packed_to_display,
+	  cob_move_binary_to_display, cob_move_edited_to_display,
+	  indirect_move, cob_move_ctx), numeric.c (cob_addsub_optimized): pass
+	  the context to MOVE helpers called through a pointer
+	* common.c (cob_sys_exit_proc, cob_sys_error_proc, cob_common_init),
+	  screenio.c (cob_sys_window): no local context where it is only used
+	  in disabled code
+	* common.c (cob_malloc, cob_realloc, cob_free, cob_fast_malloc): no
+	  context lookup on the fast path of memory functions
+	* call.c (set_resolve_error, cache_preload, insert,
+	  cob_resolve_internal, cob_set_cancel_ctx, cob_resolve_ctx, ...),
+	  cconv.c (cob_load_collation), cobcapi.c (cob_get_param_field,
+	  cob_get_num_params, cob_get_dbl_param, cob_put_dbl_param,
+	  cob_get_s64_param, cob_get_u64_param, ...), coblocal.h (cob_io_name,
+	  cob_init_termio, cob_init_reportio, cob_fork_fileio,
+	  cob_exit_fileio_msg_only, cob_decimal_get_mpf, ...), common.c
+	  (translate_boolean_to_int, internal_nanosleep, get_config_val,
+	  cob_stack_trace_internal, cob_terminate_routines, cob_get_strerror,
+	  ...), fbdb.c (bdb_bt_compare, bdb_err_event, join_environment,
+	  bdb_lock_file, bdb_lock_record, bdb_test_record_lock, ...), fextfh.c
+	  (free_extfh_fcd, copy_file_to_fcd, update_fcd_to_file,
+	  copy_keys_fcd_to_file, copy_fcd_to_file, find_fcd, ...), fileio.c
+	  (dummy_91, get_io_ptr, isam_to_file, indexed_file_type, cob_key_def,
+	  set_qbl_buf, ...), fileio.h (cob_read_dict, cob_chk_file_mapping,
+	  db_savekey, cob_dump_xfd, cob_xfd_to_ddl), fisam.c (indexed_keydesc,
+	  get_isreclen, isam_open, isam_read, isam_read_next), flmdb.c
+	  (check_alt_keys, lmdb_write_internal, lmdb_start_internal,
+	  lmdb_delete_internal, lmdb_open, lmdb_start, ...), focextfh.c
+	  (get_io_ptr, relative_rewrite, sequential_read, sequential_write,
+	  sequential_rewrite, relative_start, ...), foci.c (ociCountIndex,
+	  oci_create_table, join_environment, oci_file_delete, oci_open,
+	  oci_start, ...), fodbc.c (odbcCountIndex, odbc_create_table,
+	  join_environment, odbc_file_delete, odbc_open, odbc_start, ...),
+	  fsqlxfd.c (db_cmpkey, eval_expr, cob_load_xfd, cob_load_ddl,
+	  getSchemaEnvName, logSchemaEnvName, ...), intrinsic.c (comp_field,
+	  cob_alloc_field, cob_mod_or_rem, numval, get_min_and_max_of_args,
+	  calc_mean_of_args, ...), mlio.c (set_xml_code, set_xml_exception,
+	  get_xml_code, set_json_code, set_json_exception, get_num, ...),
+	  move.c (store_common_region, cob_move_display_to_display,
+	  cob_move_packed_to_display, cob_move_display_to_binary,
+	  cob_move_binary_to_display, optimized_move_display_to_edited, ...),
+	  numeric.c (cob_decimal_print, cob_decimal_adjust,
+	  cob_decimal_get_ieee64dec, cob_decimal_set_ieee64dec,
+	  cob_decimal_get_ieee128dec, cob_decimal_set_ieee128dec, ...),
+	  profiling.c (cob_prof_realloc_arrays, cob_prof_enter_procedure_ctx,
+	  cob_prof_end), reportio.c (cob_field_init, cob_field_dup,
+	  cob_add_fields, reportDump, limitCheckOneLine, limitCheckLine, ...),
+	  screenio.c (init_cob_screen_if_needed, handle_status,
+	  raise_ec_on_invalid_line_or_col, cob_move_cursor, cob_set_cursor_pos,
+	  adjust_attr_from_color_field, ...), strings.c (cob_str_memcpy,
+	  inspect_common_no_replace, inspect_common,
+	  cob_inspect_characters_intern, cob_inspect_characters_ctx,
+	  cob_inspect_all_intern, ...), termio.c (display_numeric,
+	  pretty_display_numeric, cob_display_common, cob_display_va_ctx,
+	  cob_dump_field_va_ctx, cob_print_field, ...): propagate the context
+	  to internal functions
+	* mlio.c (xml_startElementNs, xml_endElementNs): rename the user data
+	  parameter of SAX callbacks
+	* call.c (set_resolve_error, cache_preload, insert,
+	  cob_resolve_internal, cob_resolve_error, cob_call_error, ...),
+	  cconv.c (cob_load_collation), cobcapi.c (cob_get_param_field,
+	  cob_get_name_line, cob_get_num_params, cob_get_dbl_param,
+	  cob_put_dbl_param, cob_get_s64_param, ...), cobcapi.h, coblocal.h,
+	  common.c (cob_get_strerror, cob_sig_handler, sort_compare,
+	  sort_compare_collate, cob_move_intermediate,
+	  cob_move_to_group_as_alnum, ...), common.h (print_runtime_conf,
+	  cob_relocate_string, cob_last_exception_is, cob_last_runtime_error,
+	  cob_context_leave, cob_module_global_enter, ...), fbdb.c
+	  (bdb_bt_compare, bdb_err_event, join_environment, bdb_lock_file,
+	  bdb_lock_record, bdb_test_record_lock, ...), fextfh.c
+	  (free_extfh_fcd, copy_file_to_fcd, update_fcd_to_file,
+	  copy_keys_fcd_to_file, copy_fcd_to_file, find_fcd, ...), fileio.c
+	  (get_io_ptr, isam_to_file, cob_key_def, set_qbl_buf, cob_open_qbl,
+	  cob_close_qbl, ...), fisam.c (indexed_keydesc, get_isreclen), flmdb.c
+	  (lmdb_open), focextfh.c (get_io_ptr), foci.c (oci_open, oci_start,
+	  oci_read), fodbc.c (odbc_open, odbc_start, odbc_read), fsqlxfd.c
+	  (db_cmpkey, eval_expr, cob_load_xfd, cob_load_ddl, getSchemaEnvName,
+	  cob_sql_stmt, ...), intrinsic.c (comp_field, cob_alloc_field,
+	  cob_mod_or_rem, numval, get_min_and_max_of_args, calc_mean_of_args,
+	  ...), mlio.c (set_xml_code, set_xml_exception, get_xml_code,
+	  set_json_code, set_json_exception, get_num, ...), move.c
+	  (store_common_region, optimized_move_display_to_edited,
+	  indirect_move, cob_move_all, cob_move_ibm, cob_init_table, ...),
+	  numeric.c (cob_gmp_free, cob_decimal_init, cob_decimal_clear,
+	  cob_decimal_set_ullint, cob_decimal_set_llint, cob_decimal_print,
+	  ...), profiling.c (cob_prof_init_module, cob_prof_realloc_arrays,
+	  cob_prof_enter_procedure, cob_prof_exit_procedure,
+	  cob_prof_enter_section, cob_prof_use_paragraph_entry, ...),
+	  reportio.c (cob_field_init, cob_field_dup, cob_add_fields,
+	  limitCheckOneLine, saveLineCounter, write_rec, ...), screenio.c
+	  (init_cob_screen_if_needed, handle_status,
+	  raise_ec_on_invalid_line_or_col, adjust_attr_from_color_field,
+	  cob_screen_attr, cob_screen_init, ...), strings.c (cob_str_memcpy,
+	  inspect_common_no_replace, inspect_common, cob_inspect_init,
+	  cob_inspect_init_converting, cob_inspect_start, ...), termio.c
+	  (display_numeric, pretty_display_numeric, cob_display_common,
+	  cob_display, cob_dump_output, cob_dump_file, ...): suffix _ctx for
+	  functions taking the context, old names kept
+	* common.h (cob_prof_init_module, cob_prof_exit_section,
+	  cob_prof_use_paragraph_entry), profiling.c
+	  (cob_prof_use_paragraph_entry, cob_prof_goto, cob_prof_end):
+	  profiling functions take the context
+	* common.h (cob_is_xml_namechar, cob_xml_generate, cob_json_generate),
+	  mlio.c (xml_process_next_event): XML / JSON functions take the
+	  context
+	* common.h (cob_path_to_absolute), reportio.c: REPORT WRITER functions
+	  take the context
+	* common.h (cob_runtime_warning_external, cob_screen_display,
+	  cob_screen_accept, cob_field_display, cob_set_cursor_pos,
+	  cob_sys_get_char), screenio.c (cob_field_display, cob_field_accept),
+	  termio.c (cob_display, cob_accept): screen ACCEPT / DISPLAY functions
+	  take the context
+	* common.c (cob_dump_sub, cob_dump_symbols), common.h, termio.c: ACCEPT
+	  / DISPLAY / DUMP functions take the context
+	* call.c (insert), common.c (cob_sig_handler,
+	  call_exit_handlers_and_terminate, cob_set_main_argv0), common.h
+	  (cob_accept, cob_file_external_addr, cob_file_malloc,
+	  cob_file_create, cob_file_set_attr, cob_file_set_key, ...), fextfh.c
+	  (cob_extfh_start, cob_extfh_read, cob_file_fcd_adrs,
+	  cob_file_fcdkey_adrs), fileio.c (cob_put_qbl, cob_file_external_addr,
+	  cob_open, cob_commit, cob_rollback, cob_file_sort_using, ...), foci.c
+	  (oci_start, oci_read), fodbc.c (odbc_start, odbc_read), reportio.c
+	  (write_rec): file I/O functions take the context
+	* call.c (set_resolve_error, cache_preload, cob_resolve_internal,
+	  cob_call_error, cob_resolve, cob_resolve_cobol, ...), cconv.c
+	  (cob_load_collation), cobcapi.c (get_value, cob_parse_field),
+	  cobcapi.h, common.c (cob_get_strerror, sort_compare,
+	  sort_compare_collate, cob_rescan_env_vals,
+	  cob_get_last_exception_name, cob_add_exception, ...), common.h
+	  (print_runtime_conf, cob_relocate_string, cob_last_exception_is,
+	  cob_last_runtime_error, cob_module_enter, cob_module_leave, ...),
+	  fbdb.c (bdb_bt_compare, bdb_err_event, join_environment,
+	  bdb_lock_file, bdb_lock_record, bdb_test_record_lock, ...), fextfh.c
+	  (free_extfh_fcd, copy_file_to_fcd, update_fcd_to_file,
+	  copy_keys_fcd_to_file, copy_fcd_to_file, find_fcd, ...), fileio.c
+	  (get_io_ptr, isam_to_file, cob_key_def, set_qbl_buf, cob_open_qbl,
+	  cob_close_qbl, ...), fisam.c (indexed_keydesc), flmdb.c (lmdb_open),
+	  focextfh.c (get_io_ptr), foci.c (oci_open), fodbc.c (odbc_open),
+	  fsqlxfd.c (db_cmpkey, cob_load_xfd, cob_load_ddl, getSchemaEnvName,
+	  cob_sql_stmt), intrinsic.c (comp_field, cob_alloc_field,
+	  cob_mod_or_rem, numval, get_min_and_max_of_args,
+	  seconds_from_formatted_time, ...), mlio.c (set_xml_exception,
+	  set_json_exception, generate_content, generate_json_from_tree,
+	  cob_xml_generate, cob_xml_parse, ...), move.c (store_common_region,
+	  optimized_move_display_to_edited, cob_alloc_move, cob_set_llint),
+	  numeric.c (cob_decimal_adjust, cob_decimal_get_ieee64dec,
+	  cob_decimal_set_ieee64dec, cob_decimal_get_ieee128dec,
+	  cob_decimal_set_ieee128dec, cob_add_packed, ...), profiling.c
+	  (cob_prof_realloc_arrays, cob_prof_end), reportio.c
+	  (limitCheckOneLine, cob_report_suppress), screenio.c
+	  (init_cob_screen_if_needed, handle_status,
+	  raise_ec_on_invalid_line_or_col, cob_screen_init,
+	  pass_cursor_to_program, get_line_and_col_from_field, ...), strings.c
+	  (inspect_common, cob_inspect_converting_intern,
+	  cob_string_init_intern, cob_string_append_intern,
+	  cob_unstring_init_intern, cob_unstring_finish_intern), termio.c
+	  (cob_display, cob_accept): runtime support functions take the context
+	* call.c (cob_call_error, cob_resolve_cobol, cob_call_field,
+	  cob_cancel_field, cob_call, cob_func, ...), cobcapi.c
+	  (cob_get_param_field, cob_get_num_params, cob_get_field_str,
+	  cob_put_field_str, cob_put_s64_param, cob_put_u64_param, ...),
+	  cobcapi.h, common.c (cob_sys_exit_proc, cob_sys_error_proc,
+	  cob_sys_x91, cob_call_with_exception_check), common.h (cob_s64_pow,
+	  cob_get_name_hash, cob_encode_program_id, cob_resolve_cobol,
+	  cob_call_field, cob_cancel_field, ...), fileio.c (cob_load_module):
+	  CALL / CANCEL / resolve functions take the context
+	* cobcapi.c (cob_put_field_str), common.h (cob_xml_parse,
+	  cob_intr_binop, cob_valid_time_format, cob_intr_when_compiled,
+	  cob_intr_upper_case, cob_intr_lower_case, ...), intrinsic.c (numval,
+	  cob_intr_test_numval, cob_intr_test_numval_c), screenio.c
+	  (valid_field_data, format_field): intrinsic functions take the
+	  context
+	* cobcapi.c (cob_get_dbl_param, cob_put_dbl_param, cob_get_s64_param,
+	  cob_get_u64_param, cob_get_picx_param, cob_put_field_str, ...),
+	  common.c (cob_move_intermediate, cob_move_to_group_as_alnum,
+	  cob_accept_exception_status, cob_cmp, cob_accept_date,
+	  cob_accept_date_yyyymmdd, ...), common.h (cob_alloc_move,
+	  cob_put_pointer, cob_logical_right_c, cob_div_quotient,
+	  cob_div_remainder, cob_cmp_numdisp, ...), fextfh.c (cob_extfh_start,
+	  cob_extfh_read, cob_extfh_read_next, cob_extfh_write,
+	  cob_extfh_rewrite, cob_extfh_delete, ...), fileio.c (cob_put_qbl,
+	  cob_set_file_format, file_linage_check, cob_linage_write_opt,
+	  cob_fd_file_open, cob_file_open, ...), fisam.c (get_isreclen),
+	  fsqlxfd.c (eval_expr, cob_index_to_xfd, cob_file_to_xfd,
+	  cob_xfd_to_file), intrinsic.c (cob_mod_or_rem, calc_mean_of_args,
+	  calc_variance_of_args, get_interval_and_current_year_from_args,
+	  valid_decimal_time, seconds_from_formatted_time, ...), mlio.c
+	  (set_xml_code, get_xml_code, set_json_code, get_num, xml_generate,
+	  xml_parse, ...), move.c (indirect_move, cob_move_all, cob_move,
+	  cob_alloc_move, cob_set_int, cob_get_int, ...), numeric.c
+	  (cob_decimal_print, cob_decimal_set_packed, cob_decimal_get_packed,
+	  cob_set_packed_int, cob_decimal_get_display, cob_decimal_get_field,
+	  ...), reportio.c (cob_field_init, cob_field_dup, cob_add_fields,
+	  saveLineCounter, copy_line_fields), screenio.c (handle_status,
+	  adjust_attr_from_color_field, cob_screen_attr,
+	  pass_cursor_to_program, get_line_and_col_from_field,
+	  get_prev_screen_item, ...), strings.c (cob_str_memcpy,
+	  inspect_common_no_replace, cob_inspect_characters_intern,
+	  cob_string_init_intern, cob_string_finish_intern,
+	  cob_unstring_init_intern, ...), termio.c (display_numeric,
+	  pretty_display_numeric, cob_accept): MOVE, arithmetic and C-API data
+	  functions take the context
+	* common.h (cob_bcd_cmp_zero), strings.c: INSPECT / STRING / UNSTRING
+	  functions take the context
+	* coblocal.h, common.c (cob_exit_common, cob_get_global_ptr,
+	  cob_module_global_enter, cob_module_enter, cob_init), common.h
+	  (cob_common_init): runtime / execution context and current context of
+	  the thread
+	* flmdb.c (local_file): close /proc/partitions, opened at each OPEN of
+	  an LMDB file and never closed (one file descriptor lost per OPEN)
+	* fileio.c (cob_file_open): the child process of a bidirectional
+	  pipe only writes its message and calls _exit when dup2 or execv
+	  fail, instead of cob_runtime_error, cob_stop_run and exit, which
+	  flushed in the child the stdio buffers of the parent (records
+	  written twice) and ran the end of its run unit
+	* cobcapi.c (cob_get_s64_param, cob_get_u64_param, cob_put_s64_param,
+	  cob_put_u64_param): do not write the scale into the shared static
+	  attributes const_binll_attr / const_binull_attr (data race between
+	  threads, wrong scale seen by a concurrent call), use a local copy
+	* cobcapi.c: const_float_attr, const_binll_attr and const_binull_attr
+	  are constant
+	* flmdb.c (get_dupno): fix memory leak, the transaction and the
+	  cursor were allocated, then replaced by mdb_txn_begin and
+	  mdb_cursor_open
+
 2026-09-04  David Declerck <david.declerck@ocamlpro.com>
 
 	* fileio.c (cob_file_open, cob_file_close) [_WIN32]:

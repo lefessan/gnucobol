@@ -1,0 +1,12 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. calls.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 I     PIC 9(9) COMP VALUE 0.
+       01 T     PIC 9(9) COMP VALUE 0.
+       PROCEDURE DIVISION.
+           PERFORM VARYING I FROM 1 BY 1 UNTIL I > 20000000
+              CALL "csub" USING I T
+           END-PERFORM
+           DISPLAY T
+           STOP RUN.

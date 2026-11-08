@@ -1,0 +1,2967 @@
+## Copyright (C) 2026 Free Software Foundation, Inc.
+## Written by Fabrice Le Fessant
+##
+## This file is part of GnuCOBOL.
+##
+## The GnuCOBOL compiler is free software: you can redistribute it
+## and/or modify it under the terms of the GNU General Public License
+## as published by the Free Software Foundation, either version 3 of the
+## License, or (at your option) any later version.
+##
+## GnuCOBOL is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+
+### GnuCOBOL Test Suite
+
+## Reentrant runtime: several execution contexts in one process,
+## possibly in several threads (see TXSERIES-T1-DESIGN.md)
+
+AT_SETUP([CALL in from C, several execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create cob_context_destroy cob_context_enter reentrant])
+
+# each context has its own instances of the programs (WORKING-STORAGE,
+# files) and its own run unit (EXTERNAL items); destroying a context
+# closes its open files
+
+AT_DATA([counter.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      counter.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO FNAME
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 FNAME         PIC X(20).
+       01 CNT           PIC 9(4) VALUE 0.
+       01 X             PIC S9(20)V9(5) VALUE 1.
+       01 EXT-CNT       PIC 9(4) EXTERNAL.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           IF CNT = 0
+              STRING "out-" TAG ".txt" DELIMITED SIZE INTO FNAME
+              OPEN OUTPUT OUT-FILE
+           END-IF
+           IF EXT-CNT NOT NUMERIC
+              MOVE 0 TO EXT-CNT
+           END-IF
+           ADD 1 TO CNT EXT-CNT
+           COMPUTE X = X * 3 / 7 + FUNCTION PI
+           MOVE TAG TO OUT-REC
+           WRITE OUT-REC
+           DISPLAY TAG ": " CNT " " EXT-CNT
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_counter (const char *tag)
+{
+   void *argv[1];
+   argv[0] = (void *)tag;
+   (void)cob_call ("counter", 1, argv);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx2, *ctx3, *prev;
+
+   cob_init (argc, argv);
+
+   call_counter ("main");
+   call_counter ("main");
+
+   ctx2 = cob_context_create ();
+   prev = cob_context_enter (ctx2);
+   call_counter ("ctx2");
+   cob_context_leave (prev);
+
+   call_counter ("main");
+
+   prev = cob_context_enter (ctx2);
+   call_counter ("ctx2");
+   cob_context_leave (prev);
+   cob_context_destroy (ctx2);
+
+   ctx3 = cob_context_create ();
+   prev = cob_context_enter (ctx3);
+   call_counter ("ctx3");
+   cob_context_leave (prev);
+   cob_context_destroy (ctx3);
+
+   call_counter ("main");
+
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE counter.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[main: 0001 0001
+main: 0002 0002
+ctx2: 0001 0001
+main: 0003 0003
+ctx2: 0002 0002
+ctx3: 0001 0001
+main: 0004 0004
+], [libcob: counter.cob:33: warning: implicit CLOSE of OUT-FILE ('out-main.txt')
+])
+AT_CHECK([cat out-ctx2.txt out-ctx3.txt], [0],
+[ctx2
+ctx2
+ctx3
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([CALL in from C, execution contexts in several threads])
+AT_KEYWORDS([runreentrant cob_context_create cob_context_destroy cob_context_enter reentrant thread])
+
+# each thread creates its own execution context and calls the same
+# program many times; the WORKING-STORAGE and the files of the program
+# must be private to each context (arithmetic, intrinsic functions,
+# STRING / INSPECT and LINE SEQUENTIAL files are exercised)
+
+AT_DATA([calc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      calc.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT F ASSIGN TO FNAME ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD F.
+       01 FR            PIC X(40).
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(8) VALUE 0.
+       01 X             PIC S9(20)V9(5) VALUE 0.
+       01 S             PIC X(40).
+       01 FNAME         PIC X(30).
+       01 D             PIC X(21).
+       LINKAGE          SECTION.
+       01 RES           PIC 9(8).
+       01 TID           PIC 9(2).
+       PROCEDURE        DIVISION USING RES TID.
+           IF CNT = 0
+              STRING "f" TID ".txt" DELIMITED SIZE INTO FNAME
+              OPEN OUTPUT F
+           END-IF
+           ADD 1 TO CNT
+           COMPUTE X = (CNT * 3) / 7 + FUNCTION SQRT (CNT * CNT)
+           MOVE FUNCTION CURRENT-DATE TO D
+           MOVE SPACES TO S
+           STRING "v" CNT " " X DELIMITED SIZE INTO S
+           INSPECT S REPLACING ALL "0" BY "o"
+           MOVE S TO FR
+           WRITE FR
+           MOVE CNT TO RES
+           GOBACK.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <libcob.h>
+
+#define NTHREADS 8
+#define NCALLS 1000
+
+static int bads[NTHREADS];
+
+static void *
+task (void *arg)
+{
+   int *bad = (int *)arg;
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char res[9] = "00000000";
+   char tid[3];
+   void *argv[2];
+   int i;
+
+   snprintf (tid, sizeof tid, "%02d", (int)(bad - bads));
+   argv[0] = res;
+   argv[1] = tid;
+   for (i = 1; i <= NCALLS; i++) {
+      char expected[9];
+      (void)cob_call ("calc", 2, argv);
+      snprintf (expected, sizeof expected, "%08d", i);
+      if (memcmp (res, expected, 8)) {
+         (*bad)++;
+      }
+   }
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+
+int
+main (int argc, char **argv)
+{
+   pthread_t th[NTHREADS];
+   int i;
+
+   cob_init (argc, argv);
+   /* the module is loaded by the first CALL, in one of the threads */
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_create (&th[i], NULL, task, &bads[i]);
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_join (th[i], NULL);
+      printf ("thread %d: %d bad\n", i, bads[i]);
+   }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([$COMPILE_MODULE calc.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+AT_CHECK([wc -l < f00.txt], [0], [1000
+], [])
+AT_CHECK([tail -1 f00.txt], [0], [voooo1ooo oooooooooooooooo142857142
+], [])
+AT_CHECK([for i in 01 02 03 04 05 06 07; do cmp f00.txt f$i.txt || exit 1; done], [0], [], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([intrinsic constants in several threads])
+AT_KEYWORDS([runreentrant cob_context_create FUNCTION PI thread])
+
+# the constants of the intrinsic functions (PI, E, logarithms) are
+# computed on first use, possibly by several threads at the same time
+
+AT_DATA([calc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      calc.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(8) VALUE 0.
+       01 X             PIC S9(10)V9(20).
+       LINKAGE          SECTION.
+       01 RES           PIC 9(8).
+       01 TID           PIC 9(2).
+       PROCEDURE        DIVISION USING RES TID.
+           ADD 1 TO CNT
+           COMPUTE X = FUNCTION PI + FUNCTION E
+                     + FUNCTION LOG (CNT + 1) + FUNCTION LOG10 (CNT + 1)
+                     + FUNCTION ACOS (0.5)
+           MOVE CNT TO RES
+           GOBACK.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <libcob.h>
+
+#define NTHREADS 8
+#define NCALLS 1000
+
+static int bads[NTHREADS];
+
+static void *
+task (void *arg)
+{
+   int *bad = (int *)arg;
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char res[9] = "00000000";
+   char tid[3];
+   void *argv[2];
+   int i;
+
+   snprintf (tid, sizeof tid, "%02d", (int)(bad - bads));
+   argv[0] = res;
+   argv[1] = tid;
+   for (i = 1; i <= NCALLS; i++) {
+      char expected[9];
+      (void)cob_call ("calc", 2, argv);
+      snprintf (expected, sizeof expected, "%08d", i);
+      if (memcmp (res, expected, 8)) {
+         (*bad)++;
+      }
+   }
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+
+int
+main (int argc, char **argv)
+{
+   pthread_t th[NTHREADS];
+   int i;
+
+   cob_init (argc, argv);
+   /* the module is loaded by the first CALL, in one of the threads */
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_create (&th[i], NULL, task, &bads[i]);
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_join (th[i], NULL);
+      printf ("thread %d: %d bad\n", i, bads[i]);
+   }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([$COMPILE_MODULE calc.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([INDEXED files in several threads])
+AT_KEYWORDS([runreentrant cob_context_create INDEXED thread])
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+
+# each thread creates its own execution context and writes then reads
+# its own INDEXED file (with an alternate key); the first OPEN of the
+# threads loads the I/O routine and joins the environment of the
+# backend concurrently
+
+AT_DATA([calc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      calc.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT I ASSIGN TO INAME ORGANIZATION INDEXED
+                  ACCESS DYNAMIC RECORD KEY IK
+                  ALTERNATE RECORD KEY IA WITH DUPLICATES.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD I.
+       01 IR.
+          05 IK         PIC 9(8).
+          05 IA         PIC 9(2).
+          05 IDT        PIC X(20).
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(8) VALUE 0.
+       01 INAME         PIC X(30).
+       LINKAGE          SECTION.
+       01 RES           PIC 9(8).
+       01 TID           PIC 9(2).
+       PROCEDURE        DIVISION USING RES TID.
+           IF CNT = 0
+              STRING "i" TID ".dat" DELIMITED SIZE INTO INAME
+              OPEN OUTPUT I
+              CLOSE I
+              OPEN I-O I
+           END-IF
+           ADD 1 TO CNT
+           MOVE CNT TO IK
+           MOVE FUNCTION MOD (CNT 7) TO IA
+           MOVE "data" TO IDT
+           WRITE IR
+           MOVE CNT TO IK
+           READ I KEY IS IK
+           IF IK NOT = CNT
+              MOVE 0 TO CNT
+           END-IF
+           MOVE CNT TO RES
+           GOBACK.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <libcob.h>
+
+#define NTHREADS 8
+#define NCALLS 1000
+
+static int bads[NTHREADS];
+
+static void *
+task (void *arg)
+{
+   int *bad = (int *)arg;
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char res[9] = "00000000";
+   char tid[3];
+   void *argv[2];
+   int i;
+
+   snprintf (tid, sizeof tid, "%02d", (int)(bad - bads));
+   argv[0] = res;
+   argv[1] = tid;
+   for (i = 1; i <= NCALLS; i++) {
+      char expected[9];
+      (void)cob_call ("calc", 2, argv);
+      snprintf (expected, sizeof expected, "%08d", i);
+      if (memcmp (res, expected, 8)) {
+         (*bad)++;
+      }
+   }
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+
+int
+main (int argc, char **argv)
+{
+   pthread_t th[NTHREADS];
+   int i;
+
+   cob_init (argc, argv);
+   /* the module is loaded by the first CALL, in one of the threads */
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_create (&th[i], NULL, task, &bads[i]);
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_join (th[i], NULL);
+      printf ("thread %d: %d bad\n", i, bads[i]);
+   }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([$COMPILE_MODULE calc.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([dynamic CALL and CANCEL in several threads])
+AT_KEYWORDS([runreentrant cob_context_create CALL CANCEL thread])
+
+# each thread creates its own execution context and calls a program
+# which CALLs dynamically two programs of the same module (a literal
+# and a field) and CANCELs one of them: the resolved entries and the
+# count of active programs of a module are specific to each context
+
+AT_DATA([calc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      calc.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(8) VALUE 0.
+       01 SUBNAME       PIC X(8) VALUE "sub2".
+       LINKAGE          SECTION.
+       01 RES           PIC 9(8).
+       01 TID           PIC 9(2).
+       PROCEDURE        DIVISION USING RES TID.
+           CALL "sub" USING CNT
+           CALL SUBNAME USING CNT
+           IF FUNCTION MOD (CNT 100) = 0
+              CANCEL "sub"
+           END-IF
+           MOVE CNT TO RES
+           GOBACK.
+       END PROGRAM calc.
+])
+
+AT_DATA([sub.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 C             PIC 9(8).
+       PROCEDURE        DIVISION USING C.
+           ADD 1 TO C
+           GOBACK.
+       END PROGRAM sub.
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub2.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 C             PIC 9(8).
+       PROCEDURE        DIVISION USING C.
+           GOBACK.
+       END PROGRAM sub2.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <pthread.h>
+#include <libcob.h>
+
+#define NTHREADS 8
+#define NCALLS 1000
+
+static int bads[NTHREADS];
+
+static void *
+task (void *arg)
+{
+   int *bad = (int *)arg;
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char res[9] = "00000000";
+   char tid[3];
+   void *argv[2];
+   int i;
+
+   snprintf (tid, sizeof tid, "%02d", (int)(bad - bads));
+   argv[0] = res;
+   argv[1] = tid;
+   for (i = 1; i <= NCALLS; i++) {
+      char expected[9];
+      (void)cob_call ("calc", 2, argv);
+      snprintf (expected, sizeof expected, "%08d", i);
+      if (memcmp (res, expected, 8)) {
+         (*bad)++;
+      }
+   }
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+
+int
+main (int argc, char **argv)
+{
+   pthread_t th[NTHREADS];
+   int i;
+
+   cob_init (argc, argv);
+   /* the module is loaded by the first CALL, in one of the threads */
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_create (&th[i], NULL, task, &bads[i]);
+   }
+   for (i = 0; i < NTHREADS; i++) {
+      pthread_join (th[i], NULL);
+      printf ("thread %d: %d bad\n", i, bads[i]);
+   }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([$COMPILE_MODULE calc.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sub.cob], [0], [], [])
+AT_CHECK([cp sub.$COB_MODULE_EXT sub2.$COB_MODULE_EXT], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([CANCEL in one execution context])
+AT_KEYWORDS([runreentrant cob_context_create cob_cancel CANCEL])
+
+# CANCEL acts on the instance of the program in the current context
+# only: the WORKING-STORAGE of the other contexts is kept
+
+AT_DATA([counter.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      counter.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG ": " CNT
+           GOBACK.
+])
+
+AT_DATA([canceller.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      canceller.
+       PROCEDURE        DIVISION.
+           CANCEL "counter"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_counter (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("counter", 1, argv);
+   cob_context_leave (prev);
+}
+
+static void
+cancel_counter (cob_context *ctx, int from_cobol)
+{
+   cob_context *prev = cob_context_enter (ctx);
+   if (from_cobol) {
+      (void)cob_call ("canceller", 0, NULL);
+   } else {
+      cob_cancel ("counter");
+   }
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx2 = cob_context_create ();
+
+   call_counter (main_ctx, "main");
+   call_counter (main_ctx, "main");
+   call_counter (ctx2, "ctx2");
+   call_counter (ctx2, "ctx2");
+
+   /* two CANCELs in a row, in two contexts */
+   cancel_counter (ctx2, 0);
+   call_counter (main_ctx, "main");
+   cancel_counter (main_ctx, 1);
+   call_counter (main_ctx, "main");
+   call_counter (ctx2, "ctx2");
+   call_counter (main_ctx, "main");
+
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE counter.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE canceller.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[main: 0001
+main: 0002
+ctx2: 0001
+ctx2: 0002
+main: 0003
+main: 0001
+ctx2: 0001
+main: 0002
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([physical CANCEL with several execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create cob_cancel CANCEL COB_PHYSICAL_CANCEL])
+
+# the module of a program is not unloaded by a physical CANCEL while
+# other contexts exist: they may have an instance of it; the CANCEL is
+# then only logical, the other contexts keep their WORKING-STORAGE
+
+AT_DATA([counter.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      counter.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       01 TXT           PIC X(8) VALUE "counter".
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG ": " TXT " " CNT
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_counter (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("counter", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx2 = cob_context_create ();
+
+   call_counter (ctx2, "ctx2");
+   call_counter (main_ctx, "main");
+   cob_cancel ("counter");
+   call_counter (main_ctx, "main");
+   call_counter (ctx2, "ctx2");
+
+   /* the last other context is destroyed: CANCEL is physical again */
+   cob_context_destroy (ctx2);
+   call_counter (main_ctx, "main");
+   cob_cancel ("counter");
+   call_counter (main_ctx, "main");
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE counter.cob], [0], [], [])
+AT_CHECK([COB_PHYSICAL_CANCEL=1 $COBCRUN_DIRECT ./host], [0],
+[ctx2: counter  0001
+main: counter  0001
+main: counter  0001
+ctx2: counter  0002
+main: counter  0002
+main: counter  0001
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([record locks of INDEXED files between execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create INDEXED LOCK])
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+
+# each context has its own record locks: a record locked in a context
+# cannot be locked in another one until it is released
+
+AT_DATA([lk.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      lk.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT IX ASSIGN TO "ixfile"
+                  ORGANIZATION INDEXED ACCESS DYNAMIC
+                  RECORD KEY IK
+                  LOCK MODE MANUAL
+                  SHARING WITH ALL OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD IX.
+       01 IR.
+          05 IK         PIC X(4).
+          05 IDATA      PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           EVALUATE OP
+           WHEN "W"
+              OPEN OUTPUT IX
+              MOVE "K001" TO IK
+              MOVE "data" TO IDATA
+              WRITE IR
+              CLOSE IX
+           WHEN "O"
+              OPEN I-O IX
+           WHEN "R"
+              MOVE "K001" TO IK
+              READ IX WITH LOCK
+           WHEN "U"
+              UNLOCK IX
+           WHEN "C"
+              CLOSE IX
+           END-EVALUATE
+           DISPLAY TAG " " OP ": " FS
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+lk (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("lk", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   lk (ctx1, "ctx1", "W");
+   lk (ctx1, "ctx1", "O");
+   lk (ctx2, "ctx2", "O");
+   lk (ctx1, "ctx1", "R");
+   lk (ctx2, "ctx2", "R");   /* locked by ctx1 */
+   lk (ctx1, "ctx1", "U");
+   lk (ctx2, "ctx2", "R");
+   lk (ctx1, "ctx1", "R");   /* locked by ctx2 */
+   lk (ctx2, "ctx2", "C");
+   lk (ctx1, "ctx1", "R");
+   lk (ctx1, "ctx1", "C");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE lk.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 W: 00
+ctx1 O: 00
+ctx2 O: 00
+ctx1 R: 00
+ctx2 R: 51
+ctx1 U: 00
+ctx2 R: 00
+ctx1 R: 51
+ctx2 C: 00
+ctx1 R: 00
+ctx1 C: 00
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([record and file locks of RELATIVE files between contexts])
+AT_KEYWORDS([runreentrant cob_context_create RELATIVE LOCK])
+
+# fcntl locks belong to the process: the locks of each context are kept
+# in a table of the runtime, so that the contexts exclude each other;
+# when a context closes the file (which releases all the fcntl locks of
+# the process on it), the locks of the other contexts are set again and
+# still exclude the other processes
+
+AT_DATA([rl.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      rl.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT RELF ASSIGN TO "relfile"
+                  ORGANIZATION RELATIVE ACCESS RANDOM
+                  RELATIVE KEY RK
+                  LOCK MODE MANUAL
+                  SHARING WITH ALL OTHER
+                  STATUS FS.
+           SELECT XF ASSIGN TO "relfile"
+                  ORGANIZATION RELATIVE ACCESS RANDOM
+                  RELATIVE KEY RK
+                  SHARING WITH NO OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD RELF.
+       01 RR            PIC X(10).
+       FD XF.
+       01 XR            PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       01 RK            PIC 9(4).
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           MOVE 1 TO RK
+           EVALUATE OP
+           WHEN "W"
+              OPEN OUTPUT RELF
+              MOVE "data" TO RR
+              WRITE RR
+              CLOSE RELF
+           WHEN "O"
+              OPEN I-O RELF
+           WHEN "R"
+              READ RELF WITH LOCK
+           WHEN "C"
+              CLOSE RELF
+           WHEN "X"
+              OPEN I-O XF
+           WHEN "Y"
+              CLOSE XF
+           END-EVALUATE
+           DISPLAY TAG " " OP ": " FS
+           GOBACK.
+])
+
+AT_DATA([other.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      other.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT RELF ASSIGN TO "relfile"
+                  ORGANIZATION RELATIVE ACCESS RANDOM
+                  RELATIVE KEY RK
+                  LOCK MODE MANUAL
+                  SHARING WITH ALL OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD RELF.
+       01 RR            PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       01 RK            PIC 9(4).
+       PROCEDURE        DIVISION.
+           MOVE 1 TO RK
+           OPEN I-O RELF
+           READ RELF WITH LOCK
+           DISPLAY "proc R: " FS
+           CLOSE RELF
+           STOP RUN.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <stdlib.h>
+#include <libcob.h>
+
+static void
+rl (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("rl", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   rl (ctx1, "ctx1", "W");
+   /* record locks */
+   rl (ctx1, "ctx1", "O");
+   rl (ctx2, "ctx2", "O");
+   rl (ctx1, "ctx1", "R");
+   rl (ctx2, "ctx2", "R");   /* locked by ctx1 */
+   rl (ctx1, "ctx1", "C");   /* releases the lock */
+   rl (ctx1, "ctx1", "O");
+   rl (ctx2, "ctx2", "R");
+   rl (ctx1, "ctx1", "R");   /* locked by ctx2 */
+   /* ctx1 closes the file: the lock of ctx2 still excludes a process */
+   rl (ctx1, "ctx1", "C");
+   fflush (stdout);
+   if (system ("./other") != 0) {
+      return 1;
+   }
+   rl (ctx2, "ctx2", "C");
+   fflush (stdout);
+   if (system ("./other") != 0) {
+      return 1;
+   }
+   /* file lock at OPEN */
+   rl (ctx1, "ctx1", "X");
+   rl (ctx2, "ctx2", "X");   /* locked by ctx1 */
+   rl (ctx1, "ctx1", "Y");
+   rl (ctx2, "ctx2", "X");
+   rl (ctx2, "ctx2", "Y");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE rl.cob], [0], [], [])
+AT_CHECK([$COMPILE other.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 W: 00
+ctx1 O: 00
+ctx2 O: 00
+ctx1 R: 00
+ctx2 R: 51
+ctx1 C: 00
+ctx1 O: 00
+ctx2 R: 00
+ctx1 R: 51
+ctx1 C: 00
+proc R: 51
+ctx2 C: 00
+proc R: 00
+ctx1 X: 00
+ctx2 X: 61
+ctx1 Y: 00
+ctx2 X: 00
+ctx2 Y: 00
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([UNLOCK of the record locks of a RELATIVE file])
+AT_KEYWORDS([runreentrant cob_context_create RELATIVE LOCK UNLOCK])
+
+# UNLOCK releases the record locks of the file connector, for the other
+# contexts and for the other processes; the lock of another context on
+# the same file is kept
+
+AT_DATA([ul.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ul.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT RELF ASSIGN TO "relfile"
+                  ORGANIZATION RELATIVE ACCESS RANDOM
+                  RELATIVE KEY RK
+                  LOCK MODE MANUAL
+                  SHARING WITH ALL OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD RELF.
+       01 RR            PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       01 RK            PIC 9(4).
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       01 REC           PIC 9.
+       PROCEDURE        DIVISION USING TAG OP REC.
+           MOVE REC TO RK
+           EVALUATE OP
+           WHEN "W"
+              OPEN OUTPUT RELF
+              MOVE "data" TO RR
+              WRITE RR
+              MOVE 2 TO RK
+              WRITE RR
+              CLOSE RELF
+           WHEN "O"
+              OPEN I-O RELF
+           WHEN "R"
+              READ RELF WITH LOCK
+           WHEN "U"
+              UNLOCK RELF
+           WHEN "C"
+              CLOSE RELF
+           END-EVALUATE
+           DISPLAY TAG " " OP " " REC ": " FS
+           GOBACK.
+])
+
+AT_DATA([other.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      other.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT RELF ASSIGN TO "relfile"
+                  ORGANIZATION RELATIVE ACCESS RANDOM
+                  RELATIVE KEY RK
+                  LOCK MODE MANUAL
+                  SHARING WITH ALL OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD RELF.
+       01 RR            PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       01 RK            PIC 9(4).
+       PROCEDURE        DIVISION.
+           OPEN I-O RELF
+           MOVE 1 TO RK
+           READ RELF WITH LOCK
+           DISPLAY "proc R 1: " FS
+           MOVE 2 TO RK
+           READ RELF WITH LOCK
+           DISPLAY "proc R 2: " FS
+           CLOSE RELF
+           STOP RUN.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <stdlib.h>
+#include <libcob.h>
+
+static void
+ul (cob_context *ctx, const char *tag, const char *op, const char *rec)
+{
+   void *argv[3];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   argv[2] = (void *)rec;
+   (void)cob_call ("ul", 3, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   ul (ctx1, "ctx1", "W", "1");
+   ul (ctx1, "ctx1", "O", "1");
+   ul (ctx2, "ctx2", "O", "1");
+   ul (ctx1, "ctx1", "R", "1");
+   ul (ctx2, "ctx2", "R", "2");
+   ul (ctx2, "ctx2", "R", "1");   /* locked by ctx1 */
+   ul (ctx1, "ctx1", "U", "1");
+   fflush (stdout);
+   if (system ("./other") != 0) {  /* record 2 still locked by ctx2 */
+      return 1;
+   }
+   ul (ctx2, "ctx2", "R", "1");
+   ul (ctx2, "ctx2", "U", "1");
+   fflush (stdout);
+   if (system ("./other") != 0) {
+      return 1;
+   }
+   ul (ctx1, "ctx1", "C", "1");
+   ul (ctx2, "ctx2", "C", "1");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ul.cob], [0], [], [])
+AT_CHECK([$COMPILE other.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 W 1: 00
+ctx1 O 1: 00
+ctx2 O 1: 00
+ctx1 R 1: 00
+ctx2 R 2: 00
+ctx2 R 1: 51
+ctx1 U 1: 00
+proc R 1: 00
+proc R 2: 51
+ctx2 R 1: 00
+ctx2 U 1: 00
+proc R 1: 00
+proc R 2: 00
+ctx1 C 1: 00
+ctx2 C 1: 00
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([file lock at OPEN of INDEXED files between contexts])
+AT_KEYWORDS([runreentrant cob_context_create INDEXED LOCK SHARING])
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+
+# an INDEXED file opened for exclusive use in a context cannot be
+# opened in another context of the process until it is closed
+
+AT_DATA([xo.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      xo.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT IX ASSIGN TO "ixfile"
+                  ORGANIZATION INDEXED ACCESS DYNAMIC
+                  RECORD KEY IK
+                  SHARING WITH NO OTHER
+                  STATUS FS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD IX.
+       01 IR.
+          05 IK         PIC X(4).
+          05 IDATA      PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           EVALUATE OP
+           WHEN "W"
+              OPEN OUTPUT IX
+              MOVE "K001" TO IK
+              MOVE "data" TO IDATA
+              WRITE IR
+              CLOSE IX
+           WHEN "O"
+              OPEN I-O IX
+           WHEN "C"
+              CLOSE IX
+           END-EVALUATE
+           DISPLAY TAG " " OP ": " FS
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+xo (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("xo", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   xo (ctx1, "ctx1", "W");
+   xo (ctx1, "ctx1", "O");
+   xo (ctx2, "ctx2", "O");   /* opened by ctx1 */
+   xo (ctx1, "ctx1", "C");
+   xo (ctx2, "ctx2", "O");
+   xo (ctx1, "ctx1", "O");   /* opened by ctx2 */
+   xo (ctx2, "ctx2", "C");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE xo.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 W: 00
+ctx1 O: 00
+ctx2 O: 61
+ctx1 C: 00
+ctx2 O: 00
+ctx1 O: 61
+ctx2 C: 00
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([COBOL to C to COBOL in several execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create CALL cob_call])
+
+# a COBOL program calls a C function, which calls back a COBOL program
+# with cob_call: the callee runs in the current context of the caller
+# (its WORKING-STORAGE is the one of that context)
+
+AT_DATA([proga.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      proga.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG " proga: " CNT
+           CALL "cfunc" USING TAG
+           GOBACK.
+])
+
+AT_DATA([progb.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      progb.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 10 TO CNT
+           DISPLAY TAG " progb: " CNT
+           GOBACK.
+])
+
+AT_DATA([cfunc.c], [[
+#include <libcob.h>
+
+COB_EXT_EXPORT int
+cfunc (char *tag)
+{
+   void *argv[1];
+   argv[0] = tag;
+   return cob_call ("progb", 1, argv);
+}
+]])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_proga (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("proga", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx2 = cob_context_create ();
+
+   call_proga (main_ctx, "main");
+   call_proga (ctx2, "ctx2");
+   call_proga (main_ctx, "main");
+   call_proga (ctx2, "ctx2");
+
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE proga.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE progb.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE cfunc.c], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[main proga: 0001
+main progb: 0010
+ctx2 proga: 0001
+ctx2 progb: 0010
+main proga: 0002
+main progb: 0020
+ctx2 proga: 0002
+ctx2 progb: 0020
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([IS INITIAL programs in several execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create INITIAL])
+
+# an INITIAL program gets its initial state at each call, in each
+# context; a program it calls keeps its state per context
+
+AT_DATA([init.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      init IS INITIAL.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG " init: " CNT
+           CALL "sub" USING TAG
+           GOBACK.
+])
+
+AT_DATA([sub.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           ADD 1 TO CNT
+           DISPLAY TAG " sub: " CNT
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+call_init (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("init", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx2 = cob_context_create ();
+
+   call_init (main_ctx, "main");
+   call_init (ctx2, "ctx2");
+   call_init (main_ctx, "main");
+   call_init (ctx2, "ctx2");
+   call_init (ctx2, "ctx2");
+
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE init.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sub.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[main init: 0001
+main sub: 0001
+ctx2 init: 0001
+ctx2 sub: 0001
+main init: 0001
+main sub: 0002
+ctx2 init: 0001
+ctx2 sub: 0002
+ctx2 init: 0001
+ctx2 sub: 0003
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([READY TRACE in one execution context])
+AT_KEYWORDS([runreentrant cob_context_create READY TRACE])
+
+# READY TRACE / RESET TRACE only change the tracing of the context
+
+AT_DATA([trc.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      trc.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+       MAIN-PARA.
+           EVALUATE OP
+           WHEN "R"
+              READY TRACE
+           WHEN "X"
+              RESET TRACE
+           END-EVALUATE
+           DISPLAY TAG " " OP
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+trc (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("trc", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   trc (ctx1, "ctx1", "R");
+   trc (ctx2, "ctx2", "N");
+   trc (ctx1, "ctx1", "N");
+   trc (ctx1, "ctx1", "X");
+   trc (ctx1, "ctx1", "N");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE -ftraceall trc.cob], [0], [], [])
+AT_CHECK([COB_TRACE_FILE=trace.txt $COBCRUN_DIRECT ./host], [0],
+[ctx1 R
+ctx2 N
+ctx1 N
+ctx1 X
+ctx1 N
+], [])
+# traced: the end of the first call in ctx1 (after READY TRACE), the
+# third call in ctx1, the fourth one until RESET TRACE; not the call
+# in ctx2
+AT_CHECK([cat trace.txt], [0],
+[Source: 'trc.cob'
+Program-Id:  trc
+Program-Id:  trc                         DISPLAY                         Line:     16
+Program-Id:  trc                         GOBACK                          Line:     17
+Program-Id:  trc                   Exit: trc                             Line:     17
+Program-Id:  trc                  Entry: trc                             Line:      9
+Program-Id:  trc              Paragraph: MAIN-PARA                       Line:      9
+Program-Id:  trc                         EVALUATE                        Line:     10
+Program-Id:  trc                         WHEN                            Line:     11
+Program-Id:  trc                         WHEN                            Line:     13
+Program-Id:  trc                         DISPLAY                         Line:     16
+Program-Id:  trc                         GOBACK                          Line:     17
+Program-Id:  trc                   Exit: trc                             Line:     17
+Program-Id:  trc                  Entry: trc                             Line:      9
+Program-Id:  trc              Paragraph: MAIN-PARA                       Line:      9
+Program-Id:  trc                         EVALUATE                        Line:     10
+Program-Id:  trc                         WHEN                            Line:     11
+Program-Id:  trc                         WHEN                            Line:     13
+Program-Id:  trc                         RESET TRACE                     Line:     14
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([locale of an execution context])
+AT_KEYWORDS([runreentrant cob_context_create cob_set_locale LOCALE])
+
+# the locale set in a context (cob_set_locale, also used by the
+# CLASSIFICATION clause) is not the one of the process: the other
+# contexts are not affected
+
+AT_SKIP_IF([locale -a 2>/dev/null | grep -q -i '^fr_FR\.utf-*8$'; test $? -ne 0])
+
+AT_DATA([ld.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ld.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           DISPLAY TAG ": " FUNCTION LOCALE-DATE (20261107)
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <string.h>
+#include <libcob.h>
+
+static void
+ld (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("ld", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2, *prev;
+   char name[] = "fr_FR.utf8";
+   cob_field_attr attr = {COB_TYPE_ALPHANUMERIC, 0, 0, 0, NULL};
+   cob_field f = {sizeof (name) - 1, (unsigned char *)name, &attr};
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   ld (ctx1, "ctx1");
+   prev = cob_context_enter (ctx1);
+   cob_set_locale_ctx (ctx1, &f, COB_LC_TIME);
+   cob_context_leave (prev);
+   ld (ctx1, "ctx1");
+   ld (ctx2, "ctx2");
+   ld (ctx1, "ctx1");
+   ld (cob_get_current_context (), "main");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ld.cob], [0], [], [])
+AT_CHECK([LC_ALL=C $COBCRUN_DIRECT ./host], [0],
+[ctx1: 11/07/26
+ctx1: 07/11/2026
+ctx2: 11/07/26
+ctx1: 07/11/2026
+main: 11/07/26
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([environment of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create ENVIRONMENT-VALUE ACCEPT DD_])
+
+# while other contexts exist, a variable set in a context with DISPLAY
+# UPON ENVIRONMENT-VALUE is only seen by this context (ACCEPT FROM
+# ENVIRONMENT, mapping of the file names, child processes); the
+# environment of the process is not changed
+
+AT_DATA([ev.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ev.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO "OUTF"
+                  ORGANIZATION LINE SEQUENTIAL.
+           SELECT PIPE-IN ASSIGN TO PCMD
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       FD PIPE-IN.
+       01 PIPE-REC      PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 V             PIC X(10).
+       01 PCMD          PIC X(30) VALUE "< echo pipe$MYVAR".
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           IF OP = "S"
+              DISPLAY "MYVAR" UPON ENVIRONMENT-NAME
+              DISPLAY TAG UPON ENVIRONMENT-VALUE
+              DISPLAY "DD_OUTF" UPON ENVIRONMENT-NAME
+              DISPLAY TAG UPON ENVIRONMENT-VALUE
+              OPEN OUTPUT OUT-FILE
+              MOVE TAG TO OUT-REC
+              WRITE OUT-REC
+              CLOSE OUT-FILE
+           END-IF
+           IF OP = "X"
+              CALL "SYSTEM" USING "echo $MYVAR >> sys.txt"
+              OPEN INPUT PIPE-IN
+              MOVE SPACES TO PIPE-REC
+              READ PIPE-IN END-READ
+              CLOSE PIPE-IN
+              DISPLAY TAG " <" PIPE-REC ">"
+           END-IF
+           MOVE SPACES TO V
+           ACCEPT V FROM ENVIRONMENT "MYVAR"
+           DISPLAY TAG " MYVAR=<" V ">"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <stdlib.h>
+#include <libcob.h>
+
+static void
+ev (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("ev", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   ev (ctx1, "ctx1", "S");
+   ev (ctx2, "ctx2", " ");
+   ev (ctx2, "ctx2", "S");
+   ev (ctx1, "ctx1", "X");
+   ev (ctx2, "ctx2", "X");
+   ev (main_ctx, "main", "X");
+   printf ("process MYVAR: %s\n", getenv ("MYVAR") ? getenv ("MYVAR") : "(unset)");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ev.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx1 MYVAR=<ctx1      >
+ctx2 MYVAR=<          >
+ctx2 MYVAR=<ctx2      >
+ctx1 <pipectx1  >
+ctx1 MYVAR=<ctx1      >
+ctx2 <pipectx2  >
+ctx2 MYVAR=<ctx2      >
+main <pipe      >
+main MYVAR=<          >
+process MYVAR: (unset)
+], [])
+AT_CHECK([cat ctx1 ctx2], [0],
+[ctx1
+ctx2
+], [])
+AT_CHECK([cat sys.txt], [0],
+[ctx1
+ctx2
+
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([current directory of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create CBL_CHANGE_DIR CBL_CREATE_DIR])
+
+# while other contexts exist, CBL_CHANGE_DIR only changes the current
+# directory of the context: the relative names of its files and
+# directories, and its child processes, use it; the directory of the
+# process is not changed
+
+AT_DATA([cd.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      cd.
+       ENVIRONMENT      DIVISION.
+       CONFIGURATION    SECTION.
+       SPECIAL-NAMES.
+           PRINTER IS PRT.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO "out.txt"
+                  ORGANIZATION LINE SEQUENTIAL.
+           SELECT PIPE-OUT ASSIGN TO PCMD
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       FD PIPE-OUT.
+       01 PIPE-REC      PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 RC            PIC S9(9) BINARY.
+       01 PCMD          PIC X(30) VALUE "> cat > piped.txt".
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 DIR           PIC X(2).
+       PROCEDURE        DIVISION USING TAG DIR.
+           IF DIR NOT = SPACES
+              CALL "CBL_CHANGE_DIR" USING DIR RETURNING RC
+              DISPLAY TAG " CBL_CHANGE_DIR: " RC
+              CALL "CBL_CREATE_DIR" USING "sub" RETURNING RC
+              DISPLAY TAG " CBL_CREATE_DIR: " RC
+           END-IF
+           OPEN OUTPUT OUT-FILE
+           MOVE TAG TO OUT-REC
+           WRITE OUT-REC
+           CLOSE OUT-FILE
+           OPEN OUTPUT PIPE-OUT
+           MOVE TAG TO PIPE-REC
+           WRITE PIPE-REC
+           CLOSE PIPE-OUT
+           CALL "SYSTEM" USING "echo sys > where.txt"
+           DISPLAY TAG UPON PRT
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <libcob.h>
+
+static void
+cd (cob_context *ctx, const char *tag, const char *dir)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)dir;
+   (void)cob_call ("cd", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx1, *ctx2;
+   char before[4096], after[4096];
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   (void)getcwd (before, sizeof (before));
+   cd (ctx1, "ctx1", "d1");
+   cd (ctx2, "ctx2", "d2");
+   cd (ctx1, "ctx1", "  ");
+   cd (main_ctx, "main", "  ");
+   (void)getcwd (after, sizeof (after));
+   printf ("process directory unchanged: %d\n", strcmp (before, after) == 0);
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([mkdir d1 d2], [0], [], [])
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE cd.cob], [0], [], [])
+AT_CHECK([COB_DISPLAY_PRINT_PIPE="cat >> printed.txt" $COBCRUN_DIRECT ./host], [0],
+[ctx1 CBL_CHANGE_DIR: +000000000
+ctx1 CBL_CREATE_DIR: +000000000
+ctx2 CBL_CHANGE_DIR: +000000000
+ctx2 CBL_CREATE_DIR: +000000000
+process directory unchanged: 1
+], [])
+AT_CHECK([cat d1/out.txt d2/out.txt out.txt], [0],
+[ctx1
+ctx2
+main
+], [])
+AT_CHECK([test -d d1/sub && test -d d2/sub && test ! -d sub], [0], [], [])
+AT_CHECK([cat d1/where.txt d2/where.txt where.txt], [0],
+[sys
+sys
+sys
+], [])
+AT_CHECK([cat d1/piped.txt d2/piped.txt piped.txt], [0],
+[ctx1
+ctx2
+main
+], [])
+AT_CHECK([cat d1/printed.txt d2/printed.txt printed.txt], [0],
+[ctx1
+ctx1
+ctx2
+main
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([ODBC connection of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create ODBC COMMIT ROLLBACK])
+
+# each context has its own ODBC connection: it connects to the DSN of
+# its environment, and COMMIT / ROLLBACK only apply to its updates;
+# needs the SQLite ODBC driver (COB_TEST_SQLITE_ODBC: path of the
+# driver, else the usual place)
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+# (each check runs in its own shell: the path is computed where used)
+AT_CHECK([drv="${COB_TEST_SQLITE_ODBC:-/usr/lib/x86_64-linux-gnu/odbc/libsqlite3odbc.so}"
+test -f "$drv" || exit 77
+mkdir schema && cat > odbcinst.ini <<EOF
+@<:@SQLite3@:>@
+Driver=$drv
+EOF
+cat > odbc.ini <<EOF
+@<:@cobtest1@:>@
+Driver=SQLite3
+Database=$PWD/db1.sqlite
+@<:@cobtest2@:>@
+Driver=SQLite3
+Database=$PWD/db2.sqlite
+EOF
+], [0], [], [])
+
+AT_DATA([od.cob], [
+      $SET XFD "ALL"
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      od.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT F ASSIGN TO "tasks" ORGANIZATION INDEXED
+                  ACCESS DYNAMIC RECORD KEY K STATUS FS.
+       I-O-CONTROL.
+           APPLY COMMIT ON F.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD F.
+       01 R.
+          05 K          PIC 9(4).
+          05 V          PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       01 ARG           PIC X(8).
+       PROCEDURE        DIVISION USING TAG OP ARG.
+           EVALUATE OP
+           WHEN "S"
+              DISPLAY "COB_SCHEMA_DSN" UPON ENVIRONMENT-NAME
+              DISPLAY ARG UPON ENVIRONMENT-VALUE
+              OPEN OUTPUT F
+              CLOSE F
+              OPEN I-O F
+              DISPLAY TAG " open: " FS
+           WHEN "W"
+              MOVE ARG (1:4) TO K
+              MOVE TAG TO V
+              WRITE R
+              DISPLAY TAG " write: " FS
+           WHEN "C"
+              COMMIT
+              DISPLAY TAG " commit"
+           WHEN "R"
+              ROLLBACK
+              DISPLAY TAG " rollback"
+           WHEN "X"
+              CLOSE F
+           WHEN "L"
+              DISPLAY "COB_SCHEMA_DSN" UPON ENVIRONMENT-NAME
+              DISPLAY ARG UPON ENVIRONMENT-VALUE
+              OPEN INPUT F
+              MOVE 0 TO K
+              START F KEY >= K
+              PERFORM UNTIL FS NOT = "00"
+                 READ F NEXT
+                 IF FS = "00"
+                    DISPLAY TAG " " ARG ": " K " " V
+                 END-IF
+              END-PERFORM
+              CLOSE F
+              DISPLAY TAG " " ARG ": end"
+           END-EVALUATE
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+od (cob_context *ctx, const char *tag, const char *op, const char *arg)
+{
+   void *argv[3];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   argv[2] = (void *)arg;
+   (void)cob_call ("od", 3, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2, *ctx3;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   od (ctx1, "ctx1", "S", "cobtest1");
+   od (ctx1, "ctx1", "W", "0001    ");
+   od (ctx2, "ctx2", "S", "cobtest2");
+   od (ctx2, "ctx2", "W", "0002    ");
+   od (ctx2, "ctx2", "R", "        ");
+   od (ctx1, "ctx1", "C", "        ");
+   od (ctx1, "ctx1", "X", "        ");
+   od (ctx2, "ctx2", "X", "        ");
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+
+   ctx3 = cob_context_create ();
+   od (ctx3, "ctx3", "L", "cobtest1");
+   cob_context_destroy (ctx3);
+   ctx3 = cob_context_create ();
+   od (ctx3, "ctx3", "L", "cobtest2");
+   cob_context_destroy (ctx3);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([COB_SCHEMA_DIR=$PWD/schema $COMPILE_MODULE -fsql od.cob], [0], [], [])
+AT_CHECK([ODBCSYSINI=$PWD ODBCINI=$PWD/odbc.ini COB_SCHEMA_DIR=$PWD/schema \
+          IX_OPTIONS=format=odbc $COBCRUN_DIRECT ./host], [0],
+[ctx1 open: 00
+ctx1 write: 00
+ctx2 open: 00
+ctx2 write: 00
+ctx2 rollback
+ctx1 commit
+ctx3 cobtest1: 0001 ctx1
+ctx3 cobtest1: end
+ctx3 cobtest2: end
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([ODBC in several threads])
+AT_KEYWORDS([runreentrant cob_context_create ODBC thread])
+
+# 8 threads, each with its own context, connect at the same time to
+# their own data base (DSN of the environment of the context), write
+# and read records; needs the SQLite ODBC driver (see the previous test)
+
+AT_SKIP_IF([test "$COB_HAS_ISAM" = "no"])
+AT_CHECK([drv="${COB_TEST_SQLITE_ODBC:-/usr/lib/x86_64-linux-gnu/odbc/libsqlite3odbc.so}"
+test -f "$drv" || exit 77
+mkdir schema && printf '@<:@SQLite3@:>@\nDriver=%s\n' "$drv" > odbcinst.ini
+for i in 0 1 2 3 4 5 6 7; do
+  printf '@<:@cobmt%d@:>@\nDriver=SQLite3\nDatabase=%s/db%d.sqlite\n' $i "$PWD" $i
+done > odbc.ini
+], [0], [], [])
+
+AT_DATA([ow.cob], [
+      $SET XFD "ALL"
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ow.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT F ASSIGN TO "mtrecs" ORGANIZATION INDEXED
+                  ACCESS DYNAMIC RECORD KEY K STATUS FS.
+       I-O-CONTROL.
+           APPLY COMMIT ON F.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD F.
+       01 R.
+          05 K          PIC 9(6).
+          05 V          PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 FS            PIC XX.
+       01 I             PIC 9(6).
+       01 BAD           PIC 9(6) VALUE 0.
+       LINKAGE          SECTION.
+       01 RES           PIC 9(6).
+       PROCEDURE        DIVISION USING RES.
+           OPEN OUTPUT F
+           CLOSE F
+           OPEN I-O F
+           PERFORM VARYING I FROM 1 BY 1 UNTIL I > 200
+              MOVE I TO K
+              MOVE "val" TO V
+              WRITE R
+              IF FS NOT = "00" ADD 1 TO BAD END-IF
+           END-PERFORM
+           COMMIT
+           PERFORM VARYING I FROM 1 BY 1 UNTIL I > 200
+              MOVE I TO K
+              READ F KEY IS K
+              IF FS NOT = "00" OR K NOT = I ADD 1 TO BAD END-IF
+           END-PERFORM
+           CLOSE F
+           MOVE BAD TO RES
+           GOBACK.
+])
+
+AT_DATA([mt.c], [[
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <libcob.h>
+#define N 8
+static int bads[N];
+static void *task (void *arg)
+{
+   int id = (int)((int *)arg - bads);
+   cob_context *ctx = cob_context_create ();
+   cob_context *prev = cob_context_enter (ctx);
+   char env[40], res[7] = "000000";
+   void *argv[1] = { res };
+   snprintf (env, sizeof env, "COB_SCHEMA_DSN=cobmt%d", id);
+   cob_putenv_ctx (ctx, env);
+   (void)cob_call ("ow", 1, argv);
+   *(int *)arg = (res[0]-'0')*100000 + atoi (res + 1) ;
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return NULL;
+}
+int main (int argc, char **argv)
+{
+   pthread_t th[N]; int i;
+   cob_init (argc, argv);
+   for (i = 0; i < N; i++) pthread_create (&th[i], NULL, task, &bads[i]);
+   for (i = 0; i < N; i++) { pthread_join (th[i], NULL); printf ("thread %d: %d bad\n", i, bads[i]); }
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE mt.c -lpthread || exit 77], [0], [], [])
+AT_CHECK([COB_SCHEMA_DIR=$PWD/schema $COMPILE_MODULE -fsql ow.cob], [0], [], [])
+AT_CHECK([ODBCSYSINI=$PWD ODBCINI=$PWD/odbc.ini COB_SCHEMA_DIR=$PWD/schema \
+          IX_OPTIONS=format=odbc $COBCRUN_DIRECT ./mt], [0],
+[thread 0: 0 bad
+thread 1: 0 bad
+thread 2: 0 bad
+thread 3: 0 bad
+thread 4: 0 bad
+thread 5: 0 bad
+thread 6: 0 bad
+thread 7: 0 bad
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([runtime settings of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create COB_LS_FIXED ENVIRONMENT-VALUE])
+
+# a runtime setting set in the environment of a context (while other
+# contexts exist) only applies to this context: here COB_LS_FIXED keeps
+# the trailing spaces of the LINE SEQUENTIAL records; emptying the
+# variable gives back the setting of the process
+
+AT_DATA([ls.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ls.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO FNAME
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(5).
+       WORKING-STORAGE  SECTION.
+       01 FNAME         PIC X(12).
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING TAG OP.
+           IF OP = "S"
+              DISPLAY "COB_LS_FIXED" UPON ENVIRONMENT-NAME
+              DISPLAY "TRUE" UPON ENVIRONMENT-VALUE
+           END-IF
+           IF OP = "U"
+              DISPLAY "COB_LS_FIXED" UPON ENVIRONMENT-NAME
+              DISPLAY " " UPON ENVIRONMENT-VALUE
+           END-IF
+           STRING TAG OP ".txt" DELIMITED SIZE INTO FNAME
+           OPEN OUTPUT OUT-FILE
+           MOVE "ab" TO OUT-REC
+           WRITE OUT-REC
+           CLOSE OUT-FILE
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+static void
+ls (cob_context *ctx, const char *tag, const char *op)
+{
+   void *argv[2];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   argv[1] = (void *)op;
+   (void)cob_call ("ls", 2, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   ls (ctx1, "ctx1", "S");
+   ls (ctx2, "ctx2", "N");
+   ls (main_ctx, "main", "N");
+   ls (ctx1, "ctx1", "U");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ls.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0], [], [])
+AT_CHECK([cat ctx1S.txt ctx2N.txt mainN.txt ctx1U.txt | tr ' ' '_'], [0],
+[ab___
+ab
+ab
+ab
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([runtime warnings of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create COB_DISABLE_WARNINGS])
+
+# COB_DISABLE_WARNINGS set in the environment of a context only disables the
+# runtime warnings of this context
+
+AT_DATA([wn.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      wn.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 PNAME         PIC X(10) VALUE " sub".
+       LINKAGE          SECTION.
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING OP.
+           IF OP = "S"
+              DISPLAY "COB_DISABLE_WARNINGS" UPON ENVIRONMENT-NAME
+              DISPLAY "TRUE" UPON ENVIRONMENT-VALUE
+           END-IF
+           CALL PNAME
+           GOBACK.
+])
+
+AT_DATA([sub.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub.
+       PROCEDURE        DIVISION.
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static void
+wn (cob_context *ctx, const char *op)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)op;
+   fprintf (stderr, "%s\n", op);
+   (void)cob_call ("wn", 1, argv);
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+
+   wn (ctx1, "S");
+   wn (ctx2, "N");
+   wn (ctx1, "N");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE wn.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sub.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0], [],
+[S
+N
+libcob: wn.cob:14: warning: ' sub' literal includes leading spaces which are omitted
+N
+])
+
+AT_CLEANUP
+
+
+AT_SETUP([STOP RUN and fatal errors in an execution context])
+AT_KEYWORDS([runreentrant cob_context_create cob_call_with_exception_check STOP])
+
+# called with cob_call_with_exception_check_ctx in a context other than
+# the main one, STOP RUN and fatal errors end the run unit of the context
+# (files closed), call the end handler of the host and return to the
+# host; the process and the other contexts go on
+
+AT_DATA([sr.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sr.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OUT-FILE ASSIGN TO "sr.txt"
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 MISSING       PIC X(10) VALUE "nosuchprog".
+       LINKAGE          SECTION.
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING OP.
+           EVALUATE OP
+           WHEN "S"
+              OPEN OUTPUT OUT-FILE
+              MOVE "stop" TO OUT-REC
+              WRITE OUT-REC
+              MOVE 7 TO RETURN-CODE
+              STOP RUN
+           WHEN "E"
+              CALL MISSING
+           END-EVALUATE
+           DISPLAY "sr " OP ": back"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static void
+end_handler (cob_context *ctx, int ret, int exit_code, const char *msg,
+             void *data)
+{
+   printf ("end handler %s: %d, exit code %d, \"%s\"\n",
+           (const char *)data, ret, exit_code, msg);
+   fflush (stdout);
+}
+
+static void
+sr (cob_context *ctx, const char *op)
+{
+   void *argv[1];
+   int ret;
+   cob_context *prev = cob_context_enter (ctx);
+   cob_context_set_end_handler (ctx, end_handler, (void *)op);
+   argv[0] = (void *)op;
+   ret = cob_call_with_exception_check_ctx (ctx, "sr", 1, argv);
+   cob_context_leave (prev);
+   printf ("%s: return %d, exit code %d\n", op, ret,
+           cob_last_exit_code_ctx (ctx));
+   fflush (stdout);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+
+   cob_init (argc, argv);
+
+   ctx = cob_context_create ();
+   sr (ctx, "S");
+   cob_context_destroy (ctx);
+
+   ctx = cob_context_create ();
+   sr (ctx, "E");
+   cob_context_destroy (ctx);
+
+   ctx = cob_context_create ();
+   sr (ctx, "N");
+   cob_context_destroy (ctx);
+
+   printf ("host goes on\n");
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sr.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[end handler S: 1, exit code 7, ""
+S: return 1, exit code 7
+end handler E: -1, exit code -1, "sr.cob:26: module 'nosuchprog' not found"
+E: return -1, exit code -1
+sr N: back
+N: return 0, exit code 0
+host goes on
+], [libcob: sr.cob:26: error: module 'nosuchprog' not found
+])
+AT_CHECK([cat sr.txt], [0],
+[stop
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([exit and error procedures of the execution contexts])
+AT_KEYWORDS([runreentrant cob_context_create CBL_EXIT_PROC CBL_ERROR_PROC])
+
+# the procedures installed with CBL_EXIT_PROC and CBL_ERROR_PROC belong
+# to the run unit of the context: the exit procedures run at the end of
+# the run unit of their context (STOP RUN, destruction), the error
+# procedures for the errors of their context
+
+AT_DATA([ep.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ep.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 EXIT-ADDR     USAGE PROCEDURE-POINTER.
+       01 ERR-ADDR      USAGE PROGRAM-POINTER.
+       01 MISSING       PIC X(10) VALUE "nosuchprog".
+       LINKAGE          SECTION.
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING OP.
+           EVALUATE OP
+           WHEN "I"
+              SET EXIT-ADDR TO ENTRY "bye"
+              CALL "CBL_EXIT_PROC" USING 0, EXIT-ADDR
+              SET ERR-ADDR TO ENTRY "errp"
+              CALL "CBL_ERROR_PROC" USING 0, ERR-ADDR
+           WHEN "S"
+              STOP RUN
+           WHEN "E"
+              CALL MISSING
+           END-EVALUATE
+           GOBACK.
+       END PROGRAM ep.
+
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      bye.
+       PROCEDURE        DIVISION.
+           DISPLAY "exit procedure"
+           GOBACK.
+       END PROGRAM bye.
+
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      errp.
+       PROCEDURE        DIVISION.
+           DISPLAY "error procedure"
+           MOVE 1 TO RETURN-CODE
+           GOBACK.
+       END PROGRAM errp.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static int
+ep (cob_context *ctx, const char *op)
+{
+   void *argv[1];
+   int ret;
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)op;
+   ret = cob_call_with_exception_check_ctx (ctx, "ep", 1, argv);
+   cob_context_leave (prev);
+   return ret;
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+
+   /* STOP RUN */
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+   ep (ctx1, "I");
+   printf ("ctx2 stop: %d\n", ep (ctx2, "S"));
+   fflush (stdout);
+   printf ("ctx1 stop: %d\n", ep (ctx1, "S"));
+   fflush (stdout);
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+
+   /* errors, end by destruction */
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+   ep (ctx1, "I");
+   printf ("ctx2 error: %d\n", ep (ctx2, "E"));
+   fflush (stdout);
+   printf ("ctx1 error: %d\n", ep (ctx1, "E"));
+   fflush (stdout);
+   cob_context_destroy (ctx2);
+   ctx2 = cob_context_create ();
+   ep (ctx2, "I");
+   printf ("destroy ctx2\n");
+   fflush (stdout);
+   cob_context_destroy (ctx2);
+   cob_context_destroy (ctx1);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ep.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[ctx2 stop: 1
+exit procedure
+ctx1 stop: 1
+ctx2 error: -1
+error procedure
+exit procedure
+ctx1 error: -1
+destroy ctx2
+exit procedure
+], [libcob: ep.cob:21: error: module 'nosuchprog' not found
+libcob: ep.cob:21: error: module 'nosuchprog' not found
+])
+
+AT_CLEANUP
+
+
+AT_SETUP([hosted runtime: no signal handlers])
+AT_KEYWORDS([runreentrant cob_set_hosted signal])
+
+# a hosted runtime (cob_set_hosted before cob_init) installs no signal
+# handler, the host keeps its own
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   struct sigaction sa;
+   const int hosted = argc > 1 && strcmp (argv[1], "hosted") == 0;
+
+   cob_set_hosted (hosted);
+   cob_init (0, NULL);
+   sigaction (SIGSEGV, NULL, &sa);
+   printf ("hosted %d, SIGSEGV handler: %s\n", cob_is_hosted (),
+           sa.sa_handler == SIG_DFL ? "default" : "libcob");
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host hosted], [0],
+[hosted 1, SIGSEGV handler: default
+], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[hosted 0, SIGSEGV handler: libcob
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([hosted runtime: STOP RUN in the main context])
+AT_KEYWORDS([runreentrant cob_set_hosted cob_call_with_exception_check STOP])
+
+# in a hosted runtime, the main context is a task as the others: its
+# STOP RUN ends its run unit and returns to the host, the runtime goes on;
+# the next run unit starts with the programs in their initial state and
+# new EXTERNAL items
+
+AT_DATA([st.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      st.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT OPTIONAL OUT-FILE ASSIGN TO "st.txt"
+                  ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD OUT-FILE.
+       01 OUT-REC       PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9 VALUE 0.
+       01 EXT-CNT       PIC 9 EXTERNAL.
+       PROCEDURE        DIVISION.
+           IF EXT-CNT NOT NUMERIC
+              MOVE 0 TO EXT-CNT
+           END-IF
+           ADD 1 TO CNT EXT-CNT
+           OPEN EXTEND OUT-FILE
+           MOVE "run" TO OUT-REC
+           WRITE OUT-REC
+           COMPUTE RETURN-CODE = EXT-CNT * 10 + CNT
+           STOP RUN.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+   int i, ret;
+
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   ctx = cob_get_current_context ();
+   for (i = 0; i < 2; i++) {
+      ret = cob_call_with_exception_check_ctx (ctx, "st", 0, NULL);
+      printf ("return %d, exit code %d\n", ret, cob_last_exit_code_ctx (ctx));
+   }
+   printf ("host goes on\n");
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE st.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[return 1, exit code 11
+return 1, exit code 11
+host goes on
+], [])
+AT_CHECK([cat st.txt], [0],
+[run
+run
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([hosted runtime: console input and screen I/O])
+AT_KEYWORDS([runreentrant cob_set_hosted ACCEPT screen])
+
+# a hosted runtime (server) does not read its standard input: ACCEPT
+# gives spaces and EC-IMP-ACCEPT; screen I/O is a runtime error, which
+# returns to the host
+
+AT_CHECK([test "$COB_HAS_CURSES" = "yes" || exit 77])
+
+AT_DATA([ac.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      ac.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 X             PIC X(4) VALUE "init".
+       LINKAGE          SECTION.
+       01 OP            PIC X.
+       PROCEDURE        DIVISION USING OP.
+           IF OP = "A"
+              ACCEPT X
+              DISPLAY "accept: <" X "> "
+                      FUNCTION TRIM (FUNCTION EXCEPTION-STATUS)
+           ELSE
+              DISPLAY "screen" AT 0101
+           END-IF
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+   void *a[1];
+   int ret;
+
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   ctx = cob_context_create ();
+   (void)cob_context_enter (ctx);
+   a[0] = "A";
+   ret = cob_call_with_exception_check_ctx (ctx, "ac", 1, a);
+   printf ("accept: return %d\n", ret);
+   a[0] = "S";
+   ret = cob_call_with_exception_check_ctx (ctx, "ac", 1, a);
+   printf ("screen: return %d\n", ret);
+   cob_context_destroy (ctx);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE ac.cob], [0], [], [])
+AT_CHECK([echo data | $COBCRUN_DIRECT ./host], [0],
+[accept: <    > EC-IMP-ACCEPT
+accept: return 0
+screen: return -1
+], [libcob: ac.cob:15: error: screen I/O is not available in a hosted runtime
+])
+
+AT_CLEANUP
+
+
+AT_SETUP([hosted runtime: CBL_GC_FORK])
+AT_KEYWORDS([runreentrant cob_set_hosted CBL_GC_FORK])
+
+# a hosted runtime (server with other threads) is not duplicated
+
+AT_DATA([fk.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      fk.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 R             PIC S9(9) BINARY.
+       PROCEDURE        DIVISION.
+           CALL "CBL_GC_FORK" RETURNING R
+           DISPLAY "fork: " R
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   ctx = cob_context_create ();
+   (void)cob_context_enter (ctx);
+   (void)cob_call_with_exception_check_ctx (ctx, "fk", 0, NULL);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE fk.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[fork: -000000001
+], [libcob: fk.cob:8: warning: 'CBL_GC_FORK' is not supported in a hosted runtime
+])
+
+AT_CLEANUP
+
+
+AT_SETUP([DISPLAY handler of the host])
+AT_KEYWORDS([runreentrant cob_context_set_display_handler DISPLAY])
+
+# a host can receive the DISPLAY upon SYSOUT / SYSERR of a context
+# (for example to send them to its log) instead of the standard output
+
+AT_DATA([dp.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      dp.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 TAG           PIC X(4).
+       PROCEDURE        DIVISION USING TAG.
+           DISPLAY TAG ": to sysout"
+           DISPLAY TAG ": to syserr" UPON SYSERR
+           DISPLAY TAG ": no advancing" WITH NO ADVANCING
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static void
+log_display (cob_context *ctx, int device, const char *text, size_t len,
+             void *data)
+{
+   printf ("[%s, device %d, %d chars] %.*s", (const char *)data, device,
+           (int)len, (int)len, text);
+   if (len == 0 || text[len - 1] != '\n') {
+      printf ("\n");
+   }
+}
+
+static void
+dp (cob_context *ctx, const char *tag)
+{
+   void *argv[1];
+   cob_context *prev = cob_context_enter (ctx);
+   argv[0] = (void *)tag;
+   (void)cob_call ("dp", 1, argv);
+   cob_context_leave (prev);
+   fflush (stdout);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx1, *ctx2;
+
+   cob_init (argc, argv);
+   ctx1 = cob_context_create ();
+   ctx2 = cob_context_create ();
+   cob_context_set_display_handler (ctx1, log_display, "log");
+
+   dp (ctx1, "ctx1");
+   dp (ctx2, "ctx2");
+   printf ("\n");
+
+   cob_context_destroy (ctx1);
+   cob_context_destroy (ctx2);
+   cob_stop_run (0);
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE dp.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[[[log, device 0, 16 chars] ctx1: to sysout
+[log, device 1, 16 chars] ctx1: to syserr
+[log, device 0, 18 chars] ctx1: no advancing
+ctx2: to sysout
+ctx2: no advancing
+]], [ctx2: to syserr
+])
+
+AT_CLEANUP
+
+
+AT_SETUP([no mutable static data in the generated code])
+AT_KEYWORDS([runreentrant static])
+
+# all the mutable data of the programs lives in the instance of the
+# compilation unit, allocated in each context; the only static data
+# left are shared by the contexts:
+# - cob_unit_slot: slot of the compilation unit, set once
+# - cob_module_path: path of the module, set once
+
+AT_CHECK([objdump --version >/dev/null 2>&1 || exit 77])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       ENVIRONMENT      DIVISION.
+       CONFIGURATION    SECTION.
+       SPECIAL-NAMES.
+           ALPHABET ALPHA-CUSTOM IS "A" THRU "Z", "0" THRU "9".
+           ALPHABET ALPHA-NATIVE IS NATIVE.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT F ASSIGN TO "f.txt" ORGANIZATION LINE SEQUENTIAL.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD F.
+       01 FR            PIC X(10).
+       WORKING-STORAGE  SECTION.
+       01 X             PIC 9(4) VALUE 0.
+       01 Y             PIC S9(20)V9(5) VALUE 1.
+       01 S             PIC X(10).
+       01 P             USAGE POINTER.
+       01 E             PIC X(4) EXTERNAL.
+       01 B             PIC X(10) BASED.
+       LINKAGE          SECTION.
+       01 L             PIC X(10).
+       PROCEDURE        DIVISION USING L.
+           ADD 1 TO X
+           COMPUTE Y = Y * 3 / 7 + FUNCTION PI
+           MOVE "abc" TO S
+           INSPECT S CONVERTING "abc" TO "ABC"
+           INSPECT S CONVERTING ALPHA-CUSTOM TO ALPHA-NATIVE
+           CALL "sub" USING S
+           CALL "nested" USING S
+           OPEN OUTPUT F
+           CLOSE F
+           GOBACK.
+
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      nested.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 Z             PIC 9(4) VALUE 0.
+       LINKAGE          SECTION.
+       01 L             PIC X(10).
+       PROCEDURE        DIVISION USING L.
+           ADD 1 TO Z
+           GOBACK.
+       END PROGRAM nested.
+       END PROGRAM prog.
+
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      other.
+       PROCEDURE        DIVISION.
+           CALL "sub2"
+           GOBACK.
+       END PROGRAM other.
+])
+
+AT_CHECK([$COBC -c ${FLAGS} prog.cob], [0], [], [])
+AT_CHECK([$SHELL "$abs_top_srcdir/build_aux/list-mutable-globals.sh" prog.o \
+          | cut -f5 | sed -e 's/\.[[0-9]]*$//' \
+          | $GREP -v -E '^(cob_unit_slot|cob_module_path)$'],
+         [1], [], [])
+
+# also with profiling
+AT_CHECK([$COBC -c ${FLAGS} -fprof -o progp.o prog.cob], [0], [], [])
+AT_CHECK([$SHELL "$abs_top_srcdir/build_aux/list-mutable-globals.sh" progp.o \
+          | cut -f5 | sed -e 's/\.[[0-9]]*$//' \
+          | $GREP -v -E '^(cob_unit_slot|cob_module_path)$'],
+         [1], [], [])
+
+AT_CLEANUP
+

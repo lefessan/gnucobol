@@ -76,3 +76,29 @@ prog.cob:13: error: invalid SET statement
 ])
 
 AT_CLEANUP
+
+
+AT_SETUP([ADDRESS OF an undefined item])
+AT_KEYWORDS([set address])
+
+# cobc crashed after the error (cast of the error node in
+# check_not_88_level), for example in a source translated by the CICS
+# translator of TXSeries (SET CICS-DATA-AREA(n) TO ADDRESS OF <map>)
+# when the BMS copybook is missing
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 P             USAGE POINTER OCCURS 4.
+       PROCEDURE        DIVISION.
+           SET P(2) TO ADDRESS OF UNDEF
+           GOBACK.
+])
+
+AT_CHECK([$COMPILE_ONLY prog.cob], [1], [],
+[prog.cob:8: error: 'UNDEF' is not defined
+])
+
+AT_CLEANUP

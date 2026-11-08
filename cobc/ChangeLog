@@ -1,4 +1,88 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* codegen.c (output_internal_function): LOCAL-STORAGE in the
+	  allocations of the context
+	* codegen.c (output_cob_prof_data): profiling data per context or const
+	* codegen.c (output_call_cache, output_module_init_function,
+	  output_module_init_non_static, codegen_finalize): resolved CALL
+	  entries and reference count in the instance
+	* codegen.c (output_local_fields, output_source_cache, output_param,
+	  output_alphabet_name_definition): constant data of the generated code
+	  are const
+	* codegen.c (unit_text_prepend, output_entry_function,
+	  output_function_prototypes): sticky linkage parameters in the
+	  instance
+	* codegen.c (output_low_value, output_high_value, output_quote,
+	  output_space, output_zero, output_colseq_table_field, ...), tree.c
+	  (cb_init_parse_constants): figurative constants and collating table
+	  fields are const
+	* codegen.c (output_internal_function, codegen_internal): initialized
+	  and module of the programs in the instance
+	* codegen.c (output_unit_instance, output_call_cache,
+	  compute_align_size, output_local_ws_group, output_local_base_cache,
+	  output_nonlocal_base_cache): data areas of the programs in the
+	  instance
+	* codegen.c (output_prog_struct_init, output_prog_struct,
+	  output_field_sub, output_emit_one_field, output_local_field_cache,
+	  output_local_fields, ...): fields of the programs in the instance
+	* codegen.c (output_unit_prog_end, output_report_control,
+	  output_report_one_field, output_report_define_lines,
+	  output_report_sum_counters, output_report_definition): report
+	  structures in the instance
+	* codegen.c (output_globext_cache, output_internal_function,
+	  output_function_prototypes): EXTERNAL, BASED and LINKAGE pointers in
+	  the instance
+	* codegen.c (add_field_cache, output_local_storage_pointer,
+	  output_ml_attrs_definitions, output_ml_trees_definitions,
+	  output_alter_check, output_screen_definition, ...): screens, XML
+	  trees, decimals, labels, saved pointers in the instance
+	* codegen.c (unit_text_add, output_unit_member, unit_text_add_str,
+	  output_prog_member, output_unit_prog_end, output_unit_instance, ...):
+	  files and symbol table of the programs in the instance
+	* codegen.c (output_unit_init, output_unit_instance,
+	  output_internal_function, codegen_internal): data of each program in
+	  the instance, first family last_b_*
+	* codegen.c (output_local, output_internal_function, codegen_finalize):
+	  instance of the compilation unit in the generated code
+	* codegen.c (output_integer, output_long_integer, output_param,
+	  output_funcall_typed_report, output_funcall_typed,
+	  output_funcall_item, ...), codeoptim.c (cob_gen_optim): suffix _ctx
+	  for functions taking the context, old names kept
+	* codegen.c (output_funcall, output_goto, output_internal_function):
+	  profiling functions take the context
+	* codegen.c (output_xml_parse): XML / JSON functions take the context
+	* codegen.c (output_funcall_typed_report, output_funcall_typed): REPORT
+	  WRITER functions take the context
+	* codegen.c: screen ACCEPT / DISPLAY functions take the context
+	* codegen.c: ACCEPT / DISPLAY / DUMP functions take the context
+	* codegen.c (output_stmt, output_file_initialization,
+	  output_internal_function): file I/O functions take the context
+	* codegen.c (output_integer, output_long_integer, output_param,
+	  output_initialize_chaining, output_init_comment_and_source_ref,
+	  output_memory_check_call, ...), codeoptim.c (cob_gen_optim): runtime
+	  support functions take the context
+	* codegen.c (output_integer, output_long_integer, output_call,
+	  output_cancel, output_assign, output_internal_function): CALL /
+	  CANCEL / resolve functions take the context
+	* codegen.c (output_param): intrinsic functions take the context
+	* codegen.c (output_integer, output_long_integer, propagate_table,
+	  output_call_by_value_args, output_call, output_xml_parse, ...),
+	  codeoptim.c (cob_gen_optim): MOVE, arithmetic and C-API data
+	  functions take the context
+	* codegen.c: INSPECT / STRING / UNSTRING functions take the context
+	* codegen.c (output_param, output_funcall_item, output_funcall,
+	  output_func_1): pass the context to libcob functions that take it
+	* codegen.c (output_internal_function): runtime / execution context and
+	  current context of the thread
+	* parser.y (check_not_88_level): no cast of the reference to an
+	  undefined item (the error node) into a field: internal error after
+	  the error 'not defined', for example on ADDRESS OF
+	* cobc.c (process_command_line): fix leak of the name of the dialect
+	  (option -std and WITH_STD), now in a static buffer
+	* codegen.c (get_field_name): fix read beyond the name of the field,
+	  compared with "FILLER " by memcmp even when shorter (strncmp)
+
 2025-10-17  Simon Sobisch <simonsobisch@gnu.org>
 
 	* parser.y (file_description_entry): create an unnamed file in case
