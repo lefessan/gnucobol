@@ -487,3 +487,93 @@ back to TXSeries with 1
 ], [ignore])
 
 AT_CLEANUP
+
+
+AT_SETUP([unload of a module file])
+AT_KEYWORDS([runtxseries txseries cob_unload_module NEWCOPY])
+
+# a host (TXSeries for NEWCOPY) unloads a module file to load a new
+# version of it; refused while other contexts exist
+
+AT_DATA([v1.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      vers.
+       PROCEDURE        DIVISION.
+           DISPLAY "version 1"
+           GOBACK.
+])
+
+AT_DATA([v2.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      vers.
+       PROCEDURE        DIVISION.
+           DISPLAY "version 2"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+static void
+call_vers (cob_context *ctx)
+{
+   int (*entry) (void);
+   cob_context *prev = cob_context_enter (ctx);
+   printf ("preload: %d\n", cob_preload_module_ctx (ctx, "./vers.cld"));
+   entry = (int (*) (void))cob_resolve_ctx (ctx, "vers");
+   fflush (stdout);
+   (void)entry ();
+   cob_context_leave (prev);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *main_ctx, *ctx;
+
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   main_ctx = cob_get_current_context ();
+
+   ctx = cob_context_create ();
+   call_vers (ctx);
+   printf ("unload with a context: %d\n",
+           cob_unload_module_ctx (main_ctx, "./vers.cld"));
+   cob_context_destroy (ctx);
+
+   /* new version of the file */
+   if (rename ("vers2.cld", "vers.cld") != 0) {
+      perror ("rename");
+   }
+   ctx = cob_context_create ();
+   call_vers (ctx);
+   cob_context_destroy (ctx);
+
+   printf ("unload: %d\n", cob_unload_module_ctx (main_ctx, "./vers.cld"));
+   printf ("unload again: %d\n",
+           cob_unload_module_ctx (main_ctx, "./vers.cld"));
+   ctx = cob_context_create ();
+   call_vers (ctx);
+   cob_context_destroy (ctx);
+   return 0;
+}
+]])
+
+AT_CHECK([$COMPILE_MODULE -o vers.cld v1.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE -o vers2.cld v2.cob], [0], [], [])
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[preload: 1
+version 1
+unload with a context: 0
+preload: 1
+version 1
+unload: 1
+unload again: 0
+preload: 1
+version 2
+], [])
+
+AT_CLEANUP
+

@@ -1210,6 +1210,118 @@ cob_preload_module (const char *path)
 	return cob_preload_module_ctx (COB_CTX_COMPAT, path);
 }
 
+/* remove 'path' from the list of preloaded modules of the settings */
+static void
+remove_from_preload_str (cob_context *ctx, const char *path)
+{
+	char	*str = ctx->settings->cob_preload_str;
+	size_t	len = strlen (path);
+	char	*p;
+
+	if (str == NULL) {
+		return;
+	}
+	for (p = str; (p = strstr (p, path)) != NULL; p++) {
+		if ((p == str || p[-1] == PATHSEP_CHAR)
+		 && (p[len] == 0 || p[len] == PATHSEP_CHAR)) {
+			if (p[len] == PATHSEP_CHAR) {
+				memmove (p, p + len + 1, strlen (p + len + 1) + 1);
+			} else if (p > str) {
+				p[-1] = 0;
+			} else {
+				*p = 0;
+			}
+			return;
+		}
+	}
+}
+
+/* unload the module file 'path' loaded by cob_preload_module_ctx (the
+   same name): its programs are removed from the table of programs and
+   the file is closed, the next preload or CALL loads it again (for
+   example a new version of the file, as NEWCOPY of a transaction
+   monitor); refused (0) while other contexts than the main one exist,
+   which may have instances of its programs, as a physical CANCEL; the
+   programs of the module must not be active or have instances in 'ctx';
+   returns 1 when unloaded, 0 otherwise */
+int
+cob_unload_module_ctx (cob_context *ctx, const char *path)
+{
+	struct struct_handle	*preptr;
+	struct struct_handle	*prev = NULL;
+	struct struct_handle	*dynptr;
+	lt_dlhandle		handle;
+	size_t			i;
+
+	/* LCOV_EXCL_START */
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
+	}
+	/* LCOV_EXCL_STOP */
+
+	if (cob_atomic_load_uint (&ctx->rt->other_contexts) != 0) {
+		return 0;
+	}
+	call_lock_acquire ();
+	for (preptr = base_preload_ptr; preptr; preptr = preptr->next) {
+		if (strcmp (path, preptr->path) == 0) {
+			break;
+		}
+		prev = preptr;
+	}
+	if (preptr == NULL || preptr->handle == NULL) {
+		call_lock_release ();
+		return 0;
+	}
+	handle = preptr->handle;
+
+	/* its programs */
+	if (call_table) {
+		for (i = 0; i < HASH_SIZE; ++i) {
+			struct call_hash	**pp = &call_table[i];
+			while (*pp) {
+				struct call_hash	*p = *pp;
+				if (p->handle != handle) {
+					pp = &p->next;
+					continue;
+				}
+				*pp = p->next;
+				if (p->name) {
+					cob_free ((void *)p->name);
+				}
+				if (p->path) {
+					cob_free ((void *)p->path);
+				}
+				cob_free (p);
+			}
+		}
+	}
+	/* the lists of loaded modules */
+	if (prev) {
+		prev->next = preptr->next;
+	} else {
+		base_preload_ptr = preptr->next;
+	}
+	cob_free ((void *)preptr->path);
+	cob_free (preptr);
+	remove_from_preload_str (ctx, path);
+	for (dynptr = base_dynload_ptr; dynptr; dynptr = dynptr->next) {
+		if (dynptr->handle == handle) {
+			dynptr->handle = NULL;
+		}
+	}
+	lt_dlclose (handle);
+	call_lock_release ();
+	return 1;
+}
+
+/* compatibility: cob_unload_module without context */
+int
+cob_unload_module (const char *path)
+{
+	return cob_unload_module_ctx (COB_CTX_COMPAT, path);
+}
+
 void *
 cob_resolve_cobol_ctx (cob_context *ctx, const char *name, const int fold_case, const int errind)
 {

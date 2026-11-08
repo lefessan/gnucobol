@@ -2613,6 +2613,8 @@ COB_EXPIMP void		*cob_resolve		(const char *);
 COB_EXPIMP void		*cob_resolve_ctx		(cob_context *, const char *);
 COB_EXPIMP int		cob_preload_module	(const char *);
 COB_EXPIMP int		cob_preload_module_ctx	(cob_context *, const char *);
+COB_EXPIMP int		cob_unload_module	(const char *);
+COB_EXPIMP int		cob_unload_module_ctx	(cob_context *, const char *);
 COB_EXPIMP void		*cob_resolve_cobol	(const char *, const int,
 						 const int);
 COB_EXPIMP void		*cob_resolve_cobol_ctx	(cob_context *, const char *, const int,

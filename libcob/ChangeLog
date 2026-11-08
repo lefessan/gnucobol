@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* call.c (cob_preload_module), common.h (cob_preload_module_ctx):
+	  unload of a module file
 	* common.h: txseries.conf, dialect of the programs translated by
 	  TXSeries
 	* call.c (cob_resolve), common.c (run_context_exit_procedures,

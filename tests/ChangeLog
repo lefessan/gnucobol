@@ -1,6 +1,7 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_txseries.at: unload of a module file
 	* testsuite.src/run_txseries.at: runtime errors call the error
 	  procedure of TXSeries
 	* testsuite.src/run_txseries.at: make the language method global for
