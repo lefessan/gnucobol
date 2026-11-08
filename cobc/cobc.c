@@ -136,6 +136,8 @@ enum compile_level {
 
 const char		*cb_source_file = NULL;
 const char		*cb_dialect = NULL;
+/* name of the dialect given by -std or WITH_STD, in upper case */
+static char		dialect_name[COB_MINI_BUFF];
 const char		*cb_cobc_build_stamp = NULL;
 const char		*demangle_name = NULL;
 const char		*cb_storage_file_name = NULL;
@@ -3348,7 +3350,8 @@ process_command_line (const int argc, char **argv)
 			for (n=0; cob_optarg[n] != 0 && cob_optarg[n] != '-'; n++)
 				ext[n] = toupper(cob_optarg[n]);
 			ext[n] = 0;
-			cb_dialect = cobc_strdup (ext);
+			strcpy (dialect_name, ext);
+			cb_dialect = dialect_name;
 			snprintf (cob_std_conf, sizeof(cob_std_conf), "%s.conf", cob_optarg);
 			num_std++;
 			break;
@@ -3504,7 +3507,8 @@ process_command_line (const int argc, char **argv)
 		for (n=0; ext[n] != 0; n++)
 			ext[n] = toupper(ext[n]);
 		ext[n] = 0;
-		cb_dialect = cobc_strdup (ext);
+		strcpy (dialect_name, ext);
+		cb_dialect = dialect_name;
 		if (verbose_output) {
 			fprintf(stderr, _("loading default configuration file '%s.conf'\n"),WITH_STD);
 		}

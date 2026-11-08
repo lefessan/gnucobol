@@ -1,4 +1,23 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* flmdb.c (local_file): close /proc/partitions, opened at each OPEN of
+	  an LMDB file and never closed (one file descriptor lost per OPEN)
+	* fileio.c (cob_file_open): the child process of a bidirectional
+	  pipe only writes its message and calls _exit when dup2 or execv
+	  fail, instead of cob_runtime_error, cob_stop_run and exit, which
+	  flushed in the child the stdio buffers of the parent (records
+	  written twice) and ran the end of its run unit
+	* cobcapi.c (cob_get_s64_param, cob_get_u64_param, cob_put_s64_param,
+	  cob_put_u64_param): do not write the scale into the shared static
+	  attributes const_binll_attr / const_binull_attr (data race between
+	  threads, wrong scale seen by a concurrent call), use a local copy
+	* cobcapi.c: const_float_attr, const_binll_attr and const_binull_attr
+	  are constant
+	* flmdb.c (get_dupno): fix memory leak, the transaction and the
+	  cursor were allocated, then replaced by mdb_txn_begin and
+	  mdb_cursor_open
+
 2026-09-04  David Declerck <david.declerck@ocamlpro.com>
 
 	* fileio.c (cob_file_open, cob_file_close) [_WIN32]:

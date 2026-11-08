@@ -1,4 +1,14 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* atlocal.in: portable test of COB_ENABLE_DEBUG ('=' instead of the
+	  bashism '==', an error in each test under dash)
+	* testsuite.src/syn_set.at: new test for ADDRESS OF an undefined item
+	* testsuite.src/run_file.at: new test for the file descriptors of
+	  the OPEN of LMDB files
+	* testsuite.src/run_file.at: new test for a bidirectional pipe to a
+	  missing command
+
 2025-11-17  Simon Sobisch <simonsobisch@gnu.org>
 
 	* atlocal.in, atlocal_win: adjusted return_path function and its use

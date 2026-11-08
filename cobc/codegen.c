@@ -343,7 +343,7 @@ static const char *
 get_field_name (const struct cb_field *f)
 {
 	static char wrk[64];
-	if (memcmp (f->name, "FILLER ",7) == 0
+	if (strncmp (f->name, "FILLER ", 7) == 0
 	 || f->flag_filler) {
 		sprintf (wrk,"Line %d",f->common.source_line);
 		return wrk;

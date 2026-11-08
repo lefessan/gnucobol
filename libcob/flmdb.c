@@ -392,11 +392,13 @@ local_file( dev_t device, char **pname /*output*/ )
 		if( n == 4 ) {
 			if( maj == major(device) && min == minor(device) ) {
 				*pname = devname;
+				fclose (file);
 				return 1;
 			}
 		}
 	}
 
+	fclose (file);
 	return 0;
 }
 
@@ -414,8 +416,6 @@ get_dupno (cob_file *f, const cob_u32_t i)
 	/* Using a nested transaction so we don't mess up the write transacion in lmdb_write */
 	MDB_txn    *txn;
 	MDB_cursor *cursor;
-	txn    = cob_malloc(sizeof(MDB_txn *));
-	cursor = cob_malloc(sizeof(MDB_cursor *));
 
 	db_setkey(f, i);
 	memcpy (p->temp_key, p->key.mv_data, (size_t)p->maxkeylen);
