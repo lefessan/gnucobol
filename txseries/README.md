@@ -15,34 +15,55 @@ of TXSeries 11.1 (s111-L241206) has expired.
 
 ## Build and install
 
-GnuCOBOL must be built for the system of TXSeries (UBI 8 / RHEL 8 for the
-container image, glibc 2.28). In the container (as root):
-`microdnf install gcc make gmp-devel libtool-ltdl diffutils findutils`
+### Container image
+
+`Dockerfile` builds an image of TXSeries with GnuCOBOL from the image of
+TXSeries loaded from IBM and a distribution of GnuCOBOL (`make dist`,
+which contains the generated parsers and the documentation):
+
+```sh
+make dist                                  # in the build tree of GnuCOBOL
+mkdir ctx && cp txseries/Dockerfile gnucobol-*.tar.gz ctx/
+docker build --build-arg GNUCOBOL_DIST=gnucobol-4.0-early-dev.tar.gz \
+    -t txseries-gnucobol ctx
+```
+
+The image has GnuCOBOL in `/opt/gnucobol` (in `PATH`), `libcobcld`,
+the method `cicsprCOBCLD` built with it, and `CICS_COBCLD_CCFLAGS` set
+for `cicstcl` (see below).
+
+### By hand
+
+GnuCOBOL must be built for the system of TXSeries (UBI 8 / RHEL 8 for
+the container image, glibc 2.28), from a distribution (a git tree needs
+bison, flex, help2man and makeinfo, which UBI 8 does not have): as root,
+`microdnf install gcc make gmp-devel diffutils findutils tar gzip`
 (repositories `ubi-8-baseos-rpms`, `ubi-8-appstream-rpms`), then
 `configure --prefix=/opt/gnucobol --without-db --without-lmdb
---without-xml2 --without-json --without-curses --disable-nls` and
-`make install` in `lib libcob bin cobc config copy`. From a git tree,
-the generated parsers of `cobc` (`parser.[ch]`, `ppparse.[ch]`,
-`scanner.c`, `pplex.c`) and the man pages need bison, flex and help2man,
-which UBI 8 does not have: copy them from a build on another system.
-
-Then:
+--without-xml2 --without-json --without-curses --disable-nls`,
+`make install`, then in `txseries/`:
 
 ```sh
 make COB_CONFIG=/opt/gnucobol/bin/cob-config
-make install PREFIX=/opt/gnucobol
+make install COB_CONFIG=/opt/gnucobol/bin/cob-config
 ```
 
 This installs `libcobcld.a` (the API, with hidden symbols: `cob_init`,
 `cob_resolve` and `cob_resolve_error` have other signatures in libcob)
 and `libcobcld.so`, a linker script that brings `libcobcld.a` and
-`-lcob`, so that `cicsmkcobcld` works unchanged:
+libcob, so that `cicsmkcobcld` works unchanged:
 
 ```sh
 COBOLCLDIR=/opt/gnucobol cicsmkcobcld -o $CICSPATH/bin
 ```
 
 ## Programs
+
+`cicstcl -lCOBCLD` translates the program (`cicstran`) then calls the
+`cobc` of the `PATH` with `-fthread-safe -fnotrunc -I $CICSPATH/include`
+and `CICS_COBCLD_CCFLAGS`; the IVP of TXSeries builds unchanged
+(`make COBCLD` in a copy of `$CICSPATH/samples/ivp`, which also builds
+its BMS maps with `cicsmap`). By hand:
 
 ```sh
 CICS_COBCLD_CCFLAGS="-std=txseries -Wno-goto-section -Wno-goto-different-section" \

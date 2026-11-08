@@ -241,6 +241,23 @@ Sémantique `EXEC CICS LINK` / `XCTL` / `RETURN` vs `CALL` / `CANCEL`.
 Enchaînement `cicstcl` → (précompilateur SQL : GixSQL, ocesql…) → `cobc`
 → installation dans la région. Wrapper ou Makefile type.
 
+#### T6 — état (2026-11-08)
+- `txseries/Dockerfile` : image TXSeries + GnuCOBOL construite à partir
+  de l'image IBM et d'une distribution de GnuCOBOL (`make dist`, qui
+  contient les analyseurs générés et la documentation : UBI 8 n'a ni
+  bison, ni flex, ni help2man, ni makeinfo, ni même tar) ; elle
+  construit `libcobcld`, `cicsprCOBCLD` et fixe `CICS_COBCLD_CCFLAGS`.
+- Chaîne validée sans région : l'IVP de TXSeries se construit tel quel
+  (`make COBCLD` : `cicsmap`, `cicstran`, puis notre `cobc` appelé par
+  `cicstcl`) ; chaque `.cld` exporte son point d'entrée (`DFHCALL`…) et
+  importe `CICSAPIE`, `CICSAPIEDFINIT`, `CICSAPIWSADDRE`.
+- Reste un avertissement par programme (CONFIGURATION SECTION absente).
+- Non fait : précompilation SQL (`EXEC SQL` : le Makefile d'exemple de
+  CobolCloud passe par `cobc -preprocess=` et `cldsql`, sans équivalent
+  dans GnuCOBOL ; avec GixSQL ou ocesql, il faut en plus l'intégration
+  XA de la base à TXSeries) ; installation dans une région (`cicsivp -l
+  COBCLD`, `cicsadd -c pd`) : demande une région qui démarre.
+
 ### T7 — Recette
 Programmes de démonstration en région réelle, charge concurrente,
 mesures de performance (comparaison avec la version non réentrante),

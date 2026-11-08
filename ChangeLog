@@ -1,6 +1,9 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* txseries/Dockerfile: new file, dockerfile of TXSeries with GnuCOBOL
+	* Makefile.am, TXSERIES-PLAN.md, txseries/README.md: dockerfile of
+	  TXSeries with GnuCOBOL
 	* txseries/Makefile, txseries/README.md, txseries/cobcld.c
 	  (cob_get_rtd, init_runtime): make the language method global for the
 	  programs

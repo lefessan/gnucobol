@@ -33,7 +33,7 @@ dist_noinst_SCRIPTS = autogen.sh build_aux/bootstrap po/update_linguas.sh \
 noinst_SCRIPTS = pre-inst-env
 
 EXTRA_DIST = gnucobol.spec DEPENDENCIES DEPENDENCIES.md README.md HACKING \
-	txseries/cobcld.c txseries/Makefile txseries/README.md
+	txseries/cobcld.c txseries/Makefile txseries/README.md txseries/Dockerfile
 
 # add rules for code-coverage testing, as defined by AX_CODE_COVERAGE
 include $(top_srcdir)/aminclude_static.am
