@@ -3149,3 +3149,167 @@ in sub
 ], [])
 
 AT_CLEANUP
+
+
+AT_SETUP([TXSeries CobolCloud runtime API (simulation)])
+AT_KEYWORDS([runreentrant txseries cobcld])
+
+# txseries/cobcld.c driven as the language method of TXSeries does
+# (pinca_cobcld.o): one region per level of LINK, a load cancels the
+# region, the program is called directly with the EIB and the COMMAREA,
+# STOP RUN returns to the jmp_buf at rtd + 0x40; the programs reach the
+# host by static calls (CALL-CONVENTION 8 IS LITLINK), as the source
+# translated by cicstran
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      PROG.
+       ENVIRONMENT      DIVISION.
+       CONFIGURATION    SECTION.
+       SPECIAL-NAMES.
+           CALL-CONVENTION 8 IS LITLINK.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9 VALUE 0.
+       01 SUBNAME       PIC X(8) VALUE "sub".
+       LINKAGE          SECTION.
+       01 DFHEIBLK      PIC X(8).
+       01 DFHCOMMAREA   PIC X(4).
+       PROCEDURE        DIVISION USING DFHEIBLK DFHCOMMAREA.
+           ADD 1 TO CNT
+           DISPLAY "PROG " CNT " " DFHCOMMAREA
+           EVALUATE DFHCOMMAREA
+           WHEN "LINK"
+              CALL LITLINK "CICSLINK" USING SUBNAME DFHCOMMAREA
+              DISPLAY "PROG back " DFHCOMMAREA
+           WHEN "STOP"
+              STOP RUN
+           END-EVALUATE
+           GOBACK.
+])
+
+AT_DATA([sub.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      SUB.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9 VALUE 0.
+       LINKAGE          SECTION.
+       01 DFHEIBLK      PIC X(8).
+       01 DFHCOMMAREA   PIC X(4).
+       PROCEDURE        DIVISION USING DFHEIBLK DFHCOMMAREA.
+           ADD 1 TO CNT
+           DISPLAY "SUB " CNT
+           MOVE "DONE" TO DFHCOMMAREA
+           GOBACK.
+])
+
+AT_DATA([tx.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <setjmp.h>
+
+/* the API as seen by TXSeries */
+typedef struct cob_rtd cob_rtd;
+extern cob_rtd *cob_get_rtd (void);
+extern void cob_init (cob_rtd *, int, char **);
+extern cob_rtd *cob_enterprise_set_current_region (cob_rtd *, int);
+extern int cob_enterprise_get_current_region (cob_rtd *);
+extern void cob_enterprise_cancel_region (cob_rtd *, int, int);
+extern void *cob_resolve (cob_rtd *, const char *);
+extern char *cob_resolve_error (cob_rtd *);
+extern void cob_dump_debug_info (cob_rtd *);
+
+static cob_rtd *rtd;
+static int level;	/* LINK level of the task */
+static char eib[8];
+
+static void
+run (const char *name, char *commarea)
+{
+   int (*entry) (char *, char *);
+   cob_rtd *r;
+   int region = level + 1;
+   int ret;
+
+   /* PinCA_LoadCOBCLD */
+   cob_enterprise_cancel_region (rtd, region, 0);
+   r = cob_enterprise_set_current_region (rtd, region);
+   entry = (int (*) (char *, char *))cob_resolve (r, name);
+   if (entry == NULL) {
+      printf ("load %s: %s\n", name, cob_resolve_error (r));
+      return;
+   }
+   /* PinCA_StartCOBCLD */
+   level++;
+   *(int *)((char *)cob_get_rtd () + 0x108) = 1;
+   ret = setjmp (*(jmp_buf *)((char *)cob_get_rtd () + 0x40));
+   if (ret == 0) {
+      (void)entry (eib, commarea);
+   } else {
+      printf ("%s: back to TXSeries with %d\n", name, ret);
+      cob_dump_debug_info (rtd);
+   }
+   level--;
+   /* PinCA_UnloadCOBCLD */
+   region = cob_enterprise_get_current_region (cob_get_rtd ());
+   if (region != 0) {
+      cob_enterprise_set_current_region (rtd, region - 1);
+   }
+   fflush (stdout);
+}
+
+/* EXEC CICS LINK, called by the programs */
+int
+CICSLINK (char *name, char *commarea)
+{
+   char prog[9];
+   sscanf (name, "%8s", prog);
+   run (prog, commarea);
+   return 0;
+}
+
+int
+main (void)
+{
+   char commarea[4];
+
+   /* PinCA_InitLang */
+   rtd = cob_get_rtd ();
+   *(int *)rtd = 1;
+   cob_init (rtd, 0, NULL);
+
+   memcpy (commarea, "NONE", 4);
+   run ("prog", commarea);
+   run ("prog", commarea);
+   memcpy (commarea, "LINK", 4);
+   run ("prog", commarea);
+   memcpy (commarea, "STOP", 4);
+   run ("prog", commarea);
+   memcpy (commarea, "NONE", 4);
+   run ("prog", commarea);
+   /* a failed load leaves its region current, as in TXSeries */
+   run ("none", commarea);
+   printf ("region %d\n", cob_enterprise_get_current_region (rtd));
+   return 0;
+}
+]])
+
+AT_CHECK([$COMPILE_MODULE -o prog.cld prog.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE -o sub.cld sub.cob], [0], [], [])
+AT_CHECK([$COBC -x -o tx tx.c "$abs_top_srcdir/txseries/cobcld.c"],
+         [0], [], [])
+AT_CHECK([COB_LIBRARY_PATH=. ./tx], [0],
+[PROG 1 NONE
+PROG 1 NONE
+PROG 1 LINK
+SUB 1
+PROG back DONE
+PROG 1 STOP
+prog: back to TXSeries with 1
+PROG 1 NONE
+load none: module 'none.cld' not found
+region 1
+], [])
+
+AT_CLEANUP

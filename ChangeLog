@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* txseries/Makefile, txseries/README.md, txseries/cobcld.c: new files,
+	  libcobcld, the CobolCloud runtime API of TXSeries on libcob
+	* Makefile.am: libcobcld, the CobolCloud runtime API of TXSeries on
+	  libcob
 	* TXSERIES-COBOLIT-API.md: new file, API of the COBOL-IT and CobolCloud
 	  language methods
 	* TXSERIES-PLAN.md: API of the COBOL-IT and CobolCloud language methods

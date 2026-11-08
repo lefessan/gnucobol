@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_reentrant.at: libcobcld, the CobolCloud runtime API
+	  of TXSeries on libcob
 	* testsuite.src/run_reentrant.at: return point of the host, preload of
 	  a module file
 	* testsuite.src/run_reentrant.at: accept -fthread-safe (COBOL-IT
