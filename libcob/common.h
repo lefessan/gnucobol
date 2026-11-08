@@ -2014,6 +2014,7 @@ COB_EXPIMP void		cob_context_set_end_handler	(cob_context *,
 	void (*) (cob_context *, int, int, const char *, void *), void *);
 COB_EXPIMP void		cob_context_set_display_handler	(cob_context *,
 	void (*) (cob_context *, int, const char *, size_t, void *), void *);
+COB_EXPIMP void		cob_context_set_return_point	(cob_context *, void *);
 
 COB_EXPIMP int		cob_unit_enter		(cob_context **, unsigned int *,
 						 const size_t,
@@ -2609,6 +2610,8 @@ COB_EXPIMP int		cob_encode_program_id (const unsigned char * const, unsigned cha
 						 const int, const int);
 COB_EXPIMP void		*cob_resolve		(const char *);
 COB_EXPIMP void		*cob_resolve_ctx		(cob_context *, const char *);
+COB_EXPIMP int		cob_preload_module	(const char *);
+COB_EXPIMP int		cob_preload_module_ctx	(cob_context *, const char *);
 COB_EXPIMP void		*cob_resolve_cobol	(const char *, const int,
 						 const int);
 COB_EXPIMP void		*cob_resolve_cobol_ctx	(cob_context *, const char *, const int,

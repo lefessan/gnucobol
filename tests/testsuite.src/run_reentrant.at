@@ -2983,3 +2983,169 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [OK
 ], [])
 
 AT_CLEANUP
+
+
+AT_SETUP([return point of the host])
+AT_KEYWORDS([runreentrant cob_context_set_return_point STOP RUN])
+
+# a host that calls the entry point of a program directly (as TXSeries
+# does) gives a jmp_buf: STOP RUN and fatal errors end the run unit of
+# the context, then return there; the context can run again
+
+AT_DATA([sr.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sr.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 CNT           PIC 9 VALUE 0.
+       LINKAGE          SECTION.
+       01 ACT           PIC X(4).
+       PROCEDURE        DIVISION USING ACT.
+           ADD 1 TO CNT
+           DISPLAY ACT " " CNT
+           EVALUATE ACT
+           WHEN "STOP"
+              STOP RUN RETURNING 4
+           WHEN "FAIL"
+              CALL "notthere"
+           END-EVALUATE
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <setjmp.h>
+#include <libcob.h>
+
+static jmp_buf jb;
+
+static void
+run (cob_context *ctx, const char *act)
+{
+   int (*entry) (char *);
+   int ret;
+   cob_context *prev = cob_context_enter (ctx);
+   entry = (int (*) (char *))cob_resolve_ctx (ctx, "sr");
+   ret = setjmp (jb);
+   if (ret == 0) {
+      (void)entry ((char *)act);
+      printf ("%s: returned\n", act);
+   } else {
+      printf ("%s: back to the host with %d, exit code %d\n", act, ret,
+              cob_last_exit_code_ctx (ctx));
+   }
+   cob_context_leave (prev);
+   fflush (stdout);
+}
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx;
+
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   ctx = cob_context_create ();
+   cob_context_set_return_point (ctx, &jb);
+
+   run (ctx, "GOBK");
+   run (ctx, "GOBK");
+   run (ctx, "STOP");
+   run (ctx, "GOBK");
+   run (ctx, "FAIL");
+   run (ctx, "GOBK");
+
+   cob_context_set_return_point (ctx, NULL);
+   cob_context_destroy (ctx);
+   return 0;
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE sr.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[GOBK 1
+GOBK: returned
+GOBK 2
+GOBK: returned
+STOP 3
+STOP: back to the host with 1, exit code 4
+GOBK 1
+GOBK: returned
+FAIL 2
+FAIL: back to the host with -1, exit code -1
+GOBK 1
+GOBK: returned
+], [ignore])
+
+AT_CLEANUP
+
+
+AT_SETUP([preload of a module with another extension])
+AT_KEYWORDS([runreentrant cob_preload_module txseries])
+
+# TXSeries (method COBCLD) names the programs NAME.cld
+
+AT_DATA([sub.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      sub.
+       PROCEDURE        DIVISION.
+           DISPLAY "in sub"
+           GOBACK.
+])
+
+AT_DATA([caller.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      caller.
+       PROCEDURE        DIVISION.
+           CALL "sub"
+           GOBACK.
+])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <libcob.h>
+
+int
+main (int argc, char **argv)
+{
+   cob_context *ctx, *prev;
+   int (*entry) (void);
+
+   cob_set_hosted (1);
+   cob_init (argc, argv);
+   ctx = cob_context_create ();
+   prev = cob_context_enter (ctx);
+
+   printf ("missing: %d\n", cob_preload_module_ctx (ctx, "./none.cld"));
+   printf ("%s\n", cob_resolve_error_ctx (ctx));
+   printf ("before: %s\n", cob_resolve_ctx (ctx, "sub") ? "found" : "not found");
+   printf ("preload: %d\n", cob_preload_module_ctx (ctx, "./sub.cld"));
+   printf ("again: %d\n", cob_preload_module_ctx (ctx, "./sub.cld"));
+   entry = (int (*) (void))cob_resolve_ctx (ctx, "sub");
+   printf ("after: %s\n", entry ? "found" : "not found");
+   fflush (stdout);
+   (void)entry ();
+   (void)cob_call ("caller", 0, NULL);
+
+   cob_context_leave (prev);
+   cob_context_destroy (ctx);
+   return 0;
+}
+]])
+
+AT_CHECK([$COMPILE host.c], [0], [], [])
+AT_CHECK([$COMPILE_MODULE -o sub.cld sub.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE caller.cob], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./host], [0],
+[missing: 0
+module './none.cld' not found
+before: not found
+preload: 1
+again: 1
+after: found
+in sub
+in sub
+], [])
+
+AT_CLEANUP

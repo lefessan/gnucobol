@@ -1176,6 +1176,40 @@ cob_resolve (const char *name)
 	return cob_resolve_ctx (COB_CTX_COMPAT, name);
 }
 
+/* load the module file 'path' (its full name, with any extension, for
+   example the programs of a host that does not use COB_MODULE_EXT), so
+   that its entry points are found by the next resolutions and CALLs;
+   returns 1 when loaded (or already loaded), 0 on failure, with the
+   message in cob_resolve_error_ctx */
+int
+cob_preload_module_ctx (cob_context *ctx, const char *path)
+{
+	size_t	ret;
+
+	/* LCOV_EXCL_START */
+	if (!ctx) {
+		cob_fatal_error_ctx (ctx, COB_FERROR_INITIALIZED);
+	}
+	/* LCOV_EXCL_STOP */
+
+	call_lock_acquire ();
+	ret = cache_preload (ctx, path);
+	if (ret == 0) {
+		snprintf (resolve_error_buff, (size_t)CALL_BUFF_MAX,
+			  "module '%s' not found", path);
+		set_resolve_error (ctx, COB_MODULE_TYPE_PROGRAM);
+	}
+	call_lock_release ();
+	return ret != 0;
+}
+
+/* compatibility: cob_preload_module without context */
+int
+cob_preload_module (const char *path)
+{
+	return cob_preload_module_ctx (COB_CTX_COMPAT, path);
+}
+
 void *
 cob_resolve_cobol_ctx (cob_context *ctx, const char *name, const int fold_case, const int errind)
 {

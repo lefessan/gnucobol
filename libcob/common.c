@@ -384,6 +384,9 @@ struct cob_common_state {
 	   end_context_run_unit */
 	jmp_buf			return_jmp;
 	int			return_jmp_set;
+	/* return point set by the host (cob_context_set_return_point),
+	   used when the context is not in cob_call_with_exception_check_ctx */
+	jmp_buf			*host_jmp;
 #endif
 	int			exit_code;	/* of the context */
 	/* function of the host called at the end of the run unit (STOP RUN,
@@ -3913,12 +3916,14 @@ run_context_exit_procedures (cob_context *ctx)
 #ifndef COB_WITHOUT_JMP
 /* whether STOP RUN and the fatal errors return to the host from the
    context: a context other than the main one, called through
-   cob_call_with_exception_check_ctx */
+   cob_call_with_exception_check_ctx or with a return point of the host
+   (cob_context_set_return_point) */
 static int
 context_returns (cob_context *ctx)
 {
 	return context_is_task (ctx)
-	    && ctx->common->return_jmp_set;
+	    && (ctx->common->return_jmp_set
+	     || ctx->common->host_jmp != NULL);
 }
 
 /* end of the run unit of a context other than the main one (STOP RUN,
@@ -3956,10 +3961,32 @@ end_context_run_unit (cob_context *ctx, const int ret)
 	}
 	COB_MODULE_PTR = NULL;
 	free_run_unit_storage (ctx);
-	ctx->common->return_jmp_set = 0;
-	longjmp (ctx->common->return_jmp, ret);
+	if (ctx->common->return_jmp_set) {
+		ctx->common->return_jmp_set = 0;
+		longjmp (ctx->common->return_jmp, ret);
+	}
+	longjmp (*ctx->common->host_jmp, ret);
 }
 #endif
+
+/* return point of the host for the context of a task: STOP RUN and the
+   fatal errors of a program called directly by the host (not through
+   cob_call_with_exception_check_ctx) end the run unit of the context
+   (as end_context_run_unit), then longjmp to 'buf' with 1 (STOP RUN),
+   -1 (error) or -2 (hard error); 'buf' is a jmp_buf of the host, armed
+   with setjmp before each call; NULL removes the return point */
+void
+cob_context_set_return_point (cob_context *ctx, void *buf)
+{
+#ifndef COB_WITHOUT_JMP
+	if (ctx != NULL && ctx->common != NULL) {
+		ctx->common->host_jmp = buf;
+	}
+#else
+	COB_UNUSED (ctx);
+	COB_UNUSED (buf);
+#endif
+}
 
 void
 cob_stop_run_ctx (cob_context *ctx, const int status)
