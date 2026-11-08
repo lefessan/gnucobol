@@ -392,11 +392,13 @@ local_file( dev_t device, char **pname /*output*/ )
 		if( n == 4 ) {
 			if( maj == major(device) && min == minor(device) ) {
 				*pname = devname;
+				fclose (file);
 				return 1;
 			}
 		}
 	}
 
+	fclose (file);
 	return 0;
 }
 

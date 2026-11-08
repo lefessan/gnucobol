@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/run_file.at: new test for the file descriptors of
+	  the OPEN of LMDB files
 	* testsuite.src/run_file.at: new test for a bidirectional pipe to a
 	  missing command
 

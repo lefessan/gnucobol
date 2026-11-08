@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* flmdb.c (local_file): close /proc/partitions, opened at each OPEN of
+	  an LMDB file and never closed (one file descriptor lost per OPEN)
 	* fileio.c (cob_file_open): the child process of a bidirectional
 	  pipe only writes its message and calls _exit when dup2 or execv
 	  fail, instead of cob_runtime_error, cob_stop_run and exit, which

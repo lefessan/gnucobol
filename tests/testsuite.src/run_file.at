@@ -490,6 +490,58 @@ AT_CHECK([$COBCRUN_DIRECT ./prog], [0], [], [])
 AT_CLEANUP
 
 
+AT_SETUP([OPEN of LMDB files, file descriptors])
+AT_KEYWORDS([runfile LMDB INDEXED OPEN])
+
+# each OPEN of an LMDB file lost a file descriptor (/proc/partitions,
+# read to detect shared file systems), up to EMFILE
+
+AT_SKIP_IF([! $COBCRUN --info | $GREP -q "handler.*LMDB"])
+
+AT_DATA([prog.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      prog.
+       ENVIRONMENT      DIVISION.
+       INPUT-OUTPUT     SECTION.
+       FILE-CONTROL.
+           SELECT IXF ASSIGN TO "ixfile"
+                  ORGANIZATION INDEXED
+                  ACCESS DYNAMIC
+                  RECORD KEY IS IX-KEY
+                  FILE STATUS IS IX-STATUS.
+       DATA             DIVISION.
+       FILE             SECTION.
+       FD  IXF.
+       01  IX-REC.
+           05 IX-KEY    PIC X(4).
+           05 IX-DATA   PIC X(4).
+       WORKING-STORAGE  SECTION.
+       01  IX-STATUS    PIC XX.
+       01  N            PIC 999.
+       01  FAILED       PIC 999 VALUE 0.
+       PROCEDURE        DIVISION.
+           OPEN OUTPUT IXF
+           CLOSE IXF
+           PERFORM VARYING N FROM 1 BY 1 UNTIL N > 100
+              OPEN I-O IXF
+              IF IX-STATUS = "00"
+                 CLOSE IXF
+              ELSE
+                 ADD 1 TO FAILED
+              END-IF
+           END-PERFORM
+           DISPLAY "failed opens: " FAILED
+           STOP RUN.
+])
+
+AT_CHECK([$COMPILE prog.cob], [0], [], [])
+AT_CHECK([ulimit -n 40 && IO_OPTIONS=format=lmdb $COBCRUN_DIRECT ./prog],
+         [0], [failed opens: 000
+], [])
+
+AT_CLEANUP
+
+
 AT_SETUP([OUTPUT on INDEXED file to missing directory])
 AT_KEYWORDS([runfile OPEN ASSIGN])
 
