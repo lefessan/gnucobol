@@ -343,44 +343,51 @@ ajoutée après `-I …` **[vérifié]**.
 
 ---
 
-## 7. Conséquences pour GnuCOBOL (pistes pour T5)
+## 7. Conséquences pour GnuCOBOL (réalisé, 2026-11-08)
 
-1. **Bibliothèque `libcobcld`** fournissant les 12 symboles du § 3 sur
-   libcob : `cob_get_rtd` = contexte du thread (un `cob_context` par
-   tâche CICS, créé à la demande), `cob_init (rtd, …)` =
-   `cob_set_hosted (1)` + `cob_init`, régions = pile de contextes ou
-   d'instances par niveau de LINK, `cob_resolve (rtd, name)` =
-   résolution de libcob dans le contexte de la région, CANCEL de région =
-   CANCEL des programmes chargés dans ce contexte.
-2. **Conflit de noms** `cob_init` / `cob_resolve` entre l'API COBOL-IT et
-   libcob. Solution envisagée : `libcobcld.a` statique, symboles de
-   visibilité cachée, lié dans `cicsprCOBCLD` seulement ; elle appelle
-   libcob par d'autres noms (`cob_init_ctx`…, à exporter si besoin). Ne
-   pas fournir de `libcobcld.so` exportant `cob_init`, sous peine
-   d'interposition sur les appels internes de libcob.
-3. **rtd binaire** : un bloc d'au moins `0x10c` octets avec `int` en 0,
-   `jmp_buf` en `0x40`, `int` en `0x108`, en tête de la structure (le
-   reste peut pointer vers le `cob_context`). STOP RUN / erreur fatale
-   dans un contexte hébergé : `longjmp (rtd + 0x40, code)` si
-   `rtd[0x108]` est armé ; le gestionnaire de fin de T2 peut le faire.
-4. **`CBL_ERROR_PROC` / `CBL_EXIT_PROC` avec `'0'`** : libcob traite
-   « non nul » comme « retirer » ; il faut accepter `'0'` comme
-   « installer » (dans la couche `libcobcld`, pas dans libcob).
-5. **Nom résolu** : IBM passe le nom de fichier (`dfhcall`, minuscules),
-   alors que le point d'entrée est le PROGRAM-ID (`DFHCALL`). COBOL-IT
-   résout sans tenir compte de la casse **[déduit]** ; notre
-   `cob_resolve` devra essayer le nom tel quel, puis en majuscules, et
-   charger `name.cld` (pas seulement `.so`) depuis `COB_LIBRARY_PATH`.
-6. **Symboles `CICSAPI*`** : le programme les importe ; ils doivent être
-   visibles au moment du `dlopen` du `.cld` (méthode chargée avec
-   `RTLD_GLOBAL` ?) **[à vérifier en région]**.
-7. **`cobc`** : accepter `-fthread-safe` (sans effet : runtime
-   réentrant), `-preprocess=` éventuellement, et une configuration
-   `txseries.conf` (via `CICS_COBCLD_CCFLAGS=-conf=…`) qui accepte
-   `SPECIAL-NAMES` sans `CONFIGURATION SECTION` (T4).
-8. **Erreurs** : une erreur d'exécution COBOL termine l'application
-   server (`SupOS_ServerExit`) via le gestionnaire d'erreur ; pour être
-   plus robuste que COBOL-IT, préférer le `longjmp` vers `rtd + 0x40`.
+Implantation dans `txseries/` (voir `txseries/README.md`) et libcob ;
+validée par simulation de la méthode (`tests/testsuite.src/run_txseries.at`,
+`run_reentrant.at`), pas encore en région.
+
+1. **`libcobcld`** (`txseries/cobcld.c`) fournit les 12 symboles du § 3
+   sur libcob : un rtd par thread ; un `cob_context` par région (niveau
+   de LINK, 1 à 15), créé à la demande et rendu courant par
+   `cob_enterprise_set_current_region` ; `cob_init (rtd, …)` =
+   `cob_set_hosted (1)` + `cob_init_nomain` (une fois par processus) ;
+   `cob_enterprise_cancel_region (n)` détruit les contextes des régions
+   `n` et au-dessus (WORKING-STORAGE neuve à chaque LINK).
+2. **Conflit de noms** : `libcobcld.a`, symboles cachés, liée dans
+   `cicsprCOBCLD` par le script d'éditeur de liens `libcobcld.so`
+   (`GROUP (libcobcld.a libcob.so)`), sans modifier `cicsmkcobcld` ; les
+   déclarations de libcob sont renommées le temps de l'inclusion de
+   `libcob.h`.
+3. **rtd binaire** : `struct cob_rtd` avec `int` en 0, `jmp_buf` en
+   `0x40`, `int` en `0x108` (assertions statiques). STOP RUN et erreurs
+   fatales : `cob_context_set_return_point` (libcob) termine la run unit
+   du contexte puis `longjmp` vers `rtd + 0x40`.
+4. **`CBL_ERROR_PROC` / `CBL_EXIT_PROC`** : `'0'` et l'octet 0 installent.
+   Une erreur d'exécution appelle la procédure d'erreur de TXSeries
+   (abend de la tâche, annulation de ses mises à jour, comme COBOL-IT) ;
+   STOP RUN revient à TXSeries comme `EXEC CICS RETURN`.
+5. **Nom résolu** : recherche de `nom.cld` (tel quel, minuscules,
+   majuscules) dans `COB_LIBRARY_PATH`, `CICS_PROGRAM_PATH` et le
+   répertoire courant, chargement par `cob_preload_module_ctx` (libcob),
+   puis point d'entrée tel quel, en minuscules ou en majuscules.
+6. **Symboles `CICSAPI*`** : `libcobcld` rend `cicsprCOBCLD` global
+   (`dladdr` + `dlopen (RTLD_NOLOAD | RTLD_GLOBAL)`) au cas où TXSeries
+   le charge avec `RTLD_LOCAL` **[comportement de TXSeries à vérifier en
+   région]**.
+7. **`cobc`** : `-fthread-safe` accepté ; dialecte `-std=txseries`
+   (`config/txseries.conf` : option `missing-conf-section: ok`, effet de
+   `-fnotrunc`) ; `CICS_COBCLD_CCFLAGS="-std=txseries -Wno-goto-section
+   -Wno-goto-different-section"`.
+8. **NEWCOPY** : `cob_unload_module_ctx` (libcob) ; le mode 1 de
+   `cob_enterprise_cancel_region` (NEWCOPY, `CICS_DISABLE_COBCLD_CACHE`)
+   recharge les fichiers `.cld` dès qu'aucun contexte ne les utilise.
+9. **SQL** : `txseries/dbconnect.cob` (GixSQL) pour le fichier de
+   commutation PostgreSQL d'IBM ; runtime hébergé dès le chargement de
+   `libcobcld` (constructeur), car `xa_open` peut précéder
+   l'initialisation de la méthode.
 
 ---
 
