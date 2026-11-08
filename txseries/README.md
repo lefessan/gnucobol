@@ -83,6 +83,51 @@ CICS_COBCLD_CCFLAGS="-std=txseries -Wno-goto-section -Wno-goto-different-section
   directories of the `.cld` files; `CICS_PROGRAM_PATH` and the current
   directory are searched too.
 
+## SQL (PostgreSQL, GixSQL)
+
+The programs with `EXEC SQL` go through the CICS translator, then an SQL
+precompiler for GnuCOBOL, then `cobc`. With GixSQL (the fork
+`gixsql-superbol`, or 1.0.20b) and PostgreSQL:
+
+```sh
+cicstran -lCOBCLD prog.ccp                         # gives prog.cbl
+gixpp -e -S -I <gixsql>/share/gixsql/copy -i prog.cbl -o prog.gix.cbl
+cobc -m -std=txseries -I <gixsql>/share/gixsql/copy -o prog.cld \
+     prog.gix.cbl -L<gixsql>/lib -lgixsql
+```
+
+The programs do not connect: TXSeries opens the connection of each
+application server (XA, one-phase commit for PostgreSQL) with its switch
+load file `postgresql1pc` (from `$CICSPATH/examples/RM_support/PostgreSQL`,
+`postgresql1pc.mk`), built for COBOL with `-D_PSQL_COBOLIT` and linked
+with `cicsprCOBCLD` and a COBOL module `dbconnect`: use `dbconnect.cob`
+of this directory, which provides its entry points (`dbconnect`,
+`dbbegin`, `dbcommit`, `dbrollback`, `dbconnreset`, `dbautocommit`) with
+GixSQL, compiled with `-fimplicit-init` (see the file). The connection
+is the default connection of GixSQL, used by the `EXEC SQL` of the
+programs; the updates of a task are committed or rolled back by
+TXSeries.
+
+- XA open string: `DB=cicstest@localhost:5432,UID=...,PWD=...` (GixSQL
+  accepts this form, with `GIXSQL_DEFAULT_DRIVER=pgsql` in the
+  environment of the region if GixSQL has no default driver) or
+  `DB=pgsql://localhost:5432/cicstest,...`.
+- `dbconnect` turns autocommit off (GixSQL commits each statement by
+  default for PostgreSQL), unless the data source or
+  `GIXSQL_AUTOCOMMIT` says otherwise.
+- `libcobcld` makes the runtime hosted as soon as it is loaded, so that
+  `dbconnect`, called at `xa_open` maybe before the initialization of
+  the language method, does not install signal handlers in the
+  application server.
+- GixSQL 1.0.20b comments out the line before `LINKAGE SECTION` or
+  `PROCEDURE DIVISION` when it is not blank (the output of `cicstran` has
+  a blank line there), and copies unchanged an `EXEC SQL` statement on
+  the last line of a section: fixed in `gixsql-superbol`.
+
+Validated without TXSeries (simulation of the switch and of the
+language method, PostgreSQL 16): the updates of a task are rolled back
+by `xa_rollback`, kept by `xa_commit`.
+
 ## Behaviour
 
 - Each `EXEC CICS LINK` level (region 1 to 15 of the language method)

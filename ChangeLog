@@ -1,6 +1,10 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* txseries/dbconnect.cob: new file, dbconnect.cob, PostgreSQL through
+	  GixSQL
+	* Makefile.am, TXSERIES-PLAN.md, txseries/README.md: dbconnect.cob,
+	  PostgreSQL through GixSQL
 	* txseries/cobcld.c (make_method_global): hosted runtime as soon as
 	  libcobcld is loaded
 	* TXSERIES-PLAN.md, txseries/README.md: dialect option

@@ -266,11 +266,21 @@ Enchaînement `cicstcl` → (précompilateur SQL : GixSQL, ocesql…) → `cobc`
   (`make COBCLD` : `cicsmap`, `cicstran`, puis notre `cobc` appelé par
   `cicstcl`) ; chaque `.cld` exporte son point d'entrée (`DFHCALL`…) et
   importe `CICSAPIE`, `CICSAPIEDFINIT`, `CICSAPIWSADDRE`.
-- Non fait : précompilation SQL (`EXEC SQL` : le Makefile d'exemple de
-  CobolCloud passe par `cobc -preprocess=` et `cldsql`, sans équivalent
-  dans GnuCOBOL ; avec GixSQL ou ocesql, il faut en plus l'intégration
-  XA de la base à TXSeries) ; installation dans une région (`cicsivp -l
-  COBCLD`, `cicsadd -c pd`) : demande une région qui démarre.
+- SQL (2026-11-08) : chaîne `cicstran` → `gixpp` (GixSQL) → `cobc
+  -std=txseries`, validée sur l'exemple PostgreSQL d'IBM (`uxa1cob`).
+  Connexion XA : le fichier de commutation d'IBM pour PostgreSQL
+  (`postgresql1pc`, chemin `-D_PSQL_COBOLIT`) appelle les points
+  d'entrée COBOL d'un module `dbconnect` : `txseries/dbconnect.cob` les
+  fournit avec GixSQL (autocommit coupé ; `-fimplicit-init`) ;
+  `libcobcld` passe le runtime en mode hébergé dès son chargement
+  (constructeur), car `xa_open` peut précéder l'initialisation de la
+  méthode. Validé sans TXSeries contre PostgreSQL 16 : rollback et
+  commit des mises à jour d'une tâche. Bugs de GixSQL corrigés dans
+  `~/GIT/COBOL/gixsql-superbol` (instruction ESQL sur la dernière ligne
+  d'une section, BEGIN/END DECLARE SECTION sur plusieurs lignes, build
+  hors source, runtime sans MySQL).
+- Non fait : installation dans une région (`cicsivp -l COBCLD`,
+  `cicsadd -c pd`, `cicsadd -c xad`) : demande une région qui démarre.
 
 ### T7 — Recette
 Programmes de démonstration en région réelle, charge concurrente,
