@@ -2127,6 +2127,11 @@ check_not_88_level (cb_tree x)
 		/* note: this also applies to cb_error_node */
 		return x;
 	}
+	/* a reference to an undefined item (already reported) */
+	if (CB_REFERENCE_P (x)
+	 && !CB_FIELD_P (cb_ref (x))) {
+		return x;
+	}
 
 	f = CB_FIELD_PTR (x);
 
