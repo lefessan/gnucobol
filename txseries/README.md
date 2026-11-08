@@ -93,5 +93,9 @@ CICS_COBCLD_CCFLAGS="-std=txseries -Wno-goto-section -Wno-goto-different-section
 - A runtime error ends the run unit of the context and calls the error
   procedure that TXSeries installs (`CBL_ERROR_PROC`), with the message:
   it abends the task, whose updates are rolled back, as with COBOL-IT.
-- Not yet done: reload of a module on NEWCOPY (the module files stay
-  loaded), the COBOL-IT debugger.
+- NEWCOPY (and `CICS_DISABLE_COBCLD_CACHE`, which reloads at each load)
+  unloads the `.cld` files loaded so far, as soon as no GnuCOBOL context
+  uses them: at once in an application server that runs one task at a
+  time, else at a next load; a new version of a file must be a new file
+  (as written by the linker, or `mv`), not rewritten in place.
+- Not yet done: the COBOL-IT debugger.

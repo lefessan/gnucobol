@@ -187,6 +187,12 @@ Détails complets dans **`TXSERIES-COBOLIT-API.md`**. En résumé :
   ses mises à jour) comme avec COBOL-IT ; STOP RUN revient à TXSeries
   comme `EXEC CICS RETURN`. Le module de langage est rendu global
   (`RTLD_GLOBAL`) pour les appels statiques `CICSAPI*` des programmes.
+- NEWCOPY : `cob_unload_module_ctx` (libcob) retire les programmes d'un
+  fichier de module de la table et le ferme (refusé tant que d'autres
+  contextes existent, comme un CANCEL physique) ; `libcobcld` marque ses
+  modules à recharger en mode 1 (NEWCOPY, `CICS_DISABLE_COBCLD_CACHE`)
+  et les décharge dès qu'aucun contexte de région n'existe ; un
+  chargement au niveau n détruit aussi les régions au-dessus de n.
 - **Bloqué** : la version d'évaluation s111-L241206 a une date
   d'expiration intégrée, dépassée (« This Evaluation copy of TXSeries
   has now expired »), même avec l'image IBM d'origine ; la région

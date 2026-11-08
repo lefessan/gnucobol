@@ -577,3 +577,135 @@ version 2
 
 AT_CLEANUP
 
+
+AT_SETUP([NEWCOPY of a program])
+AT_KEYWORDS([runtxseries txseries cobcld NEWCOPY])
+
+# a new version of a program is used after NEWCOPY (TXSeries cancels the
+# regions 1 to 15 with the mode 1), or at each load with
+# CICS_DISABLE_COBCLD_CACHE (mode 1 at each load), not before
+
+AT_DATA([v1.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      VERS.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 DFHEIBLK      PIC X(8).
+       01 DFHCOMMAREA   PIC X(4).
+       PROCEDURE        DIVISION USING DFHEIBLK DFHCOMMAREA.
+           DISPLAY "version 1"
+           GOBACK.
+])
+
+AT_DATA([v2.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      VERS.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 DFHEIBLK      PIC X(8).
+       01 DFHCOMMAREA   PIC X(4).
+       PROCEDURE        DIVISION USING DFHEIBLK DFHCOMMAREA.
+           DISPLAY "version 2"
+           GOBACK.
+])
+
+AT_DATA([v3.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      VERS.
+       DATA             DIVISION.
+       LINKAGE          SECTION.
+       01 DFHEIBLK      PIC X(8).
+       01 DFHCOMMAREA   PIC X(4).
+       PROCEDURE        DIVISION USING DFHEIBLK DFHCOMMAREA.
+           DISPLAY "version 3"
+           GOBACK.
+])
+
+AT_DATA([tx.c], [[
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct cob_rtd cob_rtd;
+extern cob_rtd *cob_get_rtd (void);
+extern void cob_init (cob_rtd *, int, char **);
+extern cob_rtd *cob_enterprise_set_current_region (cob_rtd *, int);
+extern int cob_enterprise_get_current_region (cob_rtd *);
+extern void cob_enterprise_cancel_region (cob_rtd *, int, int);
+extern void *cob_resolve (cob_rtd *, const char *);
+extern char *cob_resolve_error (cob_rtd *);
+
+static cob_rtd *rtd;
+
+/* PinCA_LoadCOBCLD, PinCA_StartCOBCLD, PinCA_UnloadCOBCLD */
+static void
+run (int cancel_type)
+{
+   static char eib[8], commarea[4];
+   int (*entry) (char *, char *);
+   cob_rtd *r;
+
+   cob_enterprise_cancel_region (rtd, 1, cancel_type);
+   r = cob_enterprise_set_current_region (rtd, 1);
+   entry = (int (*) (char *, char *))cob_resolve (r, "vers");
+   if (entry == NULL) {
+      printf ("%s\n", cob_resolve_error (r));
+   } else {
+      (void)entry (eib, commarea);
+   }
+   cob_enterprise_set_current_region (rtd, 0);
+   fflush (stdout);
+}
+
+/* PinCA_COBCLDNewCopy */
+static void
+newcopy (void)
+{
+   int r;
+   for (r = 1; r <= 15; r++) {
+      cob_enterprise_cancel_region (rtd, r, 1);
+   }
+}
+
+static void
+install (const char *file)
+{
+   if (rename (file, "vers.cld") != 0) {
+      perror ("rename");
+   }
+}
+
+int
+main (void)
+{
+   rtd = cob_get_rtd ();
+   *(int *)rtd = 1;
+   cob_init (rtd, 0, NULL);
+
+   install ("vers1.cld");
+   run (0);
+   install ("vers2.cld");
+   run (0);
+   printf ("NEWCOPY\n");
+   newcopy ();
+   run (0);
+   /* CICS_DISABLE_COBCLD_CACHE */
+   install ("vers3.cld");
+   run (1);
+   return 0;
+}
+]])
+
+AT_CHECK([$COMPILE_MODULE -o vers1.cld v1.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE -o vers2.cld v2.cob], [0], [], [])
+AT_CHECK([$COMPILE_MODULE -o vers3.cld v3.cob], [0], [], [])
+AT_CHECK([$COBC -x -o tx tx.c "$abs_top_srcdir/txseries/cobcld.c"],
+         [0], [], [])
+AT_CHECK([COB_LIBRARY_PATH=. ./tx], [0],
+[version 1
+version 1
+NEWCOPY
+version 2
+version 3
+], [])
+
+AT_CLEANUP

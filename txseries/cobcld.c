@@ -94,6 +94,15 @@ static char			**init_argv;
 static cld_error_proc		error_proc;
 static cld_exit_proc		exit_proc;
 
+/* the module files loaded by cob_resolve, to reload on NEWCOPY */
+struct cld_module {
+	struct cld_module	*next;
+	char			*path;
+	int			reload;		/* NEWCOPY requested */
+};
+static struct cld_module	*modules;
+static pthread_mutex_t		modules_lock = PTHREAD_MUTEX_INITIALIZER;
+
 CLD_API struct cob_rtd	*cob_get_rtd (void);
 CLD_API void		cob_init (struct cob_rtd *, int, char **);
 CLD_API struct cob_rtd	*cob_enterprise_set_current_region (struct cob_rtd *,
@@ -223,19 +232,59 @@ cob_enterprise_get_current_region (struct cob_rtd *rtd)
 	return rtd->current;
 }
 
-/* cancel all the programs of a region: its context is destroyed, the
-   next use creates a new one, with the programs in their initial state;
-   mode 1 (NEWCOPY, or CICS_DISABLE_COBCLD_CACHE) should also reload the
-   module files, which libcob does not do for preloaded modules */
-void
-cob_enterprise_cancel_region (struct cob_rtd *rtd, int region, int mode)
+/* record a module file loaded by cob_resolve */
+static void
+add_module (const char *path)
 {
-	cob_context	*ctx;
+	struct cld_module	*m;
 
-	(void)mode;
-	region = valid_region (region);
-	ctx = rtd->region[region];
-	if (region == 0 || ctx == NULL) {
+	pthread_mutex_lock (&modules_lock);
+	for (m = modules; m; m = m->next) {
+		if (strcmp (m->path, path) == 0) {
+			break;
+		}
+	}
+	if (m == NULL && (m = calloc (1, sizeof (*m))) != NULL) {
+		m->path = strdup (path);
+		m->next = modules;
+		modules = m;
+	}
+	pthread_mutex_unlock (&modules_lock);
+}
+
+/* NEWCOPY: mark all the module files to be reloaded, then unload the
+   marked ones when possible (libcob refuses while contexts exist, in
+   this thread or in others: then at a later load) */
+static void
+reload_modules (int newcopy)
+{
+	struct cld_module	**mp;
+
+	pthread_mutex_lock (&modules_lock);
+	for (mp = &modules; *mp; ) {
+		struct cld_module	*m = *mp;
+		if (newcopy) {
+			m->reload = 1;
+		}
+		if (m->reload
+		 && cob_unload_module_ctx (cob_get_current_context (),
+					   m->path)) {
+			*mp = m->next;
+			free (m->path);
+			free (m);
+			continue;
+		}
+		mp = &m->next;
+	}
+	pthread_mutex_unlock (&modules_lock);
+}
+
+static void
+destroy_region (struct cob_rtd *rtd, int region)
+{
+	cob_context	*ctx = rtd->region[region];
+
+	if (ctx == NULL) {
 		return;
 	}
 	if (cob_get_current_context () == ctx) {
@@ -245,6 +294,27 @@ cob_enterprise_cancel_region (struct cob_rtd *rtd, int region, int mode)
 	cob_context_set_return_point (ctx, NULL);
 	cob_context_destroy (ctx);
 	rtd->region[region] = NULL;
+}
+
+/* cancel all the programs of a region: its context is destroyed, the
+   next use creates a new one, with the programs in their initial state;
+   the regions above are not in use (TXSeries loads a program in
+   'region' at this LINK level), they are destroyed too; mode 1 (NEWCOPY,
+   or CICS_DISABLE_COBCLD_CACHE at each load) also reloads the module
+   files, as soon as no context uses them */
+void
+cob_enterprise_cancel_region (struct cob_rtd *rtd, int region, int mode)
+{
+	int	r;
+
+	region = valid_region (region);
+	if (region == 0) {
+		return;
+	}
+	for (r = CLD_MAX_REGION; r >= region; r--) {
+		destroy_region (rtd, r);
+	}
+	reload_modules (mode == 1);
 }
 
 /* append the directories of a path list (':') to the candidates */
@@ -342,6 +412,7 @@ cob_resolve (struct cob_rtd *rtd, const char *name)
 			  cob_resolve_error_ctx (ctx));
 		return NULL;
 	}
+	add_module (path);
 
 	/* its entry point */
 	for (i = 0; i < 3; i++) {
