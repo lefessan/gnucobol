@@ -719,3 +719,95 @@ version 3
 ], [])
 
 AT_CLEANUP
+
+
+AT_SETUP([COBOL module of a switch load file])
+AT_KEYWORDS([runtxseries txseries cobcld XA dbconnect])
+
+# the switch load file of a resource manager (PostgreSQL: postgresql1pc)
+# links the language method and calls COBOL entry points (dbconnect...)
+# at xa_open, maybe before the method initializes libcob: the module,
+# compiled with -fimplicit-init, initializes it, hosted (no signal
+# handlers in the application server) since libcobcld is loaded
+
+AT_DATA([dbconn.cob], [
+       IDENTIFICATION   DIVISION.
+       PROGRAM-ID.      dbconn.
+       DATA             DIVISION.
+       WORKING-STORAGE  SECTION.
+       01 DB            PIC X(20).
+       LINKAGE          SECTION.
+       01 LK-DB         PIC X(20).
+       01 LK-USER       PIC X(20).
+       01 LK-PASSWD     PIC X(20).
+       PROCEDURE        DIVISION.
+           GOBACK.
+       ENTRY "dbconnect" USING LK-DB LK-USER LK-PASSWD.
+           MOVE SPACES TO DB
+           STRING LK-DB DELIMITED BY X"00" INTO DB
+           DISPLAY "dbconnect " FUNCTION TRIM (DB)
+           MOVE 0 TO RETURN-CODE
+           GOBACK.
+       ENTRY "dbcommit".
+           DISPLAY "dbcommit"
+           MOVE 0 TO RETURN-CODE
+           GOBACK.
+])
+
+AT_DATA([xaswitch.c], [[
+#include <stdio.h>
+#include <signal.h>
+#include <libcob.h>
+
+extern int dbconnect (char *, char *, char *);
+extern int dbcommit (void);
+
+int
+switch_open (void)
+{
+   struct sigaction sa;
+   int ret = dbconnect ("cicstest", "cics", "pw");
+   printf ("xa_open: %d, initialized %d, hosted %d\n", ret,
+           cob_is_initialized (), cob_is_hosted ());
+   (void)sigaction (SIGSEGV, NULL, &sa);
+   printf ("SIGSEGV handler: %s\n",
+           sa.sa_handler == SIG_DFL ? "default" : "installed");
+   ret = dbcommit ();
+   printf ("xa_commit: %d\n", ret);
+   fflush (stdout);
+   return 0;
+}
+]])
+
+AT_DATA([host.c], [[
+#include <stdio.h>
+#include <dlfcn.h>
+
+int
+main (void)
+{
+   int (*open) (void);
+   void *h = dlopen ("./xaswitch.so", RTLD_NOW | RTLD_LOCAL);
+   if (h == NULL) {
+      printf ("%s\n", dlerror ());
+      return 1;
+   }
+   open = (int (*) (void))dlsym (h, "switch_open");
+   return open ();
+}
+]])
+
+AT_CHECK([$COMPILE_MODULE -fimplicit-init -o libdbconn.$COB_MODULE_EXT \
+          dbconn.cob], [0], [], [])
+AT_CHECK([$COBC -b -o xaswitch.so xaswitch.c \
+          "$abs_top_srcdir/txseries/cobcld.c" -L. -ldbconn], [0], [], [])
+AT_CHECK([$COMPILE host.c -ldl], [0], [], [])
+AT_CHECK([LD_LIBRARY_PATH=".:$LD_LIBRARY_PATH" ./host], [0],
+[dbconnect cicstest
+xa_open: 0, initialized 1, hosted 1
+SIGSEGV handler: default
+dbcommit
+xa_commit: 0
+], [])
+
+AT_CLEANUP

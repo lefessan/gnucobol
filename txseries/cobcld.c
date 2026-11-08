@@ -143,6 +143,17 @@ make_method_global (void)
 	}
 }
 
+/* when the language method (or a switch load file of a resource
+   manager, which links it) is loaded: libcob runs hosted in this
+   process (no signal handlers, STOP RUN does not exit), even when a
+   COBOL module of the switch (dbconnect, compiled with -fimplicit-init)
+   is called before the initialization of the method (cob_init) */
+__attribute__ ((constructor)) static void
+cobcld_loaded (void)
+{
+	cob_set_hosted (1);
+}
+
 static void
 init_runtime (void)
 {

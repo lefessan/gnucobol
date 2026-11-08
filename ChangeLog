@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* txseries/cobcld.c (make_method_global): hosted runtime as soon as
+	  libcobcld is loaded
 	* TXSERIES-PLAN.md, txseries/README.md: dialect option
 	  missing-conf-section
 	* TXSERIES-PLAN.md, txseries/README.md, txseries/cobcld.c
