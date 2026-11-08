@@ -1,4 +1,11 @@
 
+2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
+
+	* txseries.conf: new file, txseries.conf, dialect of the programs
+	  translated by TXSeries
+	* Makefile.am: txseries.conf, dialect of the programs translated by
+	  TXSeries
+
 2025-04-22  Chuck Haatvedt  <chuck.haatvedt+cobol@gmail.com>
 
 	* runtime.cfg: add runtime configuration COB_HEAP_MEMORY and

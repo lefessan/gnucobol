@@ -1,0 +1,286 @@
+## Copyright (C) 2026 Free Software Foundation, Inc.
+## Written by Fabrice Le Fessant
+##
+## This file is part of GnuCOBOL.
+##
+## The GnuCOBOL compiler is free software: you can redistribute it
+## and/or modify it under the terms of the GNU General Public License
+## as published by the Free Software Foundation, either version 3 of the
+## License, or (at your option) any later version.
+##
+## GnuCOBOL is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with GnuCOBOL.  If not, see <https://www.gnu.org/licenses/>.
+
+### GnuCOBOL Test Suite
+
+## Programs translated by the CICS translator of IBM TXSeries
+## (cicstran -lCOBCLD), compiled with -std=txseries
+## (see TXSERIES-COBOLIT-API.md)
+
+AT_SETUP([translated CICS program, -std=txseries])
+AT_KEYWORDS([runtxseries txseries LITLINK CALL-CONVENTION])
+
+# A program in the shape of the output of cicstran: SPECIAL-NAMES
+# without CONFIGURATION SECTION, static calls of the CICS interface
+# (CALL-CONVENTION 8 IS LITLINK), binary items of the program passed
+# through native temporary items, HANDLE CONDITION through
+# GO TO ... DEPENDING ON EIBLABEL. The copybooks are simplified
+# versions of CICS-API and CICS-EIB; the C program plays the part of
+# TXSeries.
+
+AT_DATA([TXAPI], [
+       01 CICS-ARGS.
+           02 CICS-FN-CODE          PIC S9(4) COMP-5.
+           02 CICS-DEBUG-LINE       PIC S9(4) COMP-5.
+           02 CICS-ARG-MASK         PIC S9(8) COMP-5.
+           02 CICS-EIB-PTR          POINTER.
+           02 CICS-ARG-DATA OCCURS  16.
+             03 CICS-ARG-DATA-UNION        PIC X(8).
+             03 CICS-SHORT-VALUE-REDEF REDEFINES CICS-ARG-DATA-UNION.
+               04 CICS-SHORT-VALUE         PIC S9(4) COMP-5.
+               04 FILLER                   PIC X(6).
+             03 CICS-SHORT-AREA-REDEF REDEFINES CICS-ARG-DATA-UNION.
+               04 CICS-SHORT-AREA          POINTER.
+             03 CICS-DATA-AREA-REDEF REDEFINES CICS-ARG-DATA-UNION.
+               04 CICS-DATA-AREA           POINTER.
+])
+
+AT_DATA([TXEIB], [
+       01 DFHEIBLK.
+           02 EIBTRNID         PIC X(4).
+           02 EIBCALEN         PIC S9(4) COMP-5.
+           02 FILLER           PIC X(2).
+           02 EIBRESP          PIC S9(8) COMP-5.
+           02 EIBLABEL         PIC S9(4) COMP-5.
+])
+
+AT_DATA([txprog.cbl], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. TXPROG.
+       ENVIRONMENT DIVISION.
+
+       SPECIAL-NAMES.
+          call-convention 8 is litlink.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01  CICS-API-WS-START        PIC X.
+       01  WS-LEN                   PIC S9(4) COMP VALUE 10.
+       01  WS-BIG                   PIC S9(4) COMP VALUE 1000.
+       01  WS-DATA                  PIC X(8).
+       COPY 'TXAPI'.
+       01  CICS-API-SWAP-STORAGE.
+           02  CICS-API-SWAP-SHORT  PIC S9(4) COMP-5 OCCURS 4.
+       01  CICS-API-WS-END          PIC X.
+
+       LINKAGE SECTION.
+       COPY 'TXEIB'.
+       01 DFHCOMMAREA PIC X(4).
+
+       PROCEDURE DIVISION
+           USING
+           DFHEIBLK
+           DFHCOMMAREA
+                         .
+       CICS-API SECTION.
+       CICS-API-TRIGGER.
+           SET CICS-EIB-PTR TO ADDRESS OF DFHEIBLK.
+           CALL litlink 'CICSAPIWSADDRE' USING CICS-ARGS
+                CICS-API-WS-START CICS-API-WS-END.
+           IF EIBLABEL NOT = 0
+               GO TO CICS-API-ERROR.
+           PERFORM CICS-API-EDF-INIT.
+           DISPLAY "COMMAREA " DFHCOMMAREA(1:EIBCALEN).
+
+      *     EXEC CICS READQ TS QUEUE('Q1') INTO(WS-DATA) LENGTH(WS-LEN)
+      *     END-EXEC
+           SET CICS-DATA-AREA(9) TO ADDRESS OF WS-DATA
+           MOVE WS-LEN TO CICS-API-SWAP-SHORT(1)
+           SET CICS-SHORT-AREA(3) TO ADDRESS OF CICS-API-SWAP-SHORT(1)
+           MOVE 66 TO CICS-FN-CODE
+           CALL litlink 'CICSAPIE' USING CICS-ARGS
+           MOVE CICS-API-SWAP-SHORT(1) TO WS-LEN
+           IF EIBLABEL NOT = 0
+               GO TO CICS-API-ERROR
+           END-IF
+           DISPLAY "READQ " WS-LEN " " WS-DATA(1:WS-LEN).
+
+      *     binary items: no truncation to the PICTURE (-fnotrunc)
+           ADD 20000 TO WS-BIG
+           DISPLAY "BIG " WS-BIG.
+
+      *     EXEC CICS HANDLE CONDITION QIDERR(ERR-PARA) END-EXEC
+      *     then a condition raised by the next command
+           MOVE 99 TO CICS-FN-CODE
+           CALL litlink 'CICSAPIE' USING CICS-ARGS
+           IF EIBLABEL NOT = 0
+               GO TO CICS-API-ERROR
+           END-IF
+           DISPLAY "NOT REACHED"
+           GOBACK.
+       ERR-PARA.
+           DISPLAY "ERR-PARA RESP " EIBRESP
+           MOVE "DONE" TO DFHCOMMAREA
+           GOBACK.
+
+       CICS-API-EDF-INIT SECTION.
+           CALL litlink 'CICSAPIEDFINIT' USING DFHEIBLK BY VALUE 1.
+       CICS-API-ERROR SECTION.
+           IF EIBLABEL = -1
+               GO TO CICS-API-RETURN-OR-ABEND.
+           GO TO
+               CICS-API-RETURN-OR-ABEND
+               ERR-PARA
+           DEPENDING ON EIBLABEL.
+       CICS-API-RETURN-OR-ABEND.
+           GOBACK.
+])
+
+AT_DATA([tx.c], [[
+#include <stdio.h>
+#include <string.h>
+#include <libcob.h>
+
+struct eib {
+   char trnid[4];
+   short calen;
+   int resp;
+   short label;
+};
+
+struct args {
+   short fn_code;
+   short debug_line;
+   int arg_mask;
+   struct eib *eib;
+   union {
+      char data[8];
+      short short_value;
+      void *area;
+   } arg[16];
+};
+
+int
+CICSAPIWSADDRE (struct args *a, char *start, char *end)
+{
+   printf ("WS %s\n", start < end ? "in order" : "reversed");
+   a->eib->label = 0;
+   return 0;
+}
+
+int
+CICSAPIEDFINIT (struct eib *eib, int flag)
+{
+   printf ("EDF %d\n", flag);
+   eib->label = 0;
+   return 0;
+}
+
+int
+CICSAPIE (struct args *a)
+{
+   switch (a->fn_code) {
+   case 66:	/* READQ TS: data and length */
+      memcpy (a->arg[8].area, "ABCDEFGH", 8);
+      printf ("READQ length %d\n", *(short *)a->arg[2].area);
+      *(short *)a->arg[2].area = 5;
+      a->eib->resp = 0;
+      a->eib->label = 0;
+      break;
+   default:	/* QIDERR, handled: label 2 */
+      a->eib->resp = 44;
+      a->eib->label = 2;
+      break;
+   }
+   return 0;
+}
+
+int
+main (int argc, char **argv)
+{
+   int (*prog) (struct eib *, char *);
+   struct eib eib;
+   char commarea[4];
+
+   cob_init (argc, argv);
+   memset (&eib, 0, sizeof (eib));
+   memcpy (eib.trnid, "TXPR", 4);
+   memcpy (commarea, "INIT", 4);
+   eib.calen = 4;
+   prog = (int (*) (struct eib *, char *))cob_resolve ("TXPROG");
+   if (prog == NULL) {
+      printf ("%s\n", cob_resolve_error ());
+      return 1;
+   }
+   (void)prog (&eib, commarea);
+   printf ("COMMAREA after %.4s\n", commarea);
+   return 0;
+}
+]])
+
+AT_CHECK([$COMPILE_MODULE -std=txseries -Wno-goto-section \
+          -Wno-goto-different-section -Wno-others \
+          -o TXPROG.$COB_MODULE_EXT txprog.cbl], [0], [], [])
+AT_CHECK([$COMPILE tx.c], [0], [], [])
+AT_CHECK([$COBCRUN_DIRECT ./tx], [0],
+[WS in order
+EDF 1
+COMMAREA INIT
+READQ length 10
+READQ +00005 ABCDE
+BIG +21000
+ERR-PARA RESP +0000000044
+COMMAREA after DONE
+], [])
+
+AT_CLEANUP
+
+
+AT_SETUP([translated CICS program, diagnostics of -std=txseries])
+AT_KEYWORDS([runtxseries txseries])
+
+# the default dialect rejects the translated source, -std=txseries
+# accepts it with the warnings that can be silenced in
+# CICS_COBCLD_CCFLAGS
+
+AT_DATA([prog.cbl], [
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. PROG.
+       ENVIRONMENT DIVISION.
+       SPECIAL-NAMES.
+          call-convention 8 is litlink.
+       DATA DIVISION.
+       LINKAGE SECTION.
+       01 DFHCOMMAREA PIC X(4).
+       PROCEDURE DIVISION USING DFHCOMMAREA.
+       CICS-API SECTION.
+       CICS-API-TRIGGER.
+           CALL litlink 'CICSAPIE' USING DFHCOMMAREA
+           GO TO CICS-API-ERROR.
+       CICS-API-ERROR SECTION.
+           GOBACK.
+])
+
+AT_CHECK([$COMPILE_ONLY prog.cbl], [1], [],
+[prog.cbl:5: error: CONFIGURATION SECTION header missing
+prog.cbl: in section 'CICS-API':
+prog.cbl: in paragraph 'CICS-API-TRIGGER':
+prog.cbl:14: warning: GO TO SECTION 'CICS-API-ERROR'
+])
+AT_CHECK([$COMPILE_ONLY -std=txseries prog.cbl], [0], [],
+[prog.cbl:5: warning: CONFIGURATION SECTION header missing
+prog.cbl:5: note: CONFIGURATION SECTION header assumed
+prog.cbl: in section 'CICS-API':
+prog.cbl: in paragraph 'CICS-API-TRIGGER':
+prog.cbl:14: warning: GO TO SECTION 'CICS-API-ERROR'
+])
+AT_CHECK([$COMPILE_ONLY -std=txseries -Wno-goto-section -Wno-others \
+          prog.cbl], [0], [], [])
+
+AT_CLEANUP
+

@@ -202,6 +202,30 @@ Détails complets dans **`TXSERIES-COBOLIT-API.md`**. En résumé :
   variable (`EIBCALEN`).
 - Tests autofonce sur des sources traduits réels.
 
+#### T4 — état (2026-11-08)
+- Corpus : les 7 programmes CICS COBOL des exemples de TXSeries sans
+  dépendance externe (IVP `dfhc*`, `CSKLTEST`, `EXCSRVR`), traduits par
+  `cicstran -lCOBCLD`, cartes BMS générées par `cicsmap` (les exemples
+  MQ et PostgreSQL demandent les copybooks MQ / un précompilateur SQL).
+- Le traducteur convertit lui-même les éléments binaires du programme
+  (`MOVE WS-LEN TO CICS-API-SWAP-SHORT(1)`, puis retour) : seules des
+  zones natives `COMP-5` de `CICS-ARGS` atteignent TXSeries ; l'ordre
+  des octets des `COMP` est libre (gardé gros-boutiste, comme COBOL-IT,
+  Micro Focus et le mainframe, pour les données brutes partagées).
+- `CICSAPIWSADDRE` reçoit les bornes de la WORKING-STORAGE : GnuCOBOL
+  les garde dans l'ordre de déclaration (vérifié).
+- `config/txseries.conf` (`-std=txseries`, `COB_DIALECT_TXSERIES`) :
+  `default.conf` + `relax-syntax-checks` (SPECIAL-NAMES sans
+  CONFIGURATION SECTION) + effet de `-fnotrunc` (`binary-truncate: no`,
+  `pretty-display: no`). Le dialecte `ibm` refuse
+  `CALL-CONVENTION ... IS LITLINK`.
+- Les 7 programmes compilent sans erreur ; restent des avertissements
+  « GO TO SECTION » (règles maison, à couper par `-Wno-goto-section`).
+- Tests : `run_txseries.at` (programme de la forme produite par
+  `cicstran`, interface CICS simulée en C ; diagnostics).
+- Bug amont corrigé : plantage de `cobc` sur `ADDRESS OF` d'un élément
+  non défini (copybook BMS manquante), voir `BUGS-FOUND.md`.
+
 ### T5 — Intégration au chargement
 Trois options, à trancher après T3 :
 1. Se présenter comme un programme C (stub C → module COBOL).

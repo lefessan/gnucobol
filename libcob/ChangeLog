@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* common.h: txseries.conf, dialect of the programs translated by
+	  TXSeries
 	* call.c (cob_resolve), common.c (run_context_exit_procedures,
 	  context_returns, end_context_run_unit), common.h
 	  (cob_context_set_display_handler, cob_resolve_ctx): return point of
