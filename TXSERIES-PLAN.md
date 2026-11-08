@@ -227,12 +227,15 @@ Détails complets dans **`TXSERIES-COBOLIT-API.md`**. En résumé :
 - `CICSAPIWSADDRE` reçoit les bornes de la WORKING-STORAGE : GnuCOBOL
   les garde dans l'ordre de déclaration (vérifié).
 - `config/txseries.conf` (`-std=txseries`, `COB_DIALECT_TXSERIES`) :
-  `default.conf` + `relax-syntax-checks` (SPECIAL-NAMES sans
-  CONFIGURATION SECTION) + effet de `-fnotrunc` (`binary-truncate: no`,
-  `pretty-display: no`). Le dialecte `ibm` refuse
-  `CALL-CONVENTION ... IS LITLINK`.
-- Les 7 programmes compilent sans erreur ; restent des avertissements
-  « GO TO SECTION » (règles maison, à couper par `-Wno-goto-section`).
+  `default.conf` + nouvelle option de dialecte `missing-conf-section:
+  ok` (SPECIAL-NAMES sans CONFIGURATION SECTION ; `error` dans tous les
+  autres dialectes, comportement inchangé : erreur, ou avertissement
+  avec `relax-syntax-checks`) + effet de `-fnotrunc`
+  (`binary-truncate: no`, `pretty-display: no`). Le dialecte `ibm`
+  refuse `CALL-CONVENTION ... IS LITLINK`.
+- Les 7 programmes compilent sans aucun message avec `-std=txseries
+  -Wno-goto-section -Wno-goto-different-section` (avertissements
+  « règles maison » sur les GO TO écrits par le traducteur).
 - Tests : `run_txseries.at` (programme de la forme produite par
   `cicstran`, interface CICS simulée en C ; diagnostics).
 - Bug amont corrigé : plantage de `cobc` sur `ADDRESS OF` d'un élément
@@ -263,7 +266,6 @@ Enchaînement `cicstcl` → (précompilateur SQL : GixSQL, ocesql…) → `cobc`
   (`make COBCLD` : `cicsmap`, `cicstran`, puis notre `cobc` appelé par
   `cicstcl`) ; chaque `.cld` exporte son point d'entrée (`DFHCALL`…) et
   importe `CICSAPIE`, `CICSAPIEDFINIT`, `CICSAPIWSADDRE`.
-- Reste un avertissement par programme (CONFIGURATION SECTION absente).
 - Non fait : précompilation SQL (`EXEC SQL` : le Makefile d'exemple de
   CobolCloud passe par `cobc -preprocess=` et `cldsql`, sans équivalent
   dans GnuCOBOL ; avec GixSQL ou ocesql, il faut en plus l'intégration

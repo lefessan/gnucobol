@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* TXSERIES-PLAN.md, txseries/README.md: dialect option
+	  missing-conf-section
 	* TXSERIES-PLAN.md, txseries/README.md, txseries/cobcld.c
 	  (cob_enterprise_get_current_region, cob_enterprise_cancel_region,
 	  cob_resolve): NEWCOPY of the programs

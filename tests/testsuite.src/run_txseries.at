@@ -224,7 +224,7 @@ main (int argc, char **argv)
 ]])
 
 AT_CHECK([$COMPILE_MODULE -std=txseries -Wno-goto-section \
-          -Wno-goto-different-section -Wno-others \
+          -Wno-goto-different-section \
           -o TXPROG.$COB_MODULE_EXT txprog.cbl], [0], [], [])
 AT_CHECK([$COMPILE tx.c], [0], [], [])
 AT_CHECK([$COBCRUN_DIRECT ./tx], [0],
@@ -244,8 +244,9 @@ AT_CLEANUP
 AT_SETUP([translated CICS program, diagnostics of -std=txseries])
 AT_KEYWORDS([runtxseries txseries])
 
-# the default dialect rejects the translated source, -std=txseries
-# accepts it with the warnings that can be silenced in
+# the default dialect rejects the translated source (a warning with
+# -frelax-syntax-checks), -std=txseries accepts it (missing-conf-section:
+# ok), with the warnings about GO TO that can be silenced in
 # CICS_COBCLD_CCFLAGS
 
 AT_DATA([prog.cbl], [
@@ -272,15 +273,24 @@ prog.cbl: in section 'CICS-API':
 prog.cbl: in paragraph 'CICS-API-TRIGGER':
 prog.cbl:14: warning: GO TO SECTION 'CICS-API-ERROR'
 ])
-AT_CHECK([$COMPILE_ONLY -std=txseries prog.cbl], [0], [],
+AT_CHECK([$COMPILE_ONLY -frelax-syntax-checks prog.cbl], [0], [],
 [prog.cbl:5: warning: CONFIGURATION SECTION header missing
 prog.cbl:5: note: CONFIGURATION SECTION header assumed
 prog.cbl: in section 'CICS-API':
 prog.cbl: in paragraph 'CICS-API-TRIGGER':
 prog.cbl:14: warning: GO TO SECTION 'CICS-API-ERROR'
 ])
-AT_CHECK([$COMPILE_ONLY -std=txseries -Wno-goto-section -Wno-others \
-          prog.cbl], [0], [], [])
+AT_CHECK([$COMPILE_ONLY -std=txseries prog.cbl], [0], [],
+[prog.cbl: in section 'CICS-API':
+prog.cbl: in paragraph 'CICS-API-TRIGGER':
+prog.cbl:14: warning: GO TO SECTION 'CICS-API-ERROR'
+])
+AT_CHECK([$COMPILE_ONLY -std=txseries -fmissing-conf-section=warning \
+          -Wno-goto-section prog.cbl], [0], [],
+[prog.cbl:5: warning: paragraphs of CONFIGURATION SECTION without its header used
+])
+AT_CHECK([$COMPILE_ONLY -std=txseries -Wno-goto-section prog.cbl],
+         [0], [], [])
 
 AT_CLEANUP
 
@@ -375,7 +385,7 @@ main (void)
 }
 ]])
 
-AT_CHECK([$COMPILE_MODULE -std=txseries -Wno-others -o prog.cld prog.cob],
+AT_CHECK([$COMPILE_MODULE -std=txseries -o prog.cld prog.cob],
          [0], [], [])
 AT_CHECK([$COBC -b -o method.so method.c \
           "$abs_top_srcdir/txseries/cobcld.c"], [0], [], [])

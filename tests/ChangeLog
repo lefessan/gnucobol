@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* testsuite.src/configuration.at, testsuite.src/run_txseries.at:
+	  dialect option missing-conf-section
 	* testsuite.src/run_txseries.at: NEWCOPY of the programs
 	* testsuite.src/run_txseries.at: unload of a module file
 	* testsuite.src/run_txseries.at: runtime errors call the error

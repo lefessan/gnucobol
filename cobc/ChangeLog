@@ -1,6 +1,8 @@
 
 2026-11-08  Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>
 
+	* config.def (CB_CONFIG_SUPPORT), parser.y (check_relaxed_syntax):
+	  dialect option missing-conf-section
 	* cobc.c: accept -fthread-safe (COBOL-IT compatibility)
 	* codegen.c (output_internal_function): LOCAL-STORAGE in the
 	  allocations of the context

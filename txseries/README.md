@@ -72,7 +72,8 @@ CICS_COBCLD_CCFLAGS="-std=txseries -Wno-goto-section -Wno-goto-different-section
 
 - `-std=txseries` (`config/txseries.conf`): the default dialect, plus
   `SPECIAL-NAMES` without `CONFIGURATION SECTION` (written by the
-  translator) and the effect of `-fnotrunc` (passed by `cicstcl`);
+  translator, option `missing-conf-section: ok`) and the effect of
+  `-fnotrunc` (passed by `cicstcl`);
 - `-Wno-goto-section -Wno-goto-different-section`: the translator
   writes `GO TO CICS-API-ERROR` (a section) after each command, and
   `GO TO ... DEPENDING ON EIBLABEL` to the labels of `HANDLE CONDITION`;
